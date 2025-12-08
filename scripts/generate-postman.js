@@ -628,13 +628,31 @@ async function generatePostmanCollection() {
   
   console.log('✓ Validation passed');
   
+  // Check for existing collection to preserve _postman_id
+  const outputDir = join(__dirname, '../generated');
+  const outputPath = join(outputDir, 'postman-collection.json');
+  let existingPostmanId = null;
+  
+  if (existsSync(outputPath)) {
+    try {
+      const existingCollection = JSON.parse(readFileSync(outputPath, 'utf8'));
+      existingPostmanId = existingCollection?.info?._postman_id;
+      if (existingPostmanId) {
+        console.log('✓ Preserving existing Postman collection ID');
+      }
+    } catch (error) {
+      // If we can't read/parse the existing file, just generate a new ID
+      console.log('⚠ Could not read existing collection, will generate new ID');
+    }
+  }
+  
   // Generate collection
   const collection = {
     info: {
-      name: 'Model App API Collection',
+      name: 'Safety Net API Collection',
       description: 'Auto-generated from OpenAPI specifications',
       schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
-      _postman_id: generateUUID()
+      _postman_id: existingPostmanId || generateUUID()
     },
     item: [],
     variable: [
@@ -672,12 +690,10 @@ async function generatePostmanCollection() {
   }
   
   // Write output
-  const outputDir = join(__dirname, '../generated');
   if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true });
   }
   
-  const outputPath = join(outputDir, 'postman-collection.json');
   writeFileSync(outputPath, JSON.stringify(collection, null, 2));
   
   console.log('\n' + '='.repeat(70));

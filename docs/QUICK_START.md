@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get up and running with the Model App OpenAPI tools in 5 minutes!
+Get up and running with the Safety Net OpenAPI tools in 5 minutes!
 
 ## Prerequisites
 

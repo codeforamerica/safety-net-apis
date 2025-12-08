@@ -52,7 +52,7 @@ The generator creates a folder for each API spec and generates requests based on
 ### Dynamic Folder Organization
 
 ```
-Model App API Collection
+Safety Net API Collection
 ├── [API 1 Name from spec]
 │   ├── List All [Resources]
 │   ├── List [Resources] (Paginated)
