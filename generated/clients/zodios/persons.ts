@@ -115,11 +115,6 @@ const endpoints = makeApi([
         type: "Query",
         schema: z.number().int().gte(0).optional().default(0),
       },
-      {
-        name: "search",
-        type: "Query",
-        schema: z.string().min(1).optional(),
-      },
     ],
     response: z.object({
       items: z.array(
