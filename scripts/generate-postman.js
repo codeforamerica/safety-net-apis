@@ -573,6 +573,282 @@ function generateApiRequests(apiMetadata) {
 }
 
 /**
+ * Generate GraphQL requests folder
+ * Creates a folder with pre-built GraphQL queries for all discovered APIs
+ */
+function generateGraphQLFolder(apiSpecs) {
+  const items = [];
+
+  // 1. Introspection query
+  items.push({
+    name: 'Schema Introspection',
+    request: {
+      method: 'POST',
+      header: [
+        { key: 'Content-Type', value: 'application/json', type: 'text' }
+      ],
+      body: {
+        mode: 'graphql',
+        graphql: {
+          query: `query IntrospectionQuery {
+  __schema {
+    types {
+      name
+      kind
+      description
+      fields {
+        name
+        type {
+          name
+          kind
+        }
+      }
+    }
+    queryType {
+      name
+    }
+  }
+}`,
+          variables: '{}'
+        }
+      },
+      url: {
+        raw: '{{baseUrl}}/graphql',
+        host: ['{{baseUrl}}'],
+        path: ['graphql']
+      },
+      description: 'Introspect the GraphQL schema to discover all available types and queries'
+    },
+    event: [{
+      listen: 'test',
+      script: {
+        exec: [
+          'pm.test("Status code is 200", function () {',
+          '    pm.response.to.have.status(200);',
+          '});',
+          '',
+          'pm.test("Response contains schema", function () {',
+          '    const jsonData = pm.response.json();',
+          '    pm.expect(jsonData.data).to.have.property("__schema");',
+          '    pm.expect(jsonData.data.__schema).to.have.property("types");',
+          '});'
+        ]
+      }
+    }]
+  });
+
+  // 2. Cross-resource search query
+  const searchFields = apiSpecs.map(api => {
+    const singular = singularize(api.name);
+    return `      ${api.name} {
+        id
+      }`;
+  }).join('\n');
+
+  items.push({
+    name: 'Search Across All Resources',
+    request: {
+      method: 'POST',
+      header: [
+        { key: 'Content-Type', value: 'application/json', type: 'text' }
+      ],
+      body: {
+        mode: 'graphql',
+        graphql: {
+          query: `query CrossResourceSearch($query: String!, $limit: Int) {
+  search(query: $query, limit: $limit) {
+${searchFields}
+    totalCount
+  }
+}`,
+          variables: JSON.stringify({ query: 'test', limit: 10 }, null, 2)
+        }
+      },
+      url: {
+        raw: '{{baseUrl}}/graphql',
+        host: ['{{baseUrl}}'],
+        path: ['graphql']
+      },
+      description: 'Search across all resources with a single GraphQL query'
+    },
+    event: [{
+      listen: 'test',
+      script: {
+        exec: [
+          'pm.test("Status code is 200", function () {',
+          '    pm.response.to.have.status(200);',
+          '});',
+          '',
+          'pm.test("Response contains search results", function () {',
+          '    const jsonData = pm.response.json();',
+          '    pm.expect(jsonData.data).to.have.property("search");',
+          '    pm.expect(jsonData.data.search).to.have.property("totalCount");',
+          '});'
+        ]
+      }
+    }]
+  });
+
+  // 3. Generate list and single queries for each API
+  for (const api of apiSpecs) {
+    const examples = extractIndividualResources(loadExamples(api.name));
+    const singular = singularize(api.name);
+    const typeName = capitalize(singular);
+
+    // List query
+    items.push({
+      name: `List ${api.title}`,
+      request: {
+        method: 'POST',
+        header: [
+          { key: 'Content-Type', value: 'application/json', type: 'text' }
+        ],
+        body: {
+          mode: 'graphql',
+          graphql: {
+            query: `query List${capitalize(api.name)}($limit: Int, $offset: Int, $search: String) {
+  ${api.name}(limit: $limit, offset: $offset, search: $search) {
+    items {
+      id
+    }
+    total
+    limit
+    offset
+    hasNext
+  }
+}`,
+            variables: JSON.stringify({ limit: 25, offset: 0 }, null, 2)
+          }
+        },
+        url: {
+          raw: '{{baseUrl}}/graphql',
+          host: ['{{baseUrl}}'],
+          path: ['graphql']
+        },
+        description: `List all ${api.name} with pagination support`
+      },
+      event: [{
+        listen: 'test',
+        script: {
+          exec: [
+            'pm.test("Status code is 200", function () {',
+            '    pm.response.to.have.status(200);',
+            '});',
+            '',
+            `pm.test("Response contains ${api.name} list", function () {`,
+            '    const jsonData = pm.response.json();',
+            `    pm.expect(jsonData.data).to.have.property("${api.name}");`,
+            `    pm.expect(jsonData.data.${api.name}).to.have.property("items");`,
+            `    pm.expect(jsonData.data.${api.name}).to.have.property("total");`,
+            `    pm.expect(jsonData.data.${api.name}.items).to.be.an("array");`,
+            '});'
+          ]
+        }
+      }]
+    });
+
+    // Search query for this resource
+    items.push({
+      name: `Search ${api.title}`,
+      request: {
+        method: 'POST',
+        header: [
+          { key: 'Content-Type', value: 'application/json', type: 'text' }
+        ],
+        body: {
+          mode: 'graphql',
+          graphql: {
+            query: `query Search${capitalize(api.name)}($search: String!, $limit: Int) {
+  ${api.name}(search: $search, limit: $limit) {
+    items {
+      id
+    }
+    total
+    hasNext
+  }
+}`,
+            variables: JSON.stringify({ search: 'test', limit: 10 }, null, 2)
+          }
+        },
+        url: {
+          raw: '{{baseUrl}}/graphql',
+          host: ['{{baseUrl}}'],
+          path: ['graphql']
+        },
+        description: `Search ${api.name} by text query`
+      },
+      event: [{
+        listen: 'test',
+        script: {
+          exec: [
+            'pm.test("Status code is 200", function () {',
+            '    pm.response.to.have.status(200);',
+            '});',
+            '',
+            `pm.test("Response contains ${api.name} search results", function () {`,
+            '    const jsonData = pm.response.json();',
+            `    pm.expect(jsonData.data).to.have.property("${api.name}");`,
+            '});'
+          ]
+        }
+      }]
+    });
+
+    // Get single item query (using first example ID if available)
+    if (examples.length > 0) {
+      const exampleId = examples[0].data.id;
+      items.push({
+        name: `Get ${typeName} by ID`,
+        request: {
+          method: 'POST',
+          header: [
+            { key: 'Content-Type', value: 'application/json', type: 'text' }
+          ],
+          body: {
+            mode: 'graphql',
+            graphql: {
+              query: `query Get${typeName}($id: ID!) {
+  ${singular}(id: $id) {
+    id
+  }
+}`,
+              variables: JSON.stringify({ id: exampleId }, null, 2)
+            }
+          },
+          url: {
+            raw: '{{baseUrl}}/graphql',
+            host: ['{{baseUrl}}'],
+            path: ['graphql']
+          },
+          description: `Get a single ${singular} by ID`
+        },
+        event: [{
+          listen: 'test',
+          script: {
+            exec: [
+              'pm.test("Status code is 200", function () {',
+              '    pm.response.to.have.status(200);',
+              '});',
+              '',
+              `pm.test("Response contains ${singular}", function () {`,
+              '    const jsonData = pm.response.json();',
+              `    pm.expect(jsonData.data).to.have.property("${singular}");`,
+              '});'
+            ]
+          }
+        }]
+      });
+    }
+  }
+
+  return {
+    name: 'GraphQL API',
+    item: items,
+    description: 'GraphQL queries for the unified API endpoint. The GraphQL endpoint provides flexible queries with field selection, cross-resource search, and pagination.'
+  };
+}
+
+/**
  * Capitalize first letter
  */
 function capitalize(str) {
@@ -665,18 +941,18 @@ async function generatePostmanCollection() {
   };
   
   // Add folder for each API
-  console.log('\nGenerating requests...');
+  console.log('\nGenerating REST API requests...');
   for (const api of apiSpecs) {
     console.log(`  Processing ${api.title}...`);
     const requests = generateApiRequests(api);
     console.log(`    Generated ${requests.length} requests`);
-    
+
     collection.item.push({
       name: api.title,
       item: requests,
       description: api.title
     });
-    
+
     // Add resource ID variables
     const examples = extractIndividualResources(loadExamples(api.name));
     if (examples.length > 0) {
@@ -688,6 +964,12 @@ async function generatePostmanCollection() {
       });
     }
   }
+
+  // Add GraphQL folder
+  console.log('\nGenerating GraphQL requests...');
+  const graphqlFolder = generateGraphQLFolder(apiSpecs);
+  console.log(`  Generated ${graphqlFolder.item.length} GraphQL requests`);
+  collection.item.push(graphqlFolder);
   
   // Write output
   if (!existsSync(outputDir)) {

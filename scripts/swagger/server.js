@@ -54,10 +54,10 @@ async function loadAndPrepareSpec(specPath, apiName) {
  * @returns {string} HTML content
  */
 function createLandingPage(apis) {
-  const apiLinks = apis.map(api => 
+  const apiLinks = apis.map(api =>
     `<li><a href="/${api.name}">${api.title}</a></li>`
   ).join('\n          ');
-  
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -76,6 +76,12 @@ function createLandingPage(apis) {
     h1 {
       color: #333;
       border-bottom: 2px solid #49cc90;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #333;
+      margin-top: 30px;
+      border-bottom: 2px solid #e535ab;
       padding-bottom: 10px;
     }
     .container {
@@ -106,6 +112,13 @@ function createLandingPage(apis) {
       color: white;
       transform: translateX(5px);
     }
+    a.graphql {
+      color: #e535ab;
+    }
+    a.graphql:hover {
+      background: #e535ab;
+      color: white;
+    }
     .info {
       background: #e3f2fd;
       padding: 15px;
@@ -120,16 +133,129 @@ function createLandingPage(apis) {
 </head>
 <body>
   <div class="container">
-    <h1>📚 API Documentation</h1>
+    <h1>REST API Documentation</h1>
     <p>Select an API to view its documentation and try out endpoints:</p>
     <ul>
 ${apiLinks}
     </ul>
+    <h2>GraphQL API</h2>
+    <p>Explore the unified GraphQL API with an interactive playground:</p>
+    <ul>
+      <li><a href="/graphql" class="graphql">GraphQL Playground</a></li>
+    </ul>
     <div class="info">
       <strong>Mock Server:</strong> ${MOCK_SERVER_URL}<br>
-      <strong>Note:</strong> Make sure the mock server is running before using "Try it out" buttons.
+      <strong>Note:</strong> Make sure the mock server is running before using "Try it out" buttons or the GraphQL playground.
     </div>
   </div>
+</body>
+</html>
+  `;
+}
+
+/**
+ * Create GraphQL Playground HTML page
+ * Uses GraphiQL - the official GraphQL IDE
+ * @returns {string} HTML content
+ */
+function createGraphQLPlayground() {
+  const defaultQuery = `# Welcome to GraphQL Playground
+#
+# This playground connects to the mock server's GraphQL endpoint.
+# Make sure the mock server is running (npm run mock:start).
+#
+# Example queries:
+
+# List all persons with pagination
+query ListPersons {
+  persons(limit: 10, offset: 0) {
+    items {
+      id
+      email
+      name {
+        firstName
+        lastName
+      }
+      monthlyIncome
+    }
+    total
+    hasNext
+  }
+}
+
+# Get a single person by ID
+# query GetPerson {
+#   person(id: "4d1f13f0-3e26-4c50-b2fb-8d140f7ec1c2") {
+#     id
+#     email
+#     name {
+#       firstName
+#       lastName
+#     }
+#   }
+# }
+
+# Search across all resources
+# query Search {
+#   search(query: "Avery", limit: 10) {
+#     persons {
+#       id
+#       email
+#     }
+#     households {
+#       id
+#     }
+#     applications {
+#       id
+#       status
+#     }
+#     totalCount
+#   }
+# }
+`;
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GraphQL Playground</title>
+  <link rel="stylesheet" href="https://unpkg.com/graphiql@3.0.10/graphiql.min.css" />
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+    #graphiql {
+      height: 100vh;
+    }
+    .graphiql-container {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div id="graphiql"></div>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/graphiql@3.0.10/graphiql.min.js"></script>
+  <script>
+    const fetcher = GraphiQL.createFetcher({
+      url: '${MOCK_SERVER_URL}/graphql',
+    });
+
+    const defaultQuery = ${JSON.stringify(defaultQuery)};
+
+    ReactDOM.createRoot(document.getElementById('graphiql')).render(
+      React.createElement(GraphiQL, {
+        fetcher,
+        defaultQuery,
+        defaultEditorToolsVisibility: true,
+      })
+    );
+  </script>
 </body>
 </html>
   `;
@@ -183,7 +309,12 @@ async function startSwaggerServer() {
     app.get('/', (req, res) => {
       res.send(createLandingPage(loadedApis));
     });
-    
+
+    // Serve GraphQL Playground
+    app.get('/graphql', (req, res) => {
+      res.send(createGraphQLPlayground());
+    });
+
     // Serve Swagger UI for each API
     for (const api of loadedApis) {
       const swaggerOptions = {
@@ -212,16 +343,21 @@ async function startSwaggerServer() {
       console.log(`\n📚 Documentation:  http://${HOST}:${PORT}`);
       console.log(`📡 Mock Server:    ${MOCK_SERVER_URL}`);
       console.log('\n' + '='.repeat(70));
-      console.log('API Documentation URLs:');
+      console.log('REST API Documentation:');
       console.log('='.repeat(70));
-      
+
       for (const api of loadedApis) {
         console.log(`  ${api.title.padEnd(30)} http://${HOST}:${PORT}/${api.name}`);
       }
-      
+
+      console.log('\n' + '='.repeat(70));
+      console.log('GraphQL API:');
+      console.log('='.repeat(70));
+      console.log(`  ${'GraphQL Playground'.padEnd(30)} http://${HOST}:${PORT}/graphql`);
+
       console.log('\n' + '='.repeat(70));
       console.log('\n💡 Tip: Start the mock server first with: npm run mock:start');
-      console.log('    Then use "Try it out" buttons in Swagger UI to test endpoints.\n');
+      console.log('    Then use "Try it out" buttons in Swagger UI or the GraphQL Playground.\n');
     });
     
   } catch (error) {

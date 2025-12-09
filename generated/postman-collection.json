@@ -369,104 +369,6 @@
           ]
         },
         {
-          "name": "Filter by status",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/applications",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "applications"
-              ],
-              "variables": [],
-              "query": [
-                {
-                  "key": "status",
-                  "value": "draft",
-                  "description": "Filter applications by status."
-                }
-              ]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Response is JSON\", function () {",
-                  "    pm.response.to.be.json;",
-                  "});",
-                  "",
-                  "pm.test(\"Response has required list properties\", function () {",
-                  "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('items');",
-                  "    pm.expect(jsonData).to.have.property('total');",
-                  "    pm.expect(jsonData).to.have.property('limit');",
-                  "    pm.expect(jsonData).to.have.property('offset');",
-                  "    pm.expect(jsonData.items).to.be.an('array');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Filter by programs",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/applications",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "applications"
-              ],
-              "variables": [],
-              "query": [
-                {
-                  "key": "programs",
-                  "value": "example",
-                  "description": "Filter applications by program types. Can specify multiple programs (e.g., programs=snap&programs=cash_programs)."
-                }
-              ]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Response is JSON\", function () {",
-                  "    pm.response.to.be.json;",
-                  "});",
-                  "",
-                  "pm.test(\"Response has required list properties\", function () {",
-                  "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('items');",
-                  "    pm.expect(jsonData).to.have.property('total');",
-                  "    pm.expect(jsonData).to.have.property('limit');",
-                  "    pm.expect(jsonData).to.have.property('offset');",
-                  "    pm.expect(jsonData.items).to.be.an('array');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
           "name": "Get ApplicationExample1",
           "request": {
             "method": "GET",
@@ -1519,60 +1421,6 @@
           ]
         },
         {
-          "name": "Search Persons",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/persons",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "persons"
-              ],
-              "variables": [],
-              "query": [
-                {
-                  "key": "search",
-                  "value": "Avery",
-                  "description": "Search query"
-                },
-                {
-                  "key": "limit",
-                  "value": "10",
-                  "description": "Maximum results"
-                }
-              ]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Response is JSON\", function () {",
-                  "    pm.response.to.be.json;",
-                  "});",
-                  "",
-                  "pm.test(\"Response has required list properties\", function () {",
-                  "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('items');",
-                  "    pm.expect(jsonData).to.have.property('total');",
-                  "    pm.expect(jsonData).to.have.property('limit');",
-                  "    pm.expect(jsonData).to.have.property('offset');",
-                  "    pm.expect(jsonData.items).to.be.an('array');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
           "name": "Get PersonExample1",
           "request": {
             "method": "GET",
@@ -1735,6 +1583,540 @@
         }
       ],
       "description": "Person Service API"
+    },
+    {
+      "name": "GraphQL API",
+      "item": [
+        {
+          "name": "Schema Introspection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query IntrospectionQuery {\n  __schema {\n    types {\n      name\n      kind\n      description\n      fields {\n        name\n        type {\n          name\n          kind\n        }\n      }\n    }\n    queryType {\n      name\n    }\n  }\n}",
+                "variables": "{}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "Introspect the GraphQL schema to discover all available types and queries"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains schema\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"__schema\");",
+                  "    pm.expect(jsonData.data.__schema).to.have.property(\"types\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Across All Resources",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query CrossResourceSearch($query: String!, $limit: Int) {\n  search(query: $query, limit: $limit) {\n      applications {\n        id\n      }\n      households {\n        id\n      }\n      persons {\n        id\n      }\n    totalCount\n  }\n}",
+                "variables": "{\n  \"query\": \"test\",\n  \"limit\": 10\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "Search across all resources with a single GraphQL query"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains search results\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"search\");",
+                  "    pm.expect(jsonData.data.search).to.have.property(\"totalCount\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Application Service API",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query ListApplications($limit: Int, $offset: Int, $search: String) {\n  applications(limit: $limit, offset: $offset, search: $search) {\n    items {\n      id\n    }\n    total\n    limit\n    offset\n    hasNext\n  }\n}",
+                "variables": "{\n  \"limit\": 25,\n  \"offset\": 0\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "List all applications with pagination support"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains applications list\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"applications\");",
+                  "    pm.expect(jsonData.data.applications).to.have.property(\"items\");",
+                  "    pm.expect(jsonData.data.applications).to.have.property(\"total\");",
+                  "    pm.expect(jsonData.data.applications.items).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Application Service API",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query SearchApplications($search: String!, $limit: Int) {\n  applications(search: $search, limit: $limit) {\n    items {\n      id\n    }\n    total\n    hasNext\n  }\n}",
+                "variables": "{\n  \"search\": \"test\",\n  \"limit\": 10\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "Search applications by text query"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains applications search results\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"applications\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Application by ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query GetApplication($id: ID!) {\n  application(id: $id) {\n    id\n  }\n}",
+                "variables": "{\n  \"id\": \"5f8e3d2c-1a9b-4e6f-8d7c-3a2b1c4d5e6f\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "Get a single application by ID"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains application\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"application\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Household Service API",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query ListHouseholds($limit: Int, $offset: Int, $search: String) {\n  households(limit: $limit, offset: $offset, search: $search) {\n    items {\n      id\n    }\n    total\n    limit\n    offset\n    hasNext\n  }\n}",
+                "variables": "{\n  \"limit\": 25,\n  \"offset\": 0\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "List all households with pagination support"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains households list\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"households\");",
+                  "    pm.expect(jsonData.data.households).to.have.property(\"items\");",
+                  "    pm.expect(jsonData.data.households).to.have.property(\"total\");",
+                  "    pm.expect(jsonData.data.households.items).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Household Service API",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query SearchHouseholds($search: String!, $limit: Int) {\n  households(search: $search, limit: $limit) {\n    items {\n      id\n    }\n    total\n    hasNext\n  }\n}",
+                "variables": "{\n  \"search\": \"test\",\n  \"limit\": 10\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "Search households by text query"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains households search results\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"households\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Household by ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query GetHousehold($id: ID!) {\n  household(id: $id) {\n    id\n  }\n}",
+                "variables": "{\n  \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "Get a single household by ID"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains household\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"household\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Person Service API",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query ListPersons($limit: Int, $offset: Int, $search: String) {\n  persons(limit: $limit, offset: $offset, search: $search) {\n    items {\n      id\n    }\n    total\n    limit\n    offset\n    hasNext\n  }\n}",
+                "variables": "{\n  \"limit\": 25,\n  \"offset\": 0\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "List all persons with pagination support"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains persons list\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"persons\");",
+                  "    pm.expect(jsonData.data.persons).to.have.property(\"items\");",
+                  "    pm.expect(jsonData.data.persons).to.have.property(\"total\");",
+                  "    pm.expect(jsonData.data.persons.items).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Person Service API",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query SearchPersons($search: String!, $limit: Int) {\n  persons(search: $search, limit: $limit) {\n    items {\n      id\n    }\n    total\n    hasNext\n  }\n}",
+                "variables": "{\n  \"search\": \"test\",\n  \"limit\": 10\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "Search persons by text query"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains persons search results\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"persons\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Person by ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query GetPerson($id: ID!) {\n  person(id: $id) {\n    id\n  }\n}",
+                "variables": "{\n  \"id\": \"4d1f13f0-3e26-4c50-b2fb-8d140f7ec1c2\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "Get a single person by ID"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains person\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"person\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "GraphQL queries for the unified API endpoint. The GraphQL endpoint provides flexible queries with field selection, cross-resource search, and pagination."
     }
   ],
   "variable": [

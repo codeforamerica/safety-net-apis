@@ -22,19 +22,22 @@ npm run mock:start      # Mock server (port 1080)
 - Mock API: `http://localhost:1080`
 
 **View documentation:**
-- Landing page: `http://localhost:3000` (lists all discovered APIs)
-- Individual APIs: `/{api-name}` (one page per spec file)
+- Landing page: `http://localhost:3000` (lists all REST APIs and GraphQL)
+- Individual REST APIs: `/{api-name}` (one page per spec file)
+- GraphQL Playground: `/graphql` (interactive GraphQL IDE)
 
 **Try it out:**
-1. Select an API from landing page → Expand endpoint → Click "Try it out" → Execute
+1. **REST:** Select an API from landing page → Expand endpoint → Click "Try it out" → Execute
+2. **GraphQL:** Click "GraphQL Playground" → Write queries → Click play button
 
 ## What You Get
 
-✅ **Auto-discovery** - Automatically finds all OpenAPI specs in `/openapi`  
-✅ **Multiple APIs** - Separate documentation page for each API  
-✅ **Landing page** - Beautiful homepage linking to all APIs  
-✅ **Live testing** - "Try it out" functionality against your mock server  
-✅ **Real-time updates** - Restart server to see spec changes  
+✅ **Auto-discovery** - Automatically finds all OpenAPI specs in `/openapi`
+✅ **Multiple APIs** - Separate documentation page for each API
+✅ **GraphQL Playground** - Interactive GraphQL IDE with example queries
+✅ **Landing page** - Beautiful homepage linking to all REST APIs and GraphQL
+✅ **Live testing** - "Try it out" functionality against your mock server
+✅ **Real-time updates** - Restart server to see spec changes
 ✅ **No file modifications** - Specs are modified in-memory only  
 
 ## Features
@@ -77,6 +80,45 @@ Each API gets its own Swagger UI page with:
 - Example values from your OpenAPI specs
 - "Try it out" functionality for live testing
 - Model definitions and component schemas
+
+### GraphQL Playground
+
+The `/graphql` route serves an interactive GraphQL IDE (GraphiQL) that connects to the mock server's GraphQL endpoint:
+
+- **Interactive query editor** with syntax highlighting
+- **Auto-complete** for types and fields (via schema introspection)
+- **Documentation explorer** - browse the entire GraphQL schema
+- **Pre-loaded example queries** to get started quickly
+- **Query variables** support for parameterized queries
+
+**Example queries included:**
+```graphql
+# List persons with pagination
+query ListPersons {
+  persons(limit: 10) {
+    items { id email name { firstName lastName } }
+    total
+    hasNext
+  }
+}
+
+# Get single resource by ID
+query GetPerson {
+  person(id: "uuid-here") {
+    id email
+  }
+}
+
+# Cross-resource search
+query Search {
+  search(query: "Springfield") {
+    persons { id email }
+    households { id }
+    applications { id status }
+    totalCount
+  }
+}
+```
 
 ### Server Configuration
 

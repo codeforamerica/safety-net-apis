@@ -36,11 +36,12 @@ npm start
 
 The generator scans your OpenAPI specs and automatically creates:
 
-✅ **Requests for every endpoint** defined in your specs  
-✅ **Automated test scripts** on every request  
-✅ **Real example data** loaded from your YAML example files  
-✅ **Environment variables** extracted from your examples  
-✅ **Multiple request variations** per endpoint (list, search, filter, create alternatives)  
+✅ **Requests for every endpoint** defined in your specs
+✅ **GraphQL queries** for the unified GraphQL API endpoint
+✅ **Automated test scripts** on every request
+✅ **Real example data** loaded from your YAML example files
+✅ **Environment variables** extracted from your examples
+✅ **Multiple request variations** per endpoint (list, search, filter, create alternatives)
 ✅ **Error handling tests** (404, validation errors)
 
 **The collection reflects your current API definition** - regenerate anytime your specs change!  
@@ -69,8 +70,15 @@ Safety Net API Collection
 │   └── Delete [Resource]
 ├── [API 2 Name from spec]
 │   └── ... (same pattern, auto-generated)
-└── [API N Name from spec]
-    └── ... (repeats for each spec in /openapi/)
+├── [API N Name from spec]
+│   └── ... (repeats for each spec in /openapi/)
+└── GraphQL API                      ← NEW: GraphQL queries folder
+    ├── Schema Introspection
+    ├── Search Across All Resources
+    ├── List [API 1]
+    ├── Search [API 1]
+    ├── Get [Resource 1] by ID
+    └── ... (list/search/get for each API)
 ```
 
 **Generated from your specs:**
@@ -103,6 +111,43 @@ The generator creates different request variations based on your OpenAPI paths:
 
 #### DELETE /resources/{id}
 - **Delete** - Uses ID from examples
+
+### GraphQL API Folder
+
+The collection includes a dedicated GraphQL folder with pre-built queries:
+
+| Request | Description |
+|---------|-------------|
+| **Schema Introspection** | Discover all types and available queries |
+| **Search Across All Resources** | Cross-resource search with a single query |
+| **List [API]** | Paginated list query for each discovered API |
+| **Search [API]** | Text search query for each API |
+| **Get [Resource] by ID** | Single item query using example IDs |
+
+**GraphQL queries are dynamically generated** from your OpenAPI specs - when you add a new API, the GraphQL folder automatically includes queries for it!
+
+**Example GraphQL Request:**
+```graphql
+query ListPersons($limit: Int, $offset: Int, $search: String) {
+  persons(limit: $limit, offset: $offset, search: $search) {
+    items {
+      id
+    }
+    total
+    limit
+    offset
+    hasNext
+  }
+}
+```
+
+**Variables:**
+```json
+{
+  "limit": 25,
+  "offset": 0
+}
+```
 
 ## Automated Test Scripts
 
@@ -151,6 +196,13 @@ The generator adds appropriate test scripts to each request based on the HTTP me
 ```javascript
 ✓ Status code is 404
 ✓ Error response has code and message
+```
+
+### GraphQL Requests
+```javascript
+✓ Status code is 200
+✓ Response contains expected data property (e.g., "persons", "search")
+✓ Data has expected structure (items array, total count, etc.)
 ```
 
 ## Environment Variables
