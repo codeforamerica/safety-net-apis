@@ -8,7 +8,11 @@
   },
   "scripts": {
     "start": "node scripts/start-all.js",
-    "validate": "node scripts/validate-openapi.js",
+    "validate": "npm run validate:syntax && npm run validate:lint && npm run validate:patterns",
+    "validate:syntax": "node scripts/validate-openapi.js",
+    "validate:lint": "npx spectral lint 'openapi/*.yaml' --ignore-unknown-format",
+    "validate:patterns": "node scripts/validate-patterns.js",
+    "api:new": "node scripts/generate-api.js",
     "clients:generate": "node scripts/generate-clients.js",
     "postman:generate": "node scripts/generate-postman.js",
     "mock:start": "node scripts/mock-server/server.js",
@@ -21,6 +25,7 @@
     "test:all": "node tests/mock-server/run-all-tests.js --all"
   },
   "devDependencies": {
+    "@stoplight/spectral-cli": "^6.15.0",
     "openapi-zod-client": "^1.18.2"
   },
   "dependencies": {

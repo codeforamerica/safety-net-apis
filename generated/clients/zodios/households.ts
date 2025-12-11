@@ -65,6 +65,11 @@ const endpoints = makeApi([
     requestFormat: "json",
     parameters: [
       {
+        name: "q",
+        type: "Query",
+        schema: z.string().optional(),
+      },
+      {
         name: "limit",
         type: "Query",
         schema: z.number().int().gte(1).lte(100).optional().default(25),

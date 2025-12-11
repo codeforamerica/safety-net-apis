@@ -18,4 +18,84 @@ OffsetParam:
     minimum: 0
     default: 0
 
+SearchQueryParam:
+  name: q
+  in: query
+  required: false
+  schema:
+    type: string
+  description: |
+    Search query using field:value syntax. Multiple conditions separated by
+    spaces are ANDed together.
 
+    **URL Encoding:** This parameter must be URL-encoded when sent over HTTP.
+    Most HTTP clients handle this automatically. Examples in this documentation
+    show human-readable syntax for clarity.
+
+    ## Syntax
+
+    | Pattern | Description | Example |
+    |---------|-------------|---------|
+    | `term` | Full-text search across all searchable fields | `john` |
+    | `field:value` | Exact match on field | `status:approved` |
+    | `field:"value"` | Quoted value (for spaces) | `name:"john doe"` |
+    | `field.nested:value` | Nested field (dot notation) | `address.state:CA` |
+    | `field:>value` | Greater than | `income:>1000` |
+    | `field:>=value` | Greater than or equal | `income:>=1000` |
+    | `field:<value` | Less than | `income:<5000` |
+    | `field:<=value` | Less than or equal | `income:<=5000` |
+    | `field:val1,val2` | Match any value (OR) | `status:approved,pending` |
+    | `-field:value` | Exclude / negate | `-status:denied` |
+    | `field:*` | Field exists (not null) | `email:*` |
+
+    ## Examples
+
+    - `john` — search all fields for "john"
+    - `status:approved` — exact match on status field
+    - `status:approved,pending` — status is "approved" OR "pending"
+    - `income:>=1000` — income greater than or equal to 1000
+    - `created:>2024-01-01` — created after January 1, 2024
+    - `status:approved income:>=1000` — approved AND income >= 1000 (multiple conditions)
+    - `-status:denied` — exclude records with status "denied"
+    - `applicant.state:CA` — nested field filter
+
+    ## URL Encoding Reference
+
+    When manually constructing URLs, encode these characters:
+
+    | Character | Encoded |
+    |-----------|---------|
+    | (space) | `%20` or `+` |
+    | `"` | `%22` |
+    | `:` | `%3A` |
+    | `>` | `%3E` |
+    | `<` | `%3C` |
+    | `,` | `%2C` |
+
+    **Example:**
+    ```
+    Human-readable: q=status:approved income:>=1000
+    URL-encoded:    q=status%3Aapproved%20income%3A%3E%3D1000
+    ```
+  examples:
+    simpleSearch:
+      summary: Full-text search
+      value: john
+    exactMatch:
+      summary: Filter by status
+      value: "status:approved"
+    multipleFilters:
+      summary: Status and income filter
+      value: "status:approved income:>=1000"
+    dateRange:
+      summary: Created after date
+      value: "created:>2024-01-01"
+    multiValue:
+      summary: Multiple statuses (OR)
+      value: "status:approved,pending,under_review"
+    negation:
+      summary: Exclude denied
+      value: "-status:denied"
+    nestedField:
+      summary: Filter by nested field
+      value: "applicant.state:CA"
