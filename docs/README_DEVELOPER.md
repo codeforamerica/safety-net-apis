@@ -1,653 +1,179 @@
 # Developer Guide
 
-Guide for developers working on or extending the OpenAPI Tools project.
+Guide for developers working on or extending the Safety Net OpenAPI toolkit.
+
+## Installation
+
+**Requirements:** Node.js >= 18.0.0
+
+```bash
+# Check Node version
+node --version
+
+# Install dependencies
+npm install
+
+# Verify installation
+npm test
+```
+
+**Native module issues (better-sqlite3):** Install build tools:
+- macOS: `xcode-select --install`
+- Ubuntu: `sudo apt-get install build-essential python3`
 
 ## Project Structure
 
-### Folder Organization
-
 ```
-/
-├── openapi/                    # Source of truth for API definitions
-│   ├── *.yaml                  # Main API specs (one per service)
-│   ├── components/             # Reusable schemas and responses
-│   └── examples/               # Example data for mock server and swagger ui
-│
-├── generated/                  # Auto-generated, some committed
-│   ├── clients/zodios/         # TypeScript clients (committed)
-│   ├── postman-collection.json # Test collection (committed)
-│   └── mock-data/              # SQLite databases (gitignored)
-│
-├── src/mock-server/            # Mock server implementation
-│   └── handlers/               # CRUD operation handlers
-│
-├── scripts/                    # CLI tools and utilities
-│   ├── mock-server/            # Server management scripts
-│   └── swagger/                # Documentation server
-│
-├── tests/                      # Test suite
-└── docs/                       # Documentation
+openapi/                    # Source of truth
+├── *.yaml                  # API specs (auto-discovered)
+├── components/             # Shared schemas, parameters, responses
+├── examples/               # Example data for seeding
+└── patterns/               # API design patterns (naming, CRUD, search)
+
+generated/                  # Auto-generated artifacts
+├── clients/zodios/         # TypeScript clients (committed)
+├── postman-collection.json # Postman collection (committed)
+└── mock-data/*.db          # SQLite databases (gitignored)
+
+scripts/                    # CLI tools
+├── mock-server/            # Server management
+├── swagger/                # Documentation server
+├── generate-api.js         # API template generator
+├── generate-clients.js     # Zodios client generator
+└── validate-*.js           # Validation scripts
+
+tests/mock-server/
+├── unit/                   # Unit tests (no server needed)
+└── integration/            # Integration tests (need server)
 ```
-
-### How Folders Work Together
-
-**1. `/openapi/` - Source of Truth**
-- Place main API specs here (e.g., `products.yaml`)
-- Use `/components/` for shared schemas, parameters, responses
-- Add example data in `/examples/` for mock server seeding
-
-**2. `/generated/` - Auto-Generated Artifacts**
-- TypeScript clients generated from specs
-- Postman collections with tests
-- SQLite databases created from examples
-
-**3. `/src/mock-server/` - Runtime Engine**
-- Automatically discovers and serves all specs in `/openapi/`
-- Generates CRUD endpoints based on your schemas
-- Validates requests against your OpenAPI definitions
-
-**4. `/scripts/` - Developer Tools**
-- Validation, generation, and server management
-- All scripts auto-discover specs in `/openapi/`
 
 ## Adding New APIs
 
-### Pattern Overview
-
-The system follows a three-file pattern for each API:
-
-```
-/openapi/
-├── products.yaml           # API spec with paths and schemas
-├── components/
-│   └── product.yaml        # (optional) Shared schemas
-└── examples/
-    └── products.yaml       # Example data for mock server
-```
-
-### Step 1: Create OpenAPI Specification
-
-**File:** `/openapi/products.yaml`
-
-**Required Structure:**
-```yaml
-openapi: 3.1.0
-info:
-  title: Products API        # Display name
-  version: 1.0.0
-  
-paths:
-  /products:                 # Collection endpoint
-    get:                     # List all
-    post:                    # Create new
-    
-  /products/{productId}:     # Item endpoint
-    get:                     # Get one
-    patch:                   # Update
-    delete:                  # Delete
-    
-components:
-  schemas:
-    Product:                 # Main resource schema
-    ProductCreate:           # Schema for POST
-    ProductUpdate:           # Schema for PATCH
-    ProductList:             # List response schema
-```
-
-**Key Patterns:**
-
-1. **Endpoints** - Use standard REST patterns:
-   - Collection: `/products` (list, create)
-   - Item: `/products/{id}` (get, update, delete)
-
-2. **Schemas** - Define four schemas:
-   - `Product` - Full resource (includes `id`, `createdAt`, `updatedAt`)
-   - `ProductCreate` - Request body for POST (no system fields)
-   - `ProductUpdate` - Request body for PATCH (all fields optional)
-   - `ProductList` - List response (`items`, `total`, `limit`, `offset`)
-
-3. **Reuse Components** - Reference shared definitions:
-   ```yaml
-   parameters:
-     - $ref: "./components/common-parameters.yaml#/LimitParam"
-   responses:
-     '404':
-       $ref: "./components/common-responses.yaml#/NotFound"
-   ```
-
-### Step 2: Create Example Data
-
-**File:** `/openapi/examples/products.yaml`
-
-**Required Structure:**
-```yaml
-ProductExample1:              # Name doesn't matter, but use Example1, Example2...
-  id: "uuid-here"            # Must be unique UUID
-  name: "Product Name"       # Your resource fields
-  createdAt: "2024-01-15T10:00:00Z"  # ISO timestamp
-  updatedAt: "2024-01-15T10:00:00Z"  # ISO timestamp
-  
-ProductExample2:              # Add 3+ examples
-  id: "different-uuid"
-  name: "Another Product"
-  createdAt: "2024-01-16T11:00:00Z"
-  updatedAt: "2024-01-16T11:00:00Z"
-```
-
-**Key Patterns:**
-
-1. **Naming** - Use `{Resource}Example1`, `{Resource}Example2`, etc.
-2. **Required Fields** - Must include `id`, `createdAt`, `updatedAt`
-3. **Unique IDs** - Each example needs a unique UUID
-4. **Match Schema** - Examples must validate against your main schema
-5. **Realistic Data** - Use diverse, meaningful test data
-
-### Step 3: Validate, Generate, and Test
+### Option 1: Use the Generator (Recommended)
 
 ```bash
-# 1. Validate your spec and examples
+npm run api:new -- --name "benefits" --resource "Benefit"
+```
+
+This creates:
+- `openapi/benefits.yaml` - Main spec
+- `openapi/components/benefits.yaml` - Schema
+- `openapi/examples/benefits.yaml` - Example data
+
+Then customize and validate:
+```bash
 npm run validate
-
-# 2. Generate clients and Postman collection
-npm run clients:generate
-npm run postman:generate
-
-# 3. Start servers (auto-creates database from examples)
-npm start
-# or individually:
-# npm run mock:start
-
-# 4. Test your API
-curl http://localhost:1080/products
 ```
 
-Your new API is now available at:
-- Mock server: `http://localhost:1080/products`
-- Swagger docs: `http://localhost:3000/products` (after `npm run swagger:start`)
+### Option 2: Manual Creation
 
-### Testing Your New API
+See [Creating APIs Guide](./README_CREATING_APIS.md) for detailed patterns.
 
-```bash
-# List all
-curl http://localhost:1080/products
+**Required files:**
+1. `openapi/{name}.yaml` - API spec with paths
+2. `openapi/components/{name}.yaml` - Resource schema
+3. `openapi/examples/{name}.yaml` - Example data
 
-# Get one (use ID from your examples)
-curl http://localhost:1080/products/{example-id}
-
-# Create
-curl -X POST http://localhost:1080/products \
-  -H "Content-Type: application/json" \
-  -d '{"name": "New Product", "price": 99.99}'
-
-# Update
-curl -X PATCH http://localhost:1080/products/{example-id} \
-  -H "Content-Type: application/json" \
-  -d '{"price": 79.99}'
-
-# Delete
-curl -X DELETE http://localhost:1080/products/{example-id}
-```
-
-## OpenAPI Spec Patterns
-
-### Resource Schemas
-
-**Main Resource Schema** - Full object with system fields:
+**Required schema fields:**
 ```yaml
-Product:
-  type: object
-  required: [id, name, createdAt, updatedAt]
-  properties:
-    id: {type: string, format: uuid}
-    name: {type: string}
-    createdAt: {type: string, format: date-time}
-    updatedAt: {type: string, format: date-time}
-```
-
-**Create Schema** - No system fields, only required business fields:
-```yaml
-ProductCreate:
-  type: object
-  required: [name]  # Only business-required fields
-  properties:
-    name: {type: string}
-    # No id, createdAt, updatedAt - system generates these
-```
-
-**Update Schema** - All fields optional:
-```yaml
-ProductUpdate:
-  type: object
-  properties:
-    name: {type: string}
-    # All optional - user can update any field
-```
-
-**List Schema** - Standard pagination wrapper:
-```yaml
-ProductList:
-  type: object
-  required: [items, total, limit, offset]
-  properties:
-    items:
-      type: array
-      items: {$ref: "#/components/schemas/Product"}
-    total: {type: integer}
-    limit: {type: integer}
-    offset: {type: integer}
-    hasNext: {type: boolean}
-```
-
-### Endpoint Patterns
-
-**Collection Endpoints** - `/products`
-```yaml
-/products:
-  get:
-    parameters:
-      - $ref: "./components/common-parameters.yaml#/LimitParam"
-      - $ref: "./components/common-parameters.yaml#/OffsetParam"
-    responses:
-      '200':
-        schema: {$ref: "#/components/schemas/ProductList"}
-  
-  post:
-    requestBody:
-      schema: {$ref: "#/components/schemas/ProductCreate"}
-    responses:
-      '201':
-        schema: {$ref: "#/components/schemas/Product"}
-```
-
-**Item Endpoints** - `/products/{productId}`
-```yaml
-/products/{productId}:
-  parameters:
-    - name: productId
-      in: path
-      required: true
-      schema: {type: string, format: uuid}
-  
-  get:
-    responses:
-      '200':
-        schema: {$ref: "#/components/schemas/Product"}
-      '404':
-        $ref: "./components/common-responses.yaml#/NotFound"
-  
-  patch:
-    requestBody:
-      schema: {$ref: "#/components/schemas/ProductUpdate"}
-    responses:
-      '200':
-        schema: {$ref: "#/components/schemas/Product"}
-  
-  delete:
-    responses:
-      '204':
-        description: Deleted
-```
-
-### Using Shared Components
-
-**Reuse pagination parameters:**
-```yaml
-parameters:
-  - $ref: "./components/common-parameters.yaml#/LimitParam"
-  - $ref: "./components/common-parameters.yaml#/OffsetParam"
-```
-
-**Reuse error responses:**
-```yaml
-responses:
-  '400':
-    $ref: "./components/common-responses.yaml#/BadRequest"
-  '404':
-    $ref: "./components/common-responses.yaml#/NotFound"
-  '422':
-    $ref: "./components/common-responses.yaml#/UnprocessableEntity"
-```
-
-**Reuse common types:**
-```yaml
-properties:
-  address:
-    $ref: "./components/common.yaml#/Address"
-  name:
-    $ref: "./components/common.yaml#/PersonName"
+id:
+  type: string
+  format: uuid
+  readOnly: true
+createdAt:
+  type: string
+  format: date-time
+  readOnly: true
+updatedAt:
+  type: string
+  format: date-time
+  readOnly: true
 ```
 
 ## Development Workflow
 
-### Making Changes to APIs
-
 ```bash
 # 1. Edit spec or examples
-vim openapi/products.yaml
-vim openapi/examples/products.yaml
-
-# 2. Validate
+# 2. Validate changes
 npm run validate
 
-# 3. Regenerate (if spec changed)
+# 3. Regenerate clients (if spec changed)
 npm run clients:generate
-npm run postman:generate
 
-# 4. Reset data (if examples changed)
+# 4. Reset database (if examples changed)
 npm run mock:reset
 
 # 5. Test
-npm test                      # Unit tests only
-npm run test:integration      # Integration tests only
-npm run test:all             # Both unit and integration tests
+npm test
 
 # 6. Commit (including generated files)
 git add openapi/ generated/clients/ generated/postman-collection.json
-git commit -m "feat: update products API"
-```
-
-### Testing Changes
-
-```bash
-# Run unit tests only (fast, no server needed)
-npm test
-# or explicitly
-npm run test:unit
-
-# Run integration tests only (auto-starts server if needed)
-npm run test:integration
-
-# Run all tests (unit + integration)
-npm run test:all
-
-# Manual testing with Swagger UI
-npm start  # Starts both servers
-# or: npm run swagger:start
-```
-
-### Debugging
-
-**Enable verbose logging:**
-```bash
-DEBUG=* npm run mock:start
-```
-
-**Check database contents:**
-```bash
-sqlite3 generated/mock-data/products.db "SELECT * FROM products;"
-```
-
-**View OpenAPI spec processing:**
-```bash
-# Check if spec loads correctly
-node -e "
-const loader = require('./src/mock-server/openapi-loader.js');
-const specs = loader.loadAllSpecs();
-console.log(JSON.stringify(specs, null, 2));
-"
-```
-
-## Code Style and Conventions
-
-### OpenAPI Specs
-- Use YAML format
-- Place specs in `/openapi/` root (not subdirectories)
-- Use external `$ref` for reusable components
-- Include examples for all schemas
-- Add descriptions for all endpoints and fields
-- Validate specs with `npm run validate` before committing
-
-### Example Data
-- Place in `/openapi/examples/`
-- Use meaningful IDs (UUIDs)
-- Include all required fields
-- Provide 3+ examples per resource
-- Use realistic, diverse data
-- Ensure examples match schemas (validated automatically)
-
-### JavaScript Code
-- Use ES modules (`import`/`export`)
-- Use async/await for async operations
-- Handle errors with try/catch
-- Add JSDoc comments for functions
-- Use descriptive variable names
-
-### Commit Messages
-Follow conventional commits:
-- `feat:` - New features
-- `fix:` - Bug fixes
-- `docs:` - Documentation changes
-- `test:` - Test changes
-- `refactor:` - Code refactoring
-- `chore:` - Build/tooling changes
-
-## Extending the Mock Server
-
-### Adding Custom Handlers
-
-Create a new handler in `src/mock-server/handlers/`:
-
-```javascript
-// src/mock-server/handlers/custom-handler.js
-export function handleCustomOperation(req, res, db, schema) {
-  try {
-    // Your custom logic here
-    const result = db.prepare('SELECT * FROM custom_table').all();
-    
-    res.json({
-      success: true,
-      data: result
-    });
-  } catch (error) {
-    res.status(500).json({
-      code: 'INTERNAL_ERROR',
-      message: error.message
-    });
-  }
-}
-```
-
-### Adding Middleware
-
-Edit `scripts/mock-server/server.js`:
-
-```javascript
-import express from 'express';
-
-const app = express();
-
-// Add custom middleware
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
-  next();
-});
-
-// Add authentication middleware
-app.use('/admin/*', (req, res, next) => {
-  const token = req.headers.authorization;
-  if (!token) {
-    return res.status(401).json({
-      code: 'UNAUTHORIZED',
-      message: 'Authentication required'
-    });
-  }
-  next();
-});
-```
-
-## Best Practices
-
-### OpenAPI Design
-- ✅ Use consistent naming conventions
-- ✅ Version your APIs (`/v1/products`)
-- ✅ Include pagination on list endpoints
-- ✅ Use appropriate HTTP methods and status codes
-- ✅ Provide clear error messages
-- ✅ Document all parameters and responses
-- ✅ Validate specs regularly with `npm run validate`
-
-### Example Data
-- ✅ Use realistic data
-- ✅ Include edge cases
-- ✅ Maintain referential integrity (IDs that exist)
-- ✅ Update examples when schemas change
-- ✅ Validate examples match schemas
-- ✅ Document special test cases
-
-### Testing
-- ✅ Test all CRUD operations
-- ✅ Test error cases (404, 400, 422)
-- ✅ Test pagination and search
-- ✅ Test validation rules
-- ✅ Run tests before committing
-
-### Git Workflow
-- ✅ Commit generated files after spec changes
-- ✅ Review generated file diffs in PRs
-- ✅ Never manually edit generated files
-- ✅ Keep commits atomic and focused
-- ✅ Write descriptive commit messages
-
-## Troubleshooting
-
-### Client Generation Fails
-
-**Issue:** `openapi-zod-client` errors
-
-**Solution:**
-- Run `npm run validate` to check for spec errors
-- Validate OpenAPI spec at [editor.swagger.io](https://editor.swagger.io)
-- Check all `$ref` paths are correct
-- Ensure required fields are marked as required
-- Check that examples match schemas
-
-### Mock Server Won't Start
-
-**Issue:** Server fails to start
-
-**Solution:**
-- Check port 1080 is not in use: `lsof -i :1080`
-- Verify Node version: `node --version` (should be 18+)
-- Check OpenAPI specs are valid
-- Review error messages in console
-
-### Database Issues
-
-**Issue:** Incorrect or missing data
-
-**Solution:**
-```bash
-# Reset databases
-npm run mock:reset
-
-# Or manually delete and recreate
-rm generated/mock-data/*.db
-npm run mock:setup
 ```
 
 ## Generated Files
 
-The `/generated/` directory contains files generated from OpenAPI specifications.
+**Committed to git:**
+- `generated/clients/zodios/*.ts` - TypeScript clients
+- `generated/postman-collection.json` - Postman collection
 
-### Version Control Strategy
+**Gitignored:**
+- `generated/mock-data/*.db` - SQLite databases
 
-**✅ Committed to Git:**
-- **`/generated/clients/zodios/*.ts`** - TypeScript API clients
-  - Generated from OpenAPI specs
-  - Changes only when specs change
-  - Committed so developers can use immediately
-  - Reviewable in PRs to see API changes
+**When to regenerate:**
+- Spec changes: `npm run clients:generate && npm run postman:generate`
+- Example changes: `npm run mock:reset`
 
-- **`/generated/postman-collection.json`** - Postman test collection
-  - Generated from specs and examples
-  - Committed for immediate use
-  - Shows API evolution in git history
+## Extending the Mock Server
 
-**❌ Ignored in Git:**
-- **`/generated/mock-data/*.db`** - SQLite databases
-  - Runtime data that varies by environment
-  - Regenerated with `npm run mock:reset`
-  - Different copies for dev, test, CI
+### Custom Handlers
 
-### When to Regenerate
+Create handlers in `src/mock-server/handlers/`:
 
-**Zodios Clients** - Regenerate when:
-- ✅ Adding/modifying API endpoints
-- ✅ Changing request/response schemas
-- ✅ Updating parameters or headers
-
-**Postman Collection** - Regenerate when:
-- ✅ Adding/modifying API endpoints
-- ✅ Changing examples in `/openapi/examples/`
-- ✅ Updating request/response formats
-
-**Databases** - Regenerate when:
-- ✅ Adding/modifying examples
-- ✅ Needing fresh test data
-- ✅ After corrupting local data
-
-### Regeneration Commands
-
-```bash
-# Regenerate Zodios clients
-npm run clients:generate
-
-# Regenerate Postman collection
-npm run postman:generate
-
-# Regenerate databases
-npm run mock:reset
-
-# Regenerate everything
-npm run clients:generate && npm run postman:generate && npm run mock:reset
+```javascript
+export function handleCustomOperation(req, res, db, schema) {
+  const result = db.prepare('SELECT * FROM table').all();
+  res.json({ data: result });
+}
 ```
 
-### Workflow After Updating Specs
+### Custom Middleware
 
-```bash
-# 1. Validate changes
-npm run validate
+Edit `scripts/mock-server/server.js`:
 
-# 2. Regenerate clients and collection
-npm run clients:generate
-npm run postman:generate
-
-# 3. Review changes
-git diff generated/
-
-# 4. Commit the changes
-git add generated/clients/ generated/postman-collection.json
-git commit -m "feat: update API for new endpoints"
+```javascript
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
+});
 ```
 
-### Best Practices for Generated Files
+## Code Conventions
 
-1. ✅ **Commit generated clients and Postman collection** after OpenAPI changes
-2. ✅ **Review generated file diffs** in PRs to verify API changes
-3. ✅ **Never manually edit** generated files (changes will be overwritten)
-4. ✅ **Run `npm run mock:reset`** if databases become inconsistent
-5. ✅ **Validate before generating** with `npm run validate`
+- **OpenAPI specs:** YAML, external `$ref` for reusable components
+- **Examples:** 3+ per resource, realistic data, unique UUIDs
+- **JavaScript:** ES modules, async/await, JSDoc comments
+- **Commits:** Conventional commits (`feat:`, `fix:`, `docs:`)
 
-### Handling Merge Conflicts
+## Troubleshooting
 
-If you encounter merge conflicts in generated files:
-
+### Port in use
 ```bash
-# Take either version, then regenerate
-git checkout --ours generated/clients/
-npm run clients:generate
-
-# Or take theirs and regenerate
-git checkout --theirs generated/clients/
-npm run clients:generate
+lsof -i :1080        # Find process
+kill -9 <PID>        # Kill it
 ```
 
----
+### Database issues
+```bash
+npm run mock:reset   # Reset to example data
+```
 
-For more information:
-- [Validation Guide](./README_VALIDATION.md)
-- [Installation Guide](./README_INSTALLATION.md)
-- [Testing Guide](./README_TESTING.md)
-- [Mock Server Guide](./README_MOCK_SERVER.md)
+### Client generation fails
+```bash
+npm run validate     # Check for spec errors
+```
 
-
+### Node version issues
+```bash
+nvm install 18
+nvm use 18
+```

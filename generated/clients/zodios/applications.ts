@@ -2166,6 +2166,11 @@ const endpoints = makeApi([
     requestFormat: "json",
     parameters: [
       {
+        name: "q",
+        type: "Query",
+        schema: z.string().optional(),
+      },
+      {
         name: "limit",
         type: "Query",
         schema: z.number().int().gte(1).lte(100).optional().default(25),
@@ -2174,28 +2179,6 @@ const endpoints = makeApi([
         name: "offset",
         type: "Query",
         schema: z.number().int().gte(0).optional().default(0),
-      },
-      {
-        name: "status",
-        type: "Query",
-        schema: z
-          .enum([
-            "draft",
-            "submitted",
-            "under_review",
-            "approved",
-            "denied",
-            "pending_information",
-            "withdrawn",
-          ])
-          .optional(),
-      },
-      {
-        name: "programs",
-        type: "Query",
-        schema: z
-          .array(z.enum(["snap", "cash_programs", "medical_assistance"]))
-          .optional(),
       },
     ],
     response: z.object({
