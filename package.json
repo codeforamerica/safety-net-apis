@@ -24,6 +24,8 @@
     "clients:build-package": "node packages/clients/scripts/build-state-package.js",
     "postman:generate": "npm run postman -w @safety-net/clients",
     "mock:start": "npm start -w @safety-net/mock-server",
+    "mock:start:all": "npm run start:all -w @safety-net/mock-server",
+    "mock:swagger": "npm run swagger -w @safety-net/mock-server",
     "mock:setup": "npm run setup -w @safety-net/mock-server",
     "mock:reset": "npm run reset -w @safety-net/mock-server",
     "test": "npm test --workspaces --if-present",
