@@ -1,12 +1,68 @@
-# Application schema with all fields for public assistance programs
+# Application resource - application for public assistance programs
+#
+# Contains HouseholdMember which extends Person with eligibility-specific data.
+# Schemas here contain point-in-time eligibility data; persistent data is in person.yaml.
+#
+# Domain Container Hierarchy:
+#
+#   Application
+#     ├── screeningFlags          ApplicationScreeningFlags - flags organized by domain
+#     ├── preferences             ApplicationPreferences - consents and delivery preferences
+#     ├── household
+#     │     ├── members[]         HouseholdMember - see below
+#     │     ├── otherOccupants[]  HouseholdOccupant - boarders, roomers
+#     │     ├── expenses          HouseholdExpenses - rent, mortgage, utilities
+#     │     └── healthInsurancePlans{}  HealthInsurancePlan - plans keyed by name
+#     ├── expeditedSNAPInfo       ExpeditedSNAPInfo - expedited screening
+#     ├── signatures              Applicant and representative signatures
+#     ├── applicationAssister     ApplicationAssister
+#     └── authorizedRepresentative AuthorizedRepresentative
+#
+#   HouseholdMember (extends Person)
+#     ├── relationship            Relationship to primary applicant
+#     ├── programsApplyingFor[]   Programs this person is applying for
+#     ├── citizenshipInfo         CitizenshipInfo (extends Person's)
+#     ├── contactInfo             ContactInfo (extends Person's)
+#     ├── disabilityInfo          DisabilityInfo
+#     ├── employmentHistory[]     JobIncomeInfo
+#     ├── expenses                ExpenseInfo
+#     ├── familyPlanningInfo      FamilyPlanningInfo
+#     ├── financialAidInfo        FinancialAidInfo
+#     ├── fosterCareInfo          FosterCareHistory
+#     ├── healthInfo              HealthInfo
+#     ├── healthInsuranceEnrollments[]  HealthInsuranceEnrollment
+#     ├── incomeChangeInfo        IncomeChangeInfo
+#     ├── institutionalizedInfo   InstitutionalizedInfo
+#     ├── lumpSumPayments[]       LumpSumPayment
+#     ├── nonCitizenApplicationInfo NonCitizenApplicationInfo
+#     ├── pastBenefitsFromOtherStates PastBenefitsFromOtherStates
+#     ├── priorConvictions        PriorConvictionsInfo
+#     ├── resourceInfo            ResourceInfo
+#     ├── retroactiveMedicalRequest RetroactiveMedicalRequest
+#     ├── selfEmployment[]        SelfEmploymentRecord
+#     ├── strikeInfo              StrikeInfo
+#     ├── taxFilingInfo           TaxFilingInfo
+#     ├── transferredAssets[]     TransferredAsset
+#     ├── tribalInfo              TribalInfo (extends Person's)
+#     ├── unearnedIncomeSources[] UnearnedIncomeSource
+#     └── absentParents[]         AbsentParent (for children)
+#
+#   External Person Types:
+#     - ExternalPerson            Base for non-household persons (extends PersonIdentity)
+#     - AbsentParent              Absent parent for a child
+#     - ApplicationAssister       Person assisting with application
+#     - AuthorizedRepresentative  Representative authorized by applicant
+#
+#   Supporting Schemas:
+#     - (Various expense, income, health coverage, and resource details)
+
 Application:
   type: object
   description: Application schema for public assistance programs. Supports applying for SNAP, Cash Programs, and/or Medical Assistance simultaneously.
   additionalProperties: false
   required:
     - id
-    - persons
-    - programs
+    - household
     - createdAt
     - updatedAt
   properties:
@@ -31,737 +87,70 @@ Application:
         - denied
         - pending_information
         - withdrawn
-    programs:
-      $ref: "#/Programs"
-      description: |
-        Programs being applied for. A single application can include multiple programs.
-        At least one program must be set to true (snap, at least one cash program, or medicalAssistance).
-    persons:
-      type: array
-      description: |
-        All persons associated with this application, including the primary applicant (relationship=self)
-        and household members. At least one person with relationship=self is required.
-      minItems: 1
-      items:
-        $ref: "#/ApplicationPerson"
-    primaryApplicant:
+    screeningFlags:
+      $ref: "#/ApplicationScreeningFlags"
+      description: Flags indicating screening criteria relevant to this application.
+    preferences:
+      $ref: "#/ApplicationPreferences"
+      description: Application preferences and consents.
+    household:
       type: object
-      description: |
-        Information specific to the primary applicant (the person with relationship=self in the persons array).
-        Includes contact information, signatures, and link to Person record.
+      description: Household information including members, occupants, expenses, and related data.
       additionalProperties: false
+      required:
+        - members
       properties:
-        personId:
-          type: string
-          format: uuid
+        members:
+          type: array
           description: |
-            Reference to Person record for the primary applicant.
-            Populated after application processing when Person record is created.
-        contactInfo:
-          type: object
-          description: Contact information for the primary applicant.
-          additionalProperties: false
-          properties:
-            homeAddress:
-              $ref: "./common.yaml#/Address"
-              description: Home address of the primary applicant.
-            mailingAddress:
-              $ref: "./common.yaml#/Address"
-              description: Mailing address if different from home address.
-            phoneNumber:
-              $ref: "./common.yaml#/PhoneNumber"
-              description: Primary phone number.
-            otherPhoneNumber:
-              $ref: "./common.yaml#/PhoneNumber"
-              description: Alternative phone number.
-            email:
-              $ref: "./common.yaml#/Email"
-              description: Email address for electronic notices.
-            speaksEnglish:
-              type: boolean
-              description: Whether the applicant speaks and reads English.
-            preferredLanguage:
-              $ref: "./common.yaml#/Language"
-              description: Preferred language if not English.
-            isHomeless:
-              type: boolean
-              description: Whether the applicant is currently homeless.
-            isStateResident:
-              type: boolean
-              description: Whether the applicant is a resident of the state.
-            preferredNoticeMethod:
-              type: string
-              description: Preferred method for receiving notices.
-              enum:
-                - paper
-                - email
-                - both
-        signatures:
-          type: object
-          description: Primary applicant signatures.
-          additionalProperties: false
-          properties:
-            applicantSignature:
-              $ref: "./common.yaml#/Signature"
-              description: Applicant signature.
-            spouseCoApplicantSignature:
-              $ref: "./common.yaml#/Signature"
-              description: Spouse/co-applicant signature if applicable.
-            applicantAuthorizedRepresentativeSignature:
-              $ref: "./common.yaml#/Signature"
-              description: Authorized representative signature for the applicant.
-            coApplicantAuthorizedRepresentativeSignature:
-              $ref: "./common.yaml#/Signature"
-              description: Authorized representative signature for the co-applicant.
-    personWhoHelpedCompleteApplication:
-      type: object
-      description: Information about the person who helped complete this application.
-      additionalProperties: false
-      properties:
-        name:
-          type: string
-          description: Name of the person who helped complete the application.
-          maxLength: 200
-        address:
-          $ref: "./common.yaml#/Address"
-          description: Address of the person who helped complete the application.
-        phoneNumber:
-          $ref: "./common.yaml#/PhoneNumber"
-          description: Phone number of the person who helped complete the application.
-    householdDetails:
-      type: object
-      description: Additional household details beyond the persons array.
-      additionalProperties: false
-      properties:
-        roomersOrBoarders:
-          type: array
-          description: Roomers or boarders in the home.
+            IRS-recognized household members for benefits eligibility, including the primary
+            applicant (relationship=self). At least one member with relationship=self is required.
+          minItems: 1
           items:
-            type: object
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                maxLength: 200
-              rentAmount:
-                type: number
-                minimum: 0
-                description: Amount paid for rent per month.
-              mealsIncluded:
-                type: boolean
-                description: Whether meals are included with the rent.
-        institutionalizedMembers:
+            $ref: "#/HouseholdMember"
+        otherOccupants:
           type: array
-          description: Household members temporarily in an institution.
+          description: |
+            Other people living at the address who are not part of the household unit for
+            benefits purposes (e.g., boarders, roomers).
           items:
-            type: object
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                maxLength: 200
-              dateEntered:
-                type: string
-                format: date
-              facilityName:
-                type: string
-                maxLength: 200
-              facilityType:
-                type: string
-                enum:
-                  - nursing_home
-                  - hospital
-                  - mental_health_institution
-                  - incarceration
-                  - other
-              isPendingDisposition:
-                type: boolean
-                description: Whether pending disposition of charges.
-              mealsProvided:
-                type: boolean
-                description: Whether meals are provided by the facility.
-    expeditedSNAPDetails:
-      type: object
-      description: Expedited SNAP details for faster processing.
-      additionalProperties: false
-      properties:
-        householdSize:
-          type: integer
-          minimum: 1
-          description: Number of people in the home who purchase and prepare food together.
-        isMigrantOrSeasonalFarmWorker:
-          type: boolean
-        totalExpectedIncomeThisMonth:
-          type: number
-          minimum: 0
-          description: Total money household expects to get this month (before deductions).
-        totalCashOnHand:
-          type: number
-          minimum: 0
-          description: Total cash on hand and money in checking/savings account.
-        monthlyMortgage:
-          type: number
-          minimum: 0
-        monthlyRent:
-          type: number
-          minimum: 0
-        utilityCosts:
+            $ref: "#/HouseholdOccupant"
+        expenses:
+          $ref: "#/HouseholdExpenses"
+          description: Household-level expense information (rent/mortgage/utilities).
+        healthInsurancePlans:
           type: object
-          description: Monthly utility costs.
-          additionalProperties: false
-          properties:
-            electricity:
-              type: number
-              minimum: 0
-            water:
-              type: number
-              minimum: 0
-            phone:
-              type: number
-              minimum: 0
-            trash:
-              type: number
-              minimum: 0
-            sewer:
-              type: number
-              minimum: 0
-            other:
-              type: number
-              minimum: 0
-        receivedBenefitsOtherState:
-          type: boolean
-          description: Whether anyone received SNAP or cash benefits in another state in last 30 days.
-    ebtCard:
+          description: >
+            Health insurance plans available to household members, keyed by plan name.
+            The key must match the plan's `planName` property.
+          additionalProperties:
+            $ref: "#/HealthInsurancePlan"
+    expeditedSNAPInfo:
+      $ref: "#/ExpeditedSNAPInfo"
+      description: Expedited SNAP screening information.
+    signatures:
       type: object
-      description: |
-        EBT card information. Used for SNAP and Cash Programs.
+      description: Application signatures.
       additionalProperties: false
       properties:
-        needsEBTCard:
-          type: boolean
-          description: Whether the applicant needs an EBT card.
-        ebtCardDeliveryMethod:
-          type: string
-          enum:
-            - postal_mail
-            - in_person
-          description: Preferred method for receiving the EBT card.
-    voterRegistration:
-      type: object
-      description: Voter registration information.
-      additionalProperties: false
-      properties:
-        wantsToRegister:
-          type: boolean
-          description: Whether the applicant wants to register to vote.
-    dependentChildren:
-      type: object
-      description: Information about dependent children.
-      additionalProperties: false
-      properties:
-        livesWithChildUnder19:
-          type: boolean
-          description: Whether applicant lives with at least one child under 19 and is the main caretaker.
-        hasParentOutsideHome:
-          type: boolean
-          description: Whether any children have a parent living outside the home.
-        triedToGetMedicalSupport:
-          type: boolean
-          description: Whether applicant tried to get medical support from absent parent.
-        absentParents:
-          type: array
-          items:
-            type: object
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                maxLength: 200
-              address:
-                $ref: "./common.yaml#/Address"
-              phoneNumber:
-                $ref: "./common.yaml#/PhoneNumber"
-              forWhichChild:
-                type: string
-                maxLength: 200
-        wantsGoodCauseFromChildSupport:
-          type: boolean
-          description: Whether applicant wants to apply for good cause from pursuing Child Support Services.
-    fosterCare:
-      type: object
-      description: |
-        Foster care flags and application-level Former Foster Care Medical Assistance info.
-        Person-specific foster care history is stored in each person's fosterCareHistory
-        field within the persons array.
-      additionalProperties: false
-      properties:
-        hasFosterCareHistory:
-          type: boolean
-          description: Whether anyone applying has been in foster care.
-        formerFosterCareMedicalAssistance:
-          type: object
-          description: Information about receiving Former Foster Care Medical Assistance.
-          additionalProperties: false
-          properties:
-            receivedFormerFosterCareMedicalAssistance:
-              type: boolean
-            name:
-              type: string
-              maxLength: 200
-            stateLivedInWhenAgedOut:
-              type: string
-              maxLength: 2
-            nameUsedInOutOfStateFosterCare:
-              type: string
-              maxLength: 200
-            dateLeftFosterCare:
-              type: string
-              format: date
-            wereAdopted:
-              type: boolean
-            returnedToFosterCareAfterAdoption:
-              type: boolean
-            residencyDate:
-              type: string
-              format: date
-            needsHelpPayingMedicalBills:
-              type: boolean
-            medicalBillsHelpWhen:
-              type: string
-              format: date
-            medicalBillsHelpMonths:
-              type: array
-              items:
-                type: string
-                format: date
-    familyPlanning:
-      type: object
-      description: |
-        Family planning benefits flag. Person-specific family planning preferences
-        are stored in each person's wantsFamilyPlanningBenefits field within the persons array.
-      additionalProperties: false
-      properties:
-        wantsFamilyPlanningBenefits:
-          type: boolean
-          description: Whether any household member wants family planning benefits.
-    pregnancy:
-      type: object
-      description: |
-        Pregnancy flag. Person-specific pregnancy information is stored in each
-        person's pregnancyInfo field within the persons array.
-      additionalProperties: false
-      properties:
-        isAnyonePregnant:
-          type: boolean
-          description: Whether any household member is pregnant.
-    disability:
-      type: object
-      description: |
-        Disability flags and household-level SSI/SSDI history. Person-specific disability
-        information is stored in each person's disabilityInfo and socialSecurityApplications
-        fields within the persons array.
-      additionalProperties: false
-      properties:
-        hasDisability:
-          type: boolean
-          description: Whether any household member has a disability.
-        everReceivedSSIOrSSDI:
-          type: boolean
-          description: Whether any household member has ever received SSI or SSDI.
-        ssiOrSsdiEndDate:
-          type: string
-          format: date
-          description: Date SSI or SSDI benefits ended.
-    nonCitizen:
-      type: object
-      description: |
-        Non-citizen flags and emergency Medicaid info. Person-specific immigration
-        information is stored in each person's immigrationInfo field within the persons array.
-      additionalProperties: false
-      properties:
-        wantsEmergencyMedicaidAndReproductiveBenefits:
-          type: boolean
-          description: Whether any household member wants emergency Medicaid and reproductive benefits.
-        emergencyMedicaidApplicants:
-          type: array
-          description: Names of household members applying for emergency Medicaid.
-          items:
-            type: string
-            maxLength: 200
-        hasNonCitizens:
-          type: boolean
-          description: Whether any household member is a non-citizen.
-    earnedIncome:
-      type: object
-      description: |
-        Earned income flags. Person-specific employment data is stored in each person's
-        jobs, selfEmployment, and jobChanges arrays within the persons array.
-      additionalProperties: false
-      properties:
-        hasEmployment:
-          type: boolean
-          description: Whether any household member has employment income.
-        hasSelfEmployment:
-          type: boolean
-          description: Whether any household member has self-employment income.
-        hasJobChanges:
-          type: boolean
-          description: Whether any household member has recent job changes.
-    unearnedIncome:
-      type: object
-      description: |
-        Unearned income flags. Person-specific unearned income data is stored in each person's
-        unearnedIncomeSources, lumpSumPayments, and strikeInfo fields within the persons array.
-      additionalProperties: false
-      properties:
-        hasOtherIncome:
-          type: boolean
-          description: Whether any household member has unearned income.
-        hasLumpSumPayments:
-          type: boolean
-          description: Whether any household member received lump sum payments.
-        isAnyoneOnStrike:
-          type: boolean
-          description: Whether any household member is on strike.
-    expenses:
-      type: object
-      description: |
-        Household-level expense settings. Person-specific expense data is stored in each
-        person's expenses field within the persons array.
-      additionalProperties: false
-      properties:
-        rent:
-          type: object
-          description: Household-level rent settings.
-          additionalProperties: false
-          properties:
-            hasRentExpenses:
-              type: boolean
-              description: Whether any household member has rent expenses.
-            utilitiesIncludedInRent:
-              type: boolean
-            receivesSection8OrPublicHousing:
-              type: boolean
-            housingAssistanceType:
-              type: string
-              enum:
-                - section8
-                - public_housing
-        mortgage:
-          type: object
-          description: Household-level mortgage settings.
-          additionalProperties: false
-          properties:
-            hasMortgageExpenses:
-              type: boolean
-              description: Whether any household member has mortgage expenses.
-            receivesSection8OrPublicHousing:
-              type: boolean
-            housingAssistanceType:
-              type: string
-              enum:
-                - section8
-                - public_housing
-        utilities:
-          type: object
-          description: Household-level utility settings.
-          additionalProperties: false
-          properties:
-            heatingCoolingMethod:
-              type: array
-              items:
-                type: string
-                enum:
-                  - electric
-                  - gas
-                  - firewood
-                  - propane
-                  - swamp_cooler
-                  - other
-            otherHeatingCoolingType:
-              type: string
-              maxLength: 100
-            receivedLEAP:
-              type: boolean
-        additionalExpenses:
-          type: object
-          description: Household-level additional expense settings.
-          additionalProperties: false
-          properties:
-            hasAdditionalExpenses:
-              type: boolean
-              description: Whether any household member has additional expenses.
-    students:
-      type: object
-      description: |
-        Student flags and household-level student data. Person-specific student details
-        are stored in each person's studentInfo and hasFinancialAid fields within the persons array.
-      additionalProperties: false
-      properties:
-        hasStudents:
-          type: boolean
-          description: Whether any household member is a student.
-        hasFinancialAid:
-          type: boolean
-          description: Whether any household member receives financial aid.
-        grantsScholarshipsWorkStudyForLivingExpenses:
-          type: number
-          minimum: 0
-          description: Total grants/scholarships/work-study used for living expenses.
-        taxableGrantsScholarshipsWorkStudy:
-          type: number
-          minimum: 0
-          description: Total taxable grants/scholarships/work-study.
-    resources:
-      type: object
-      description: |
-        Resource flags. Person-specific resource data is stored in each person's
-        financialResources, vehicles, insurancePolicies, properties, and transferredAssets
-        arrays within the persons array.
-      additionalProperties: false
-      properties:
-        hasResources:
-          type: boolean
-          description: Whether any household member has financial resources.
-        hasVehicles:
-          type: boolean
-          description: Whether any household member owns vehicles.
-        hasLifeOrBurialInsurance:
-          type: boolean
-          description: Whether any household member has life or burial insurance.
-        ownsProperty:
-          type: boolean
-          description: Whether any household member owns real estate property.
-        hasTransferredAssets:
-          type: boolean
-          description: Whether any household member has transferred assets.
-    priorConvictions:
-      type: object
-      description: |
-        Prior convictions flags. Person-specific conviction data is stored in each person's
-        priorConvictions object within the persons array.
-      additionalProperties: false
-      properties:
-        convictedOfDuplicateSNAPBenefits:
-          type: boolean
-          description: Whether any household member was convicted of duplicate SNAP benefits.
-        hidingFromLaw:
-          type: boolean
-          description: Whether any household member is hiding from law enforcement.
-        convictedOfDrugFelony:
-          type: boolean
-          description: Whether any household member was convicted of a drug felony.
-        convictedOfSNAPTrafficking:
-          type: boolean
-          description: Whether any household member was convicted of SNAP trafficking.
-        convictedOfTradingSNAPForWeapons:
-          type: boolean
-          description: Whether any household member was convicted of trading SNAP for weapons.
-        disqualifiedForIPVOrWelfareFraud:
-          type: boolean
-          description: Whether any household member was disqualified for IPV or welfare fraud.
-        convictedOfViolentCrime:
-          type: boolean
-          description: Whether any household member was convicted of a violent crime.
-    hasMilitaryService:
-      type: boolean
-      description: |
-        Whether any household member has military service. Person-specific military service
-        data is stored in each person's isMilitaryServiceMember field within the persons array.
-    burialPreference:
-      type: string
-      enum:
-        - cremation
-        - burial
-        - no_preference
-    retroactiveMedicalCoverage:
-      type: object
-      description: |
-        Retroactive medical coverage flags. Person-specific retroactive coverage requests
-        are stored in each person's retroactiveMedicalRequest field within the persons array.
-      additionalProperties: false
-      properties:
-        wantsRetroactiveCoverage:
-          type: boolean
-          description: Whether any household member wants retroactive medical coverage.
-    healthInsurance:
-      type: object
-      description: |
-        Health insurance flags and employer-sponsored coverage. Person-specific health insurance
-        data is stored in each person's healthCoverage, medicare, federalHealthBenefits,
-        separateMailAddress, and hasLegalClaim fields within the persons array.
-      additionalProperties: false
-      properties:
-        hasHealthInsurance:
-          type: boolean
-          description: Whether any household member has health insurance.
-        employerSponsoredCoverage:
-          type: array
-          description: Employer-sponsored health coverage options (household-level).
-          items:
-            type: object
-            additionalProperties: false
-            properties:
-              employerName:
-                type: string
-                maxLength: 200
-              employerIdentificationNumber:
-                type: string
-                maxLength: 50
-              employerAddress:
-                $ref: "./common.yaml#/Address"
-              employerPhone:
-                $ref: "./common.yaml#/PhoneNumber"
-              contactAboutCoverage:
-                type: string
-                maxLength: 200
-              coverageStartDate:
-                type: string
-                format: date
-              coverageEndDate:
-                type: string
-                format: date
-              whoElseHadAccess:
-                type: string
-                maxLength: 200
-              whoElseWasEnrolled:
-                type: string
-                maxLength: 200
-              premiumAmount:
-                type: number
-                minimum: 0
-              premiumAmountUnknown:
-                type: boolean
-              premiumFrequency:
-                type: string
-                enum:
-                  - weekly
-                  - every_two_weeks
-                  - twice_monthly
-                  - monthly
-                  - yearly
-              hasEmployeeOnlyPlanMeetingMinimumValue:
-                type: boolean
-              lowestCostPlanName:
-                type: string
-                maxLength: 200
-              lowestCostPlanUnknown:
-                type: boolean
-              noPlansMeetMinimumValue:
-                type: boolean
-        hasLegalClaim:
-          type: boolean
-          description: Whether any household member has a legal claim related to medical care.
-        wantsSeparateMail:
-          type: boolean
-          description: Whether any household member wants separate mail for medical correspondence.
-    expectedIncomeChange:
-      type: object
-      description: |
-        Expected income change flags. Person-specific income change data is stored in each
-        person's expectedIncomeChange field within the persons array.
-      additionalProperties: false
-      properties:
-        doesIncomeChangeFromMonthToMonth:
-          type: boolean
-          description: Whether any household member's income changes from month to month.
-    reasonsForIncomeDifferences:
-      type: object
-      description: |
-        Reasons for income differences flags and household-level deductions.
-        Person-specific income change reasons are stored in each person's
-        incomeChangeReason field within the persons array.
-      additionalProperties: false
-      properties:
-        hasJobOrNonJobRelatedDeductions:
-          type: boolean
-          description: Whether any household member has job or non-job related deductions.
-        deductionsChangeMonthToMonth:
-          type: boolean
-          description: Whether deductions change from month to month.
-        deductions:
-          type: array
-          description: Household-level deductions.
-          items:
-            type: object
-            additionalProperties: false
-            properties:
-              deductionType:
-                type: string
-                maxLength: 200
-              frequency:
-                type: string
-                enum:
-                  - one_time_only
-                  - weekly
-                  - every_two_weeks
-                  - twice_monthly
-                  - monthly
-                  - yearly
-              currentAmount:
-                type: number
-                minimum: 0
-              actualAnnualAmount:
-                type: number
-                minimum: 0
-        hasPastIncomeAndDeductions:
-          type: boolean
-        pastIncomeAmount:
-          type: number
-          minimum: 0
-        pastDeductionsAmount:
-          type: number
-          minimum: 0
-    americanIndianOrAlaskaNativeInformation:
-      type: object
-      description: |
-        American Indian or Alaska Native flags. Person-specific tribal information
-        is stored in each person's tribalInfo field within the persons array.
-      additionalProperties: false
-      properties:
-        isAnyoneAmericanIndianOrAlaskaNative:
-          type: boolean
-          description: Whether any household member is American Indian or Alaska Native.
-        hasAnyoneReceivedServiceFromIndianHealthService:
-          type: boolean
-          description: Whether any household member has received service from Indian Health Service.
-        isAnyoneEligibleForIndianHealthService:
-          type: boolean
-          description: Whether any household member is eligible for Indian Health Service.
-    permissionToValidateIncome:
-      type: object
-      additionalProperties: false
-      properties:
-        doesNotGivePermissionToValidateIncome:
-          type: boolean
-    authorizedRepresentative:
-      type: object
-      description: Authorized representative information.
-      additionalProperties: false
-      properties:
-        isIndividual:
-          type: boolean
-        name:
-          type: string
-          maxLength: 200
-        organizationId:
-          type: string
-          maxLength: 50
-        address:
-          $ref: "./common.yaml#/Address"
-        inCareOf:
-          type: string
-          maxLength: 200
-        phoneNumber:
-          $ref: "./common.yaml#/PhoneNumber"
-        email:
-          $ref: "./common.yaml#/Email"
-        receiveNotices:
-          type: boolean
         applicantSignature:
           $ref: "./common.yaml#/Signature"
-        authorizedRepresentativeSignature:
+          description: Primary applicant signature.
+        coApplicantSignature:
           $ref: "./common.yaml#/Signature"
+          description: Spouse/co-applicant signature if applicable.
+        applicantAuthorizedRepresentativeSignature:
+          $ref: "./common.yaml#/Signature"
+          description: Authorized representative signature for the applicant.
+        coApplicantAuthorizedRepresentativeSignature:
+          $ref: "./common.yaml#/Signature"
+          description: Authorized representative signature for the co-applicant.
+    applicationAssister:
+      $ref: "#/ApplicationAssister"
+      description: The person who helped complete this application.
+    authorizedRepresentative:
+      $ref: "#/AuthorizedRepresentative"
+      description: Authorized representative for the applicant.
     createdAt:
       type: string
       format: date-time
@@ -773,280 +162,348 @@ Application:
       description: Timestamp when the application was last updated.
       readOnly: true
 
-# Person associated with an application (primary applicant or household member)
-ApplicationPerson:
+# IRS-recognized household member for benefits eligibility
+# Extends Person with application-specific fields
+HouseholdMember:
+  allOf:
+    - $ref: "./person.yaml#/Person"
+    - type: object
+      description: |
+        An IRS-recognized household member for benefits eligibility. Extends Person with
+        application-specific fields for eligibility determination. Includes the primary
+        applicant (relationship=self) and other household members.
+      required:
+        - name
+        - relationship
+      properties:
+        # Application-specific fields
+        relationship:
+          type: string
+          description: |
+            Relationship to primary applicant. Use "self" for the primary applicant.
+          enum:
+            - self
+            - spouse
+            - child
+            - parent
+            - sibling
+            - other_relative
+            - non_relative
+        programsApplyingFor:
+          type: array
+          description: Programs this person is applying for. Empty array or omitted means not applying for any programs.
+          items:
+            $ref: "./common.yaml#/Program"
+        institutionalizedInfo:
+          $ref: "#/InstitutionalizedInfo"
+          description: Information about institutionalization if this person is temporarily in an institution.
+
+        # Disability Info (eligibility determination)
+        disabilityInfo:
+          $ref: "#/DisabilityInfo"
+          description: Disability and SSI/SSDI information for this person.
+
+        hasLegalClaim:
+          type: boolean
+          description: Whether this person has a legal claim related to medical care.
+
+        # Expenses
+        expenses:
+          $ref: "#/ExpenseInfo"
+          description: Expenses paid by or for this person.
+
+        # Income Changes (for health insurance eligibility)
+        incomeChangeInfo:
+          $ref: "#/IncomeChangeInfo"
+          description: Income change information for health insurance eligibility.
+
+        # Foster Care
+        fosterCareInfo:
+          $ref: "#/FosterCareHistory"
+          description: Foster care history for this person.
+
+        # Absent Parents (for children with relationship=child)
+        absentParents:
+          type: array
+          description: Absent parents for this child.
+          items:
+            $ref: "#/AbsentParent"
+
+        # Employment (for eligibility)
+        employmentHistory:
+          type: array
+          description: Employment history for this person (jobs with endDate are past jobs).
+          items:
+            $ref: "#/JobIncomeInfo"
+        selfEmployment:
+          type: array
+          description: Self-employment businesses for this person.
+          items:
+            $ref: "#/SelfEmploymentRecord"
+
+        # Unearned Income (point-in-time for eligibility)
+        unearnedIncomeSources:
+          type: array
+          description: Unearned income sources for this person.
+          items:
+            $ref: "#/UnearnedIncomeSource"
+        lumpSumPayments:
+          type: array
+          description: Lump sum payments received by this person.
+          items:
+            $ref: "#/LumpSumPayment"
+        strikeInfo:
+          $ref: "#/StrikeInfo"
+          description: Strike information if this person is on strike.
+
+        # Non-citizen application info
+        nonCitizenApplicationInfo:
+          $ref: "#/NonCitizenApplicationInfo"
+          description: Application-specific information for non-citizens.
+
+        # Family Planning (includes pregnancy)
+        familyPlanningInfo:
+          $ref: "#/FamilyPlanningInfo"
+          description: Family planning and pregnancy information for this person.
+
+        # Financial Aid (eligibility determination)
+        financialAidInfo:
+          $ref: "#/FinancialAidInfo"
+          description: Financial aid information for this person.
+
+        # Prior Convictions (eligibility determination)
+        priorConvictions:
+          $ref: "#/PriorConvictionsInfo"
+          description: Prior convictions information for this person.
+
+        # Tax Filing Info (eligibility determination)
+        taxFilingInfo:
+          $ref: "#/TaxFilingInfo"
+          description: Tax filing information for this person.
+
+        # Resources (eligibility determination)
+        resourceInfo:
+          $ref: "#/ResourceInfo"
+          description: Financial resources and assets for this person.
+
+        # Transferred Assets (eligibility - lookback period)
+        transferredAssets:
+          type: array
+          description: Assets transferred by this person.
+          items:
+            $ref: "#/TransferredAsset"
+
+        # Retroactive Coverage Request
+        retroactiveMedicalRequest:
+          $ref: "#/RetroactiveMedicalRequest"
+          description: Request for retroactive medical coverage for this person.
+
+        # Health Info (overrides Person's - has eligibility fields)
+        healthInfo:
+          $ref: "#/HealthInfo"
+          description: Health and insurance coverage information for eligibility determination.
+
+        # Tribal Info (overrides Person's - has income fields)
+        tribalInfo:
+          $ref: "#/TribalInfo"
+          description: Tribal information extended with income eligibility fields.
+
+        # Citizenship Info (overrides Person's - has extended immigration fields)
+        citizenshipInfo:
+          $ref: "#/CitizenshipInfo"
+          description: Citizenship information extended with eligibility immigration fields.
+
+        # Contact Info (overrides Person's - has isStateResident)
+        contactInfo:
+          $ref: "#/ContactInfo"
+          description: Contact information extended with eligibility fields.
+
+        # Health Insurance Enrollments
+        healthInsuranceEnrollments:
+          type: array
+          description: This person's enrollments or eligibilities for health insurance plans.
+          items:
+            $ref: "#/HealthInsuranceEnrollment"
+
+        # Past benefits from other states
+        pastBenefitsFromOtherStates:
+          $ref: "#/PastBenefitsFromOtherStates"
+          description: Information about SNAP or cash benefits received in another state in the last 30 days.
+
+# Ancillary schemas (alphabetical order)
+
+ApplicationPreferences:
+  type: object
+  description: Application preferences and consents.
+  additionalProperties: false
+  properties:
+    givesPermissionToValidateIncome:
+      type: boolean
+      description: Whether the applicant gives permission to validate income.
+    wantsToRegisterToVote:
+      type: boolean
+      description: Whether the applicant wants to register to vote.
+    burialPreference:
+      type: string
+      enum:
+        - cremation
+        - burial
+        - no_preference
+      description: Preferred burial arrangement.
+    ebtCardDeliveryMethod:
+      type: string
+      enum:
+        - postal_mail
+        - in_person
+      description: Preferred method for receiving the EBT card.
+
+ApplicationScreeningFlags:
   type: object
   description: |
-    A person associated with an application. Includes the primary applicant (relationship=self)
-    and household members. Shares core identity fields with the Person schema.
+    Flags indicating screening criteria relevant to this application, organized by domain.
+    Presence of a flag in an array indicates the condition is true.
   additionalProperties: false
-  required:
-    - name
-    - relationship
-    - dateOfBirth
   properties:
-    # Identity fields (shared with Person schema)
-    name:
-      $ref: "./common.yaml#/Name"
-      description: Legal name of the person.
-    dateOfBirth:
-      type: string
-      format: date
-      description: Birth date of the person.
-    socialSecurityNumber:
-      $ref: "./common.yaml#/SocialSecurityNumber"
-      description: Social Security Number for identity verification.
-    gender:
-      type: string
-      description: Gender identity of the person.
-      enum:
-        - male
-        - female
-        - unknown
-    maritalStatus:
-      type: string
-      description: Current marital status.
-      enum:
-        - single
-        - married
-        - divorced
-        - separated
-        - widowed
-        - civil_union
-        - domestic_partnership
-    isUSCitizen:
-      type: boolean
-      description: Whether the person is a US citizen or national.
-    citizenshipStatus:
-      type: string
-      description: Citizenship or immigration status relevant to benefits eligibility.
-      enum:
-        - citizen
-        - permanent_resident
-        - qualified_non_citizen
-        - undocumented
-        - other
-    # ApplicationPerson-specific fields
-    relationship:
-      type: string
-      description: |
-        Relationship to primary applicant. Use "self" for the primary applicant.
-      enum:
-        - self
-        - spouse
-        - child
-        - parent
-        - sibling
-        - other_relative
-        - non_relative
-    citizenshipCertificateNumber:
-      type: string
-      description: Certificate number if naturalized or derived citizen.
-      maxLength: 50
-    isHispanicOrLatino:
-      type: boolean
-      description: Whether the person identifies as Hispanic or Latino.
-    race:
+    programs:
+      type: object
+      description: Program-specific screening flags.
+      additionalProperties: false
+      properties:
+        applyingFor:
+          type: array
+          description: Programs being applied for by one or more household members.
+          items:
+            $ref: "./common.yaml#/Program"
+        needsEbtCard:
+          type: boolean
+          description: Whether the applicant needs an EBT card.
+    familyPlanning:
       type: array
-      description: Race identification (can select multiple).
+      description: Family planning and dependent-related flags.
       items:
         type: string
         enum:
-          - american_indian_alaskan_native
-          - asian
-          - black_african_american
-          - native_hawaiian_pacific_islander
-          - white
-    programsApplyingFor:
-      type: object
-      description: Programs this person is applying for (Medical Assistance specific - each household member can apply for different programs).
-      additionalProperties: false
-      properties:
-        snap:
-          type: boolean
-          description: Whether applying for Supplemental Nutrition Assistance Program (SNAP).
-        cashPrograms:
-          type: object
-          description: Cash Programs being applied for (TANF, Adult Financial).
-          additionalProperties: false
-          properties:
-            tanfProgram:
-              type: boolean
-              description: Whether applying for Temporary Assistance for Needy Families (TANF).
-            adultFinancial:
-              type: boolean
-              description: Whether applying for Adult Financial (SSI Supplement, AND, OAP, HCA).
-        medicalAssistance:
-          type: boolean
-          description: Whether applying for Medical Assistance (State Medicaid, Children's Health Insurance, Health Insurance Marketplace).
-        notApplying:
-          type: boolean
-          description: This person is not applying for any programs.
-    # Person-specific data (moved from Application level)
-    # Disability/Health
-    disabilityInfo:
-      $ref: "#/DisabilityInfo"
-      description: Disability information for this person.
-    socialSecurityApplications:
+          - family_planning_needs
+          - pregnancy
+          - wants_reproductive_benefits
+          - child_under_19
+          - absent_parent
+          - wants_family_violence_waiver
+    disability:
       type: array
-      description: SSI/SSDI applications for this person.
+      description: Disability-related flags.
       items:
-        $ref: "#/SocialSecurityApplication"
-    healthCoverage:
+        type: string
+        enum:
+          - disability
+          - received_ssi_or_ssdi
+    citizenship:
       type: array
-      description: Health insurance coverage details for this person.
+      description: Citizenship and immigration-related flags.
       items:
-        $ref: "#/HealthCoverageDetail"
-    medicare:
-      $ref: "#/MedicareInfo"
-      description: Medicare coverage information for this person.
-    federalHealthBenefits:
+        type: string
+        enum:
+          - non_citizens
+          - wants_emergency_medicaid
+    medicalCoverage:
       type: array
-      description: Federal health benefit programs this person is enrolled in.
+      description: Medical coverage and health-related flags.
       items:
-        $ref: "#/FederalHealthBenefit"
-    separateMailAddress:
-      $ref: "./common.yaml#/Address"
-      description: Separate mailing address for this person's medical correspondence.
-    hasLegalClaim:
-      type: boolean
-      description: Whether this person has a legal claim related to medical care.
-    # Expenses
-    expenses:
-      $ref: "#/PersonExpenses"
-      description: Expenses paid by or for this person.
-    # Expected Changes
-    expectedIncomeChange:
-      $ref: "#/ExpectedIncomeChangeInfo"
-      description: Expected income change information for this person.
-    incomeChangeReason:
-      $ref: "#/IncomeChangeReason"
-      description: Reason for income change for this person.
-    # Foster Care
-    fosterCareHistory:
-      $ref: "#/FosterCareHistory"
-      description: Foster care history for this person.
-    # Immigration
-    immigrationInfo:
-      $ref: "#/ImmigrationInfo"
-      description: Immigration information for this person (if non-citizen).
-    # Income - Earned
+        type: string
+        enum:
+          - has_health_insurance
+          - legal_claim
+          - wants_retroactive_medical
+    tribal:
+      type: array
+      description: American Indian or Alaska Native-related flags.
+      items:
+        type: string
+        enum:
+          - american_indian_or_alaska_native
+          - received_indian_health_service
+          - eligible_for_indian_health_service
+    fosterCareAndBenefitsHistory:
+      type: array
+      description: Foster care and benefits history flags.
+      items:
+        type: string
+        enum:
+          - foster_care_history
+          - received_benefits_other_state
     jobs:
       type: array
-      description: Current employment jobs for this person.
+      description: Employment and income change flags.
       items:
-        $ref: "#/Job"
-    selfEmployment:
+        type: string
+        enum:
+          - has_employment
+          - has_self_employment
+          - has_job_changes
+          - expected_income_change
+          - income_differences
+          - is_anyone_on_strike
+    otherIncome:
       type: array
-      description: Self-employment businesses for this person.
+      description: Unearned income-related flags.
       items:
-        $ref: "#/SelfEmploymentRecord"
-    jobChanges:
+        type: string
+        enum:
+          - has_other_income
+          - has_lump_sum_payments
+          - deductions_change_monthly
+    expenses:
       type: array
-      description: Recent job changes or employment history for this person.
+      description: Housing and expense-related flags.
       items:
-        $ref: "#/JobChange"
-    # Income - Unearned
-    unearnedIncomeSources:
+        type: string
+        enum:
+          - has_rent_expenses
+          - has_mortgage_expenses
+          - has_additional_expenses
+    education:
       type: array
-      description: Unearned income sources for this person.
+      description: Education-related flags.
       items:
-        $ref: "#/UnearnedIncomeSource"
-    lumpSumPayments:
+        type: string
+        enum:
+          - has_students
+          - has_financial_aid
+    resources:
       type: array
-      description: Lump sum payments received by this person.
+      description: Resource and asset-related flags.
       items:
-        $ref: "#/LumpSumPayment"
-    strikeInfo:
-      $ref: "#/StrikeInfo"
-      description: Strike information if this person is on strike.
-    # Military
-    isMilitaryServiceMember:
-      type: boolean
-      description: Whether this person is a military service member.
-    # Planning
-    wantsFamilyPlanningBenefits:
-      type: boolean
-      description: Whether this person wants family planning benefits.
-    # Pregnancy
-    pregnancyInfo:
-      $ref: "#/PregnancyInfo"
-      description: Pregnancy information for this person.
-    # Prior Convictions
+        type: string
+        enum:
+          - has_resources
+          - has_vehicles
+          - has_life_or_burial_insurance
+          - owns_property
+          - has_transferred_assets
     priorConvictions:
-      $ref: "#/PriorConvictionsInfo"
-      description: Prior convictions information for this person.
-    # Resources
-    financialResources:
       type: array
-      description: Financial resources owned by this person.
+      description: Prior conviction-related flags.
       items:
-        $ref: "#/FinancialResource"
-    vehicles:
+        type: string
+        enum:
+          - has_prior_convictions
+    military:
       type: array
-      description: Vehicles owned by this person.
+      description: Military service-related flags.
       items:
-        $ref: "#/Vehicle"
-    insurancePolicies:
-      type: array
-      description: Life or burial insurance policies for this person.
-      items:
-        $ref: "#/InsurancePolicy"
-    properties:
-      type: array
-      description: Real estate properties owned by this person.
-      items:
-        $ref: "#/Property"
-    transferredAssets:
-      type: array
-      description: Assets transferred by this person.
-      items:
-        $ref: "#/TransferredAsset"
-    # Retroactive Coverage
-    retroactiveMedicalRequest:
-      $ref: "#/RetroactiveMedicalRequest"
-      description: Request for retroactive medical coverage for this person.
-    # Student
-    studentInfo:
-      $ref: "#/StudentInfo"
-      description: Student enrollment information for this person.
-    hasFinancialAid:
-      type: boolean
-      description: Whether this person receives financial aid as a student.
-    # Tax Filing
-    taxFilingInfo:
-      $ref: "#/TaxFilingInfo"
-      description: Tax filing information for this person.
-    # Tribal
-    tribalInfo:
-      $ref: "#/TribalInfo"
-      description: American Indian or Alaska Native tribal information for this person.
+        type: string
+        enum:
+          - has_military_service
 
-# Reusable Programs component
-Programs:
-  type: object
-  description: Programs being applied for. A single application can include multiple programs.
-  additionalProperties: false
-  properties:
-    snap:
-      type: boolean
-      description: Whether applying for Supplemental Nutrition Assistance Program (SNAP).
-    cashPrograms:
-      type: object
-      description: Cash Programs being applied for (TANF, Adult Financial).
-      additionalProperties: false
+AbsentParent:
+  allOf:
+    - $ref: "#/ExternalPerson"
+    - type: object
+      description: An absent parent for a child on the application.
       properties:
-        tanfProgram:
+        triedToGetMedicalSupport:
           type: boolean
-          description: Whether applying for Temporary Assistance for Needy Families (TANF).
-        adultFinancial:
-          type: boolean
-          description: Whether applying for Adult Financial (SSI Supplement, AND, OAP, HCA).
-    medicalAssistance:
-      type: boolean
-      description: Whether applying for Medical Assistance (State Medicaid, Children's Health Insurance, Health Insurance Marketplace).
-
-# Ancillary schemas (alphabetical order)
+          description: Whether applicant tried to get medical support from this absent parent.
 
 AdditionalExpense:
   type: object
@@ -1073,31 +530,234 @@ AdditionalExpense:
       type: number
       minimum: 0
 
-DisabilityInfo:
+ApplicationAssister:
+  allOf:
+    - $ref: "#/ExternalPerson"
+    - type: object
+      description: A person who helped complete an application.
+
+AuthorizedRepresentative:
+  allOf:
+    - $ref: "#/ExternalPerson"
+    - type: object
+      description: An authorized representative who can act on behalf of the applicant.
+      properties:
+        isIndividual:
+          type: boolean
+          description: Whether the representative is an individual (vs organization).
+        organizationId:
+          type: string
+          maxLength: 50
+          description: Organization identifier if not an individual.
+        inCareOf:
+          type: string
+          maxLength: 200
+          description: Care of line for address.
+        receiveNotices:
+          type: boolean
+          description: Whether this representative should receive official notices.
+        applicantSignature:
+          $ref: "./common.yaml#/Signature"
+          description: Applicant's signature authorizing this representative.
+        authorizedRepresentativeSignature:
+          $ref: "./common.yaml#/Signature"
+          description: The authorized representative's signature.
+
+CitizenshipInfo:
+  allOf:
+    - $ref: "./person.yaml#/CitizenshipInfo"
+    - type: object
+      description: Citizenship information extended with eligibility immigration fields.
+      properties:
+        immigrationInfo:
+          $ref: "#/ImmigrationInfo"
+          description: Immigration information extended with eligibility fields.
+
+ContactInfo:
+  allOf:
+    - $ref: "./person.yaml#/ContactInfo"
+    - type: object
+      description: Contact information extended with eligibility fields.
+      properties:
+        isStateResident:
+          type: boolean
+          description: Whether the person is a resident of the state (for eligibility).
+
+DeductionItem:
   type: object
-  description: Disability information for a person.
+  description: A deduction that affects income for health insurance eligibility.
   additionalProperties: false
   properties:
+    deductionType:
+      type: string
+      description: Type of deduction.
+      enum:
+        - alimony_paid
+        - capital_losses
+        - early_withdrawal_penalty
+        - student_loan_interest
+        - domestic_production_activities
+        - reimbursement_of_expenses
+        - hsa_deduction
+        - moving_expenses
+        - traditional_ira_contribution
+        - reservist_performing_artist_government_official_expenses
+        - other
+    deductionTypeOther:
+      type: string
+      maxLength: 200
+      description: Description if deductionType is 'other'.
+    frequency:
+      type: string
+      description: How often the deduction occurs.
+      enum:
+        - one_time_only
+        - weekly
+        - every_two_weeks
+        - twice_monthly
+        - monthly
+        - yearly
+    currentAmount:
+      type: number
+      minimum: 0
+      description: Current deduction amount.
+    actualAnnualAmount:
+      type: number
+      minimum: 0
+      description: Actual annual deduction amount.
+
+DisabilityInfo:
+  type: object
+  description: Disability and SSI/SSDI information for eligibility determination.
+  additionalProperties: false
+  properties:
+    hasDisability:
+      type: boolean
+      description: Whether this person has a disability.
     needsHelpWithSelfCare:
       type: boolean
       description: Whether this person needs help with self-care activities.
     hasMedicalOrDevelopmentalCondition:
       type: boolean
       description: Whether this person has a medical or developmental condition.
+    socialSecurityApplications:
+      type: array
+      description: SSI/SSDI applications for this person.
+      items:
+        $ref: "#/SocialSecurityApplication"
+    hasReceivedSsiOrSsdi:
+      type: boolean
+      description: Whether this person has ever received SSI or SSDI (if not currently applied).
+    ssiOrSsdiEndDate:
+      type: string
+      format: date
+      description: Date SSI or SSDI benefits ended for this person (if applicable).
 
-ExpectedIncomeChangeInfo:
+ExpenseInfo:
   type: object
-  description: Expected income change information for a person.
+  description: Expenses paid by or for this person.
   additionalProperties: false
   properties:
-    annualIncome:
+    rent:
+      type: array
+      items:
+        $ref: "#/RentExpense"
+    mortgage:
+      type: array
+      items:
+        $ref: "#/MortgageExpense"
+    utilities:
+      type: array
+      items:
+        $ref: "#/UtilityExpense"
+    additionalExpenses:
+      type: array
+      items:
+        $ref: "#/AdditionalExpense"
+
+ExpeditedSNAPInfo:
+  type: object
+  description: Expedited SNAP screening information for faster processing.
+  additionalProperties: false
+  properties:
+    householdSize:
+      type: integer
+      minimum: 1
+      description: Number of people in the home who purchase and prepare food together.
+    isMigrantOrSeasonalFarmWorker:
+      type: boolean
+      description: Whether any household member is a migrant or seasonal farm worker.
+    totalExpectedIncomeThisMonth:
       type: number
       minimum: 0
-    employerName:
+      description: Total money household expects to get this month (before deductions).
+    totalCashOnHand:
+      type: number
+      minimum: 0
+      description: Total cash on hand and money in checking/savings account.
+    monthlyMortgage:
+      type: number
+      minimum: 0
+      description: Monthly mortgage payment amount.
+    monthlyRent:
+      type: number
+      minimum: 0
+      description: Monthly rent payment amount.
+    utilityCosts:
+      type: object
+      description: Monthly utility costs.
+      additionalProperties: false
+      properties:
+        electricity:
+          type: number
+          minimum: 0
+        water:
+          type: number
+          minimum: 0
+        phone:
+          type: number
+          minimum: 0
+        trash:
+          type: number
+          minimum: 0
+        sewer:
+          type: number
+          minimum: 0
+        other:
+          type: number
+          minimum: 0
+
+ExternalPerson:
+  allOf:
+    - $ref: "./person.yaml#/PersonIdentity"
+    - type: object
+      description: |
+        A person referenced in an application who is not a household member.
+        Used as a base for AbsentParent, AuthorizedRepresentative, and ApplicationAssister.
+
+FamilyPlanningInfo:
+  type: object
+  description: Family planning and pregnancy information.
+  additionalProperties: false
+  properties:
+    wantsFamilyPlanningBenefits:
+      type: boolean
+      description: Whether this person wants family planning benefits.
+    dueDate:
+      type: string
+      format: date
+      description: Expected due date if pregnant.
+    numberOfBabiesExpected:
+      type: integer
+      minimum: 1
+      description: Number of babies expected if pregnant.
+    fatherName:
       type: string
       maxLength: 200
-    willAnnualIncomeBeSameOrLowerNextYear:
+      description: Name of the father.
+    wantsGoodCauseFromChildSupport:
       type: boolean
+      description: Whether this person wants good cause exemption from child support cooperation.
 
 FederalHealthBenefit:
   type: object
@@ -1113,6 +773,60 @@ FederalHealthBenefit:
     policyNumber:
       type: string
       maxLength: 100
+
+FinancialAidInfo:
+  type: object
+  description: Financial aid information for eligibility determination.
+  additionalProperties: false
+  properties:
+    hasFinancialAid:
+      type: boolean
+      description: Whether this person receives financial aid as a student.
+    grantsScholarshipsWorkStudyForLivingExpenses:
+      type: number
+      minimum: 0
+      description: Amount of grants/scholarships/work-study used for living expenses.
+    taxableGrantsScholarshipsWorkStudy:
+      type: number
+      minimum: 0
+      description: Amount of taxable grants/scholarships/work-study.
+
+FosterCareHistory:
+  type: object
+  description: Foster care history for a person.
+  additionalProperties: false
+  properties:
+    nameUsedInOutOfStateFosterCare:
+      type: string
+      maxLength: 200
+      description: Name used in out-of-state foster care, if different from current name.
+    dateLeftFosterCare:
+      type: string
+      format: date
+      description: Date the person left foster care, if known.
+    wasAdopted:
+      type: boolean
+      description: Whether the person was adopted.
+    returnedToFosterCareAfterAdoption:
+      type: boolean
+      description: If adopted, whether the person returned to foster care after adoption.
+    dateReturnedToFosterCare:
+      type: string
+      format: date
+      description: Date the person returned to foster care after adoption, if applicable.
+    dateOfStateResidency:
+      type: string
+      format: date
+      description: Date the person became a resident of the state.
+    needsHelpPayingMedicalBills:
+      type: boolean
+      description: Whether the person needs help paying medical bills.
+    medicalBillsMonths:
+      type: array
+      description: Months for which the person needs help paying medical bills.
+      items:
+        type: string
+        format: date
 
 FinancialResource:
   type: object
@@ -1149,19 +863,106 @@ FinancialResource:
       type: number
       minimum: 0
 
-FosterCareHistory:
+HouseholdExpenses:
   type: object
-  description: Foster care history for a person.
+  description: Household-level expense information.
   additionalProperties: false
   properties:
-    datesInFosterCare:
+    rent:
+      $ref: "#/RentExpenses"
+      description: Rent expenses and settings.
+    mortgage:
+      $ref: "#/MortgageExpenses"
+      description: Mortgage expenses and settings.
+    utilities:
+      type: object
+      description: Utility-related settings for the household.
+      additionalProperties: false
+      properties:
+        heatingCoolingMethod:
+          type: array
+          description: Methods used for heating and cooling.
+          items:
+            type: string
+            enum:
+              - electric
+              - gas
+              - firewood
+              - propane
+              - swamp_cooler
+              - other
+        otherHeatingCoolingType:
+          type: string
+          description: Description of other heating/cooling method if selected.
+          maxLength: 100
+        receivedLEAP:
+          type: boolean
+          description: Whether household received Low-Income Energy Assistance Program benefits.
+
+HouseholdOccupant:
+  allOf:
+    - $ref: "./person.yaml#/PersonIdentity"
+    - type: object
+      description: |
+        A person living at the address who is not part of the household unit for benefits purposes
+        (e.g., boarders, roomers). Only minimal identity information is required.
+      properties:
+        occupantType:
+          type: string
+          description: Type of occupant.
+          enum:
+            - roomer
+            - boarder
+            - other
+        rentPaidToHousehold:
+          type: number
+          minimum: 0
+          description: Amount paid for rent per month to the household.
+        mealsIncluded:
+          type: boolean
+          description: Whether meals are included with the rent.
+
+HousingExpenseItem:
+  type: object
+  description: Housing expense item (shared by rent and mortgage).
+  additionalProperties: false
+  properties:
+    expenseType:
       type: string
-      description: Date range or dates when in foster care.
+      description: Type of housing expense.
+      enum:
+        # Rent types
+        - rent
+        - renters_insurance
+        - pet_fee
+        - washer_dryer_fee
+        - condo_fee
+        - maintenance_fee
+        # Mortgage types
+        - mortgage
+        - homeowners_insurance
+        - property_taxes
+        - hoa_fees
+        - other
+    whoPays:
+      type: string
       maxLength: 200
-    ageWhenLeft:
-      type: integer
+      description: Name of the person who pays this expense.
+    isPayerInHome:
+      type: boolean
+      description: Whether the person who pays lives in the home.
+    expenseFor:
+      type: string
+      maxLength: 200
+      description: Who the expense is for.
+    expenseMonth:
+      type: string
+      format: date
+      description: Month of the expense.
+    amountPaid:
+      type: number
       minimum: 0
-      description: Age when left foster care if known.
+      description: Amount paid for this expense.
 
 HealthCoverageDetail:
   type: object
@@ -1191,79 +992,215 @@ HealthCoverageDetail:
         - eligible
         - enrolled
 
-ImmigrationInfo:
+HealthInfo:
   type: object
-  description: Immigration information for a non-citizen.
+  description: Health and insurance coverage information for eligibility determination.
   additionalProperties: false
   properties:
+    healthCoverage:
+      type: array
+      description: Health insurance coverage details for this person.
+      items:
+        $ref: "#/HealthCoverageDetail"
+    medicare:
+      $ref: "#/MedicareInfo"
+      description: Medicare coverage information for this person.
+    federalHealthBenefits:
+      type: array
+      description: Federal health benefit programs this person is enrolled in.
+      items:
+        $ref: "#/FederalHealthBenefit"
+
+HealthInsuranceEnrollment:
+  type: object
+  description: A household member's enrollment or eligibility for a health insurance plan.
+  additionalProperties: false
+  properties:
+    planName:
+      type: string
+      description: References a plan by name in the household's healthInsurancePlans map.
+      minLength: 1
     status:
       type: string
-      maxLength: 100
-    documentType:
-      type: string
-      maxLength: 100
-    documentNumber:
-      type: string
-      maxLength: 100
-    alienOrI94Number:
-      type: string
-      maxLength: 100
-    documentExpirationDate:
+      description: Whether the person is eligible for or enrolled in the plan.
+      enum:
+        - eligible
+        - enrolled
+    coverageStartDate:
       type: string
       format: date
-    countryOfIssuance:
+      description: Date coverage started.
+    coverageEndDate:
+      type: string
+      format: date
+      description: Date coverage ended or will end.
+    couldStartCoverageDate:
+      type: string
+      format: date
+      description: Date when coverage could start if not yet enrolled.
+    lostCoverageDate:
+      type: string
+      format: date
+      description: Date coverage was lost.
+    premiumAmount:
+      type: number
+      minimum: 0
+      description: Premium amount this person pays.
+    premiumAmountUnknown:
+      type: boolean
+      description: Whether the premium amount is unknown.
+    premiumFrequency:
+      type: string
+      description: How often premiums are paid.
+      enum:
+        - weekly
+        - every_two_weeks
+        - twice_monthly
+        - monthly
+        - yearly
+
+HealthInsurancePlan:
+  type: object
+  description: A health insurance plan available to household members, keyed by plan name.
+  additionalProperties: false
+  required:
+    - planType
+    - planName
+  properties:
+    planName:
+      type: string
+      description: Unique name for this plan within the application (used as map key).
+      minLength: 1
+    planType:
+      type: string
+      description: Type of health insurance plan.
+      enum:
+        - medicare
+        - tricare
+        - va_health_care
+        - peace_corps
+        - cobra
+        - retiree_health_plan
+        - employer_sponsored
+        - railroad_retirement
+    # For employer-sponsored plans
+    employer:
+      $ref: "./common.yaml#/EmployerInfo"
+      description: Employer offering the coverage (for employer_sponsored plans).
+    contactAboutCoverage:
+      type: string
+      maxLength: 200
+      description: Contact person for questions about coverage (for employer_sponsored plans).
+    hasEmployeeOnlyPlanMeetingMinimumValue:
+      type: boolean
+      description: Whether an employee-only plan meeting minimum value is available.
+    lowestCostPlanName:
+      type: string
+      maxLength: 200
+      description: Name of the lowest cost plan available.
+    lowestCostPlanUnknown:
+      type: boolean
+      description: Whether the lowest cost plan is unknown.
+    noPlansMeetMinimumValue:
+      type: boolean
+      description: Whether no plans meet minimum value requirements.
+    # For non-employer plans
+    insuranceCompanyName:
+      type: string
+      maxLength: 200
+      description: Name of the insurance company (for non-employer plans).
+    policyNumber:
       type: string
       maxLength: 100
-    livedInUSSince1996:
-      type: boolean
-    spouseOrParentIsVeteranOrActiveDuty:
-      type: boolean
-    hasSponsor:
-      type: boolean
-    sponsor:
-      type: object
-      description: Sponsor information for this non-citizen.
-      additionalProperties: false
-      properties:
-        hasBeenAbandonedMistreatedOrAbused:
-          type: boolean
-        isPregnantOr20OrYounger:
-          type: boolean
-        sponsorName:
-          type: string
-          maxLength: 200
-        sponsorSpouseName:
-          type: string
-          maxLength: 200
-        sponsorSocialSecurityNumber:
-          $ref: "./common.yaml#/SocialSecurityNumber"
-        sponsorAddress:
-          $ref: "./common.yaml#/Address"
-        sponsorSpouseSocialSecurityNumber:
-          $ref: "./common.yaml#/SocialSecurityNumber"
-        totalPeopleInSponsorHousehold:
-          type: integer
-          minimum: 1
-        doesSponsoredIndividualLiveWithSponsor:
-          type: boolean
-        doesSponsoredIndividualReceiveFreeRoomAndBoard:
-          type: boolean
-        doesSponsoredIndividualReceiveSupportFromSponsor:
-          type: boolean
+      description: Policy number (for non-employer plans).
 
-IncomeChangeReason:
+IncomeChangeInfo:
   type: object
-  description: Reason for income change.
+  description: Income change information for health insurance eligibility determination.
   additionalProperties: false
   properties:
-    whatHappened:
+    changeReason:
+      type: string
+      description: Reason for income change.
+      enum:
+        - stopped_working
+        - hours_changed
+        - employment_change
+        - marriage_or_divorce
+        - other
+    expectedAnnualIncome:
+      type: number
+      minimum: 0
+      description: Expected annual income.
+    expectedIncomeChange:
+      type: string
+      description: How income is expected to change compared to last year.
+      enum:
+        - same
+        - lower
+        - higher
+        - unknown
+    pastIncomeAmount:
+      type: number
+      minimum: 0
+      description: Past income amount for the relevant period.
+    pastDeductionsAmount:
+      type: number
+      minimum: 0
+      description: Past deductions amount for the relevant period.
+    deductionsChangeMonthly:
+      type: boolean
+      description: Whether deductions change from month to month.
+    deductions:
+      type: array
+      description: Deductions that affect income for health insurance eligibility.
+      items:
+        $ref: "#/DeductionItem"
+
+ImmigrationInfo:
+  allOf:
+    - $ref: "./person.yaml#/ImmigrationInfo"
+    - type: object
+      description: Immigration information extended with eligibility fields.
+      properties:
+        livedInUSSince1996:
+          type: boolean
+          description: Whether the person has lived in the US continuously since August 22, 1996.
+        spouseOrParentIsVeteranOrActiveDuty:
+          type: boolean
+          description: Whether spouse or parent is a veteran or active duty military.
+
+InstitutionalizedInfo:
+  type: object
+  description: Information about institutionalization if a person is temporarily in an institution.
+  additionalProperties: false
+  properties:
+    isInstitutionalized:
+      type: boolean
+      description: Whether this person is temporarily in an institution.
+    dateEntered:
+      type: string
+      format: date
+      description: Date the person entered the institution.
+    facilityName:
+      type: string
+      maxLength: 200
+      description: Name of the facility.
+    facilityType:
       type: string
       enum:
-        - stopped_working_job
-        - hours_changed_at_job
-        - change_in_employment
-        - married_legal_separation_or_divorce
+        - nursing_home
+        - hospital
+        - mental_health_institution
+        - incarceration
         - other
+      description: Type of facility.
+    isPendingDisposition:
+      type: boolean
+      description: Whether pending disposition of charges (for incarceration).
+    mealsProvided:
+      type: boolean
+      description: Whether meals are provided by the facility.
 
 InsurancePolicy:
   type: object
@@ -1286,32 +1223,45 @@ InsurancePolicy:
       enum:
         - revocable
         - irrevocable
-    policyValue:
+    faceValue:
+      type: number
+      minimum: 0
+    cashSurrenderValue:
       type: number
       minimum: 0
 
-Job:
+JobIncomeInfo:
   type: object
-  description: Employment job information.
+  description: Employment income information for eligibility determination.
   additionalProperties: false
   properties:
-    employerName:
+    employer:
+      $ref: "./common.yaml#/EmployerInfo"
+      description: Employer information.
+    startDate:
       type: string
-      maxLength: 200
-    employerPhone:
-      $ref: "./common.yaml#/PhoneNumber"
+      format: date
+      description: Date employment started.
+    endDate:
+      type: string
+      format: date
+      description: Date employment ended (omit if current job).
     monthlyWagesBeforeTaxes:
       type: number
       minimum: 0
+      description: Monthly wages before taxes.
     hourlyWage:
       type: number
       minimum: 0
+      description: Hourly wage rate.
     averageHoursPerWeek:
       type: number
       minimum: 0
       maximum: 168
+      description: Average hours worked per week.
     payFrequency:
       type: string
+      description: How often the person is paid.
       enum:
         - hourly
         - weekly
@@ -1322,47 +1272,22 @@ Job:
         - daily
     isTemporaryJob:
       type: boolean
+      description: Whether this is a temporary job.
     incomeType:
       type: string
+      description: Type of employment income.
       enum:
         - seasonal_employment
         - commission_based_employment
         - regular_employment
-
-JobChange:
-  type: object
-  description: Job change or employment history record.
-  additionalProperties: false
-  properties:
-    employerName:
-      type: string
-      maxLength: 200
-    employerPhone:
-      $ref: "./common.yaml#/PhoneNumber"
-    startDate:
-      type: string
-      format: date
-    endDate:
-      type: string
-      format: date
-    monthlyWagesBeforeTaxes:
-      type: number
-      minimum: 0
     lastPaycheckDate:
       type: string
       format: date
+      description: Date of last paycheck (for ended jobs).
     lastPaycheckAmount:
       type: number
       minimum: 0
-    payFrequency:
-      type: string
-      enum:
-        - hourly
-        - weekly
-        - every_two_weeks
-        - twice_monthly
-        - monthly
-        - yearly
+      description: Amount of last paycheck (for ended jobs).
 
 LumpSumPayment:
   type: object
@@ -1390,7 +1315,7 @@ LumpSumPayment:
 
 MedicareInfo:
   type: object
-  description: Medicare coverage information.
+  description: Medicare coverage information for eligibility determination.
   additionalProperties: false
   properties:
     partA:
@@ -1468,44 +1393,74 @@ MortgageExpense:
       type: number
       minimum: 0
 
-PersonExpenses:
+MortgageExpenses:
   type: object
-  description: Expenses paid by or for this person.
+  description: Mortgage expenses and settings.
   additionalProperties: false
   properties:
-    rent:
+    receivesSection8OrPublicHousing:
+      type: boolean
+      description: Whether receiving Section 8 or public housing assistance.
+    housingAssistanceType:
+      type: string
+      description: Type of housing assistance received.
+      enum:
+        - section8
+        - public_housing
+    items:
       type: array
+      description: Mortgage expense items.
       items:
-        $ref: "#/RentExpense"
-    mortgage:
-      type: array
-      items:
-        $ref: "#/MortgageExpense"
-    utilities:
-      type: array
-      items:
-        $ref: "#/UtilityExpense"
-    additionalExpenses:
-      type: array
-      items:
-        $ref: "#/AdditionalExpense"
+        $ref: "#/HousingExpenseItem"
 
-PregnancyInfo:
+NonCitizenApplicationInfo:
   type: object
-  description: Pregnancy information.
+  description: Application-specific information for non-citizens.
   additionalProperties: false
   properties:
-    dueDate:
+    wantsEmergencyMedicaid:
+      type: boolean
+      description: Whether this person wants emergency Medicaid.
+    wantsReproductiveBenefits:
+      type: boolean
+      description: Whether this person wants reproductive benefits.
+    hasBeenAbandonedMistreatedOrAbused:
+      type: boolean
+      description: Whether this person has been abandoned, mistreated, or abused.
+    isPregnantOr20OrYounger:
+      type: boolean
+      description: Whether this person is pregnant or 20 years old or younger.
+    livesWithSponsor:
+      type: boolean
+      description: Whether this person lives with their sponsor.
+    receivesFreeRoomAndBoardFromSponsor:
+      type: boolean
+      description: Whether this person receives free room and board from their sponsor.
+    receivesSupportFromSponsor:
+      type: boolean
+      description: Whether this person receives support from their sponsor.
+
+PastBenefitsFromOtherStates:
+  type: object
+  description: Information about SNAP or cash benefits received in another state in the last 30 days.
+  additionalProperties: false
+  properties:
+    dateReceived:
       type: string
       format: date
-    numberOfBabiesExpected:
-      type: integer
-      minimum: 1
-    fatherName:
+      description: Date benefits were received.
+    city:
       type: string
-      maxLength: 200
-    wantsGoodCauseFromChildSupport:
-      type: boolean
+      maxLength: 100
+      description: City where benefits were received.
+    county:
+      type: string
+      maxLength: 100
+      description: County where benefits were received.
+    state:
+      type: string
+      pattern: "^[A-Z]{2}$"
+      description: Two-letter state code where benefits were received.
 
 PriorConvictionsInfo:
   type: object
@@ -1575,6 +1530,55 @@ RentExpense:
       type: number
       minimum: 0
 
+RentExpenses:
+  type: object
+  description: Rent expenses and settings.
+  additionalProperties: false
+  properties:
+    utilitiesIncludedInRent:
+      type: boolean
+      description: Whether utilities are included in rent.
+    receivesSection8OrPublicHousing:
+      type: boolean
+      description: Whether receiving Section 8 or public housing assistance.
+    housingAssistanceType:
+      type: string
+      description: Type of housing assistance received.
+      enum:
+        - section8
+        - public_housing
+    items:
+      type: array
+      description: Rent expense items.
+      items:
+        $ref: "#/HousingExpenseItem"
+
+ResourceInfo:
+  type: object
+  description: Financial resources and assets.
+  additionalProperties: false
+  properties:
+    financialResources:
+      type: array
+      description: Financial resources owned by this person.
+      items:
+        $ref: "#/FinancialResource"
+    vehicles:
+      type: array
+      description: Vehicles owned by this person.
+      items:
+        $ref: "#/Vehicle"
+    insurancePolicies:
+      type: array
+      description: Life or burial insurance policies for this person.
+      items:
+        $ref: "#/InsurancePolicy"
+    realEstateProperties:
+      type: array
+      description: Real estate properties owned by this person.
+      items:
+        $ref: "#/Property"
+
 RetroactiveMedicalRequest:
   type: object
   description: Request for retroactive medical coverage.
@@ -1591,7 +1595,7 @@ RetroactiveMedicalRequest:
 
 SelfEmploymentRecord:
   type: object
-  description: Self-employment business record.
+  description: Self-employment business record for eligibility determination.
   additionalProperties: false
   properties:
     businessName:
@@ -1680,26 +1684,6 @@ StrikeInfo:
       type: number
       minimum: 0
 
-StudentInfo:
-  type: object
-  description: Student enrollment information.
-  additionalProperties: false
-  properties:
-    schoolName:
-      type: string
-      maxLength: 200
-    lastGradeCompleted:
-      type: string
-      maxLength: 50
-    startDate:
-      type: string
-      format: date
-    expectedGraduationDate:
-      type: string
-      format: date
-    isFullTimeStudent:
-      type: boolean
-
 TaxFilingInfo:
   type: object
   description: Tax filing information for a person.
@@ -1752,26 +1736,19 @@ TransferredAsset:
       minimum: 0
 
 TribalInfo:
-  type: object
-  description: American Indian or Alaska Native tribal information.
-  additionalProperties: false
-  properties:
-    tribeName:
-      type: string
-      maxLength: 200
-    tribeState:
-      type: string
-      maxLength: 100
-    typeOfIncomeReceived:
-      type: string
-      maxLength: 200
-    frequencyAndAmount:
-      type: string
-      maxLength: 200
-    hasReceivedServiceFromIndianHealthService:
-      type: boolean
-    isEligibleForIndianHealthService:
-      type: boolean
+  allOf:
+    - $ref: "./person.yaml#/TribalInfo"
+    - type: object
+      description: Tribal information extended with eligibility fields.
+      properties:
+        typeOfIncomeReceived:
+          type: string
+          maxLength: 200
+          description: Type of tribal income received.
+        frequencyAndAmount:
+          type: string
+          maxLength: 200
+          description: Frequency and amount of tribal income.
 
 UnearnedIncomeSource:
   type: object
@@ -1809,6 +1786,24 @@ UnearnedIncomeSource:
       type: number
       minimum: 0
 
+Vehicle:
+  type: object
+  description: Vehicle owned by a person.
+  additionalProperties: false
+  properties:
+    year:
+      type: integer
+      minimum: 1900
+    make:
+      type: string
+      maxLength: 100
+    model:
+      type: string
+      maxLength: 100
+    currentValue:
+      type: number
+      minimum: 0
+
 UtilityExpense:
   type: object
   description: Utility expense item.
@@ -1830,23 +1825,5 @@ UtilityExpense:
       type: string
       format: date
     amountPaid:
-      type: number
-      minimum: 0
-
-Vehicle:
-  type: object
-  description: Vehicle owned by a person.
-  additionalProperties: false
-  properties:
-    year:
-      type: integer
-      minimum: 1900
-    make:
-      type: string
-      maxLength: 100
-    model:
-      type: string
-      maxLength: 100
-    currentValue:
       type: number
       minimum: 0
