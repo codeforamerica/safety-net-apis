@@ -110,23 +110,19 @@ async function main() {
   console.log('\n1. Resolving state overlay...');
   await exec('npm', ['run', 'overlay:resolve', '-w', '@safety-net/schemas', '--', `--state=${state}`]);
 
-  // Step 2: Generate Zodios clients
-  console.log('\n2. Generating Zodios clients...');
-  await exec('npm', ['run', 'clients:generate']);
+  // Step 2: Generate modular Zod schemas from overlay-resolved specs
+  console.log('\n2. Generating modular Zod schemas...');
+  const specDir = join(repoRoot, 'packages', 'schemas', 'openapi', 'resolved');
+  const generatorScript = join(clientsRoot, 'scripts', 'generate-modular-zod.js');
+  const domains = ['applications', 'households', 'incomes', 'persons'];
 
-  // Step 3: Copy generated TypeScript files to src/
-  console.log('\n3. Copying generated clients...');
-  const generatedDir = join(clientsRoot, 'generated', 'clients', 'zodios');
-  const clientFiles = ['applications.ts', 'households.ts', 'incomes.ts', 'persons.ts'];
-
-  for (const file of clientFiles) {
-    const srcPath = join(generatedDir, file);
-    const destPath = join(srcDir, file);
-    if (existsSync(srcPath)) {
-      cpSync(srcPath, destPath);
-      console.log(`  Copied ${file}`);
+  for (const domain of domains) {
+    const specPath = join(specDir, `${domain}.yaml`);
+    const outputPath = join(srcDir, `${domain}.ts`);
+    if (existsSync(specPath)) {
+      await exec('node', [generatorScript, specPath, outputPath]);
     } else {
-      console.warn(`  Warning: ${file} not found`);
+      console.warn(`  Warning: ${specPath} not found`);
     }
   }
 
@@ -134,8 +130,8 @@ async function main() {
   cpSync(join(templatesDir, 'search-helpers.ts'), join(srcDir, 'search-helpers.ts'));
   console.log('  Copied search-helpers.ts');
 
-  // Step 4: Generate package.json from template
-  console.log('\n4. Generating package.json...');
+  // Step 3: Generate package.json and README from templates
+  console.log('\n3. Generating package metadata...');
   const packageTemplate = readFileSync(join(templatesDir, 'package.template.json'), 'utf8');
   const packageJson = packageTemplate
     .replace(/\{\{STATE\}\}/g, state)
@@ -144,20 +140,27 @@ async function main() {
   writeFileSync(join(outputDir, 'package.json'), packageJson);
   console.log('  Generated package.json');
 
-  // Step 5: Generate index.ts from template
-  console.log('\n5. Generating index.ts...');
+  const readmeTemplate = readFileSync(join(templatesDir, 'README.template.md'), 'utf8');
+  const readme = readmeTemplate
+    .replace(/\{\{STATE\}\}/g, state)
+    .replace(/\{\{STATE_TITLE\}\}/g, stateTitle);
+  writeFileSync(join(outputDir, 'README.md'), readme);
+  console.log('  Generated README.md');
+
+  // Step 4: Generate index.ts from template
+  console.log('\n4. Generating index.ts...');
   const indexTemplate = readFileSync(join(templatesDir, 'index.template.ts'), 'utf8');
   const indexTs = indexTemplate.replace(/\{\{STATE_TITLE\}\}/g, stateTitle);
   writeFileSync(join(srcDir, 'index.ts'), indexTs);
   console.log('  Generated index.ts');
 
-  // Step 6: Copy tsconfig for compilation
-  console.log('\n6. Setting up TypeScript compilation...');
+  // Step 5: Copy tsconfig for compilation
+  console.log('\n5. Setting up TypeScript compilation...');
   cpSync(join(templatesDir, 'tsconfig.build.json'), join(outputDir, 'tsconfig.json'));
   console.log('  Copied tsconfig.json');
 
-  // Step 7: Compile TypeScript
-  console.log('\n7. Compiling TypeScript...');
+  // Step 6: Compile TypeScript
+  console.log('\n6. Compiling TypeScript...');
   await exec('npx', ['tsc'], { cwd: outputDir });
   console.log('  Compilation complete');
 
