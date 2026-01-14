@@ -11,6 +11,10 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./search": {
+      "import": "./dist/search-helpers.js",
+      "types": "./dist/search-helpers.d.ts"
+    },
     "./persons": {
       "import": "./dist/persons/index.js",
       "types": "./dist/persons/index.d.ts"

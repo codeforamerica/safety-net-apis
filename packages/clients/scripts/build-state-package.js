@@ -15,7 +15,7 @@
  */
 
 import { spawn } from 'child_process';
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync, copyFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -185,11 +185,20 @@ async function main() {
     console.log(`    Generated: ${domain}`);
   }
 
-  // Step 3: Create index.ts that re-exports all domains
+  // Step 3: Create index.ts that re-exports all domains and search helpers
   console.log('\n3. Creating index exports...');
-  const indexContent = domains.map(d => `export * as ${d} from './${d}/index.js';`).join('\n') + '\n';
+  const domainExports = domains.map(d => `export * as ${d} from './${d}/index.js';`).join('\n');
+  const indexContent = `${domainExports}
+export { q, search } from './search-helpers.js';
+`;
   writeFileSync(join(srcDir, 'index.ts'), indexContent);
-  console.log('  Created index.ts')
+  console.log('  Created index.ts');
+
+  // Step 3b: Copy search helpers
+  const searchHelpersSource = join(templatesDir, 'search-helpers.ts');
+  const searchHelpersDest = join(srcDir, 'search-helpers.ts');
+  copyFileSync(searchHelpersSource, searchHelpersDest);
+  console.log('  Copied search-helpers.ts');
 
   // Step 4: Generate package.json from template
   console.log('\n4. Generating package.json...');
