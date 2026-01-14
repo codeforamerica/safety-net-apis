@@ -1,38 +1,34 @@
 {
   "name": "@codeforamerica/safety-net-{{STATE}}",
   "version": "{{VERSION}}",
-  "description": "Safety Net API Zod/Zodios client for {{STATE_TITLE}}",
+  "description": "Safety Net API client for {{STATE_TITLE}} with Zod validation",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": ["dist", "src"],
   "exports": {
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./applications": {
-      "import": "./dist/applications.js",
-      "types": "./dist/applications.d.ts"
+    "./sdk": {
+      "import": "./dist/sdk.gen.js",
+      "types": "./dist/sdk.gen.d.ts"
     },
-    "./households": {
-      "import": "./dist/households.js",
-      "types": "./dist/households.d.ts"
+    "./types": {
+      "import": "./dist/types.gen.js",
+      "types": "./dist/types.gen.d.ts"
     },
-    "./incomes": {
-      "import": "./dist/incomes.js",
-      "types": "./dist/incomes.d.ts"
-    },
-    "./persons": {
-      "import": "./dist/persons.js",
-      "types": "./dist/persons.d.ts"
+    "./zod": {
+      "import": "./dist/zod.gen.js",
+      "types": "./dist/zod.gen.d.ts"
     }
   },
   "peerDependencies": {
-    "@zodios/core": "^10.9.6",
-    "zod": "^3.22.0",
+    "zod": "^4.0.0",
     "axios": "^1.6.0"
   },
-  "keywords": ["safety-net", "{{STATE}}", "zod", "zodios", "openapi", "api-client"],
+  "keywords": ["safety-net", "{{STATE}}", "zod", "openapi", "api-client"],
   "repository": {
     "type": "git",
     "url": "https://github.com/codeforamerica/safety-net-openapi.git"
