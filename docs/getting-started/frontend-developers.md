@@ -1,10 +1,10 @@
 # Getting Started: Frontend Developers
 
-This guide is for developers building frontend applications that consume Safety Net APIs. You'll use pre-built npm packages with TypeScript clients and Zod schemas.
+This guide is for developers building frontend applications that consume Safety Net APIs. You'll use pre-built npm packages with TypeScript SDK functions and Zod schemas.
 
 ## What You'll Do
 
-- Install a state-specific npm package with type-safe schemas and API clients
+- Install a state-specific npm package with typed SDK and Zod schemas
 - Integrate into your frontend application
 - Develop against the mock server while the backend is in progress
 - Set up CI/CD to test your frontend
@@ -46,51 +46,55 @@ npm install @codeforamerica/safety-net-california
 ### 3. Install Peer Dependencies
 
 ```bash
-npm install @zodios/core zod axios
+npm install zod axios
 ```
 
 ## Using the Package
 
-### Importing Schemas
-
-The package exports Zod schemas and TypeScript types:
+### Importing SDK Functions and Types
 
 ```typescript
-// src/schemas/index.ts
-import { persons, applications, households } from '@codeforamerica/safety-net-colorado';
-import { z } from 'zod';
+// Direct imports from domain modules
+import {
+  getPerson,
+  listPersons,
+  createPerson,
+  type Person,
+  type PersonList
+} from '@codeforamerica/safety-net-colorado/persons';
 
-// Re-export schemas for your app
-export const Person = persons.schemas.Person;
-export type Person = z.infer<typeof Person>;
-
-export const PersonList = persons.schemas.PersonList;
-export type PersonList = z.infer<typeof PersonList>;
-
-export const Application = applications.schemas.Application;
-export type Application = z.infer<typeof Application>;
+// Or namespaced imports
+import { persons, applications } from '@codeforamerica/safety-net-colorado';
 ```
 
-### Using the Zodios API Client
+### Configuring the Client
 
-Each module includes a pre-configured Zodios API client:
+Create a client configuration file:
 
 ```typescript
 // src/api/client.ts
 import { persons, applications } from '@codeforamerica/safety-net-colorado';
+import { createClient, createConfig } from '@codeforamerica/safety-net-colorado/persons/client';
 
 const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:1080';
 
-// Create clients with your base URL
-export const personsClient = persons.createApiClient(BASE_URL);
-export const applicationsClient = applications.createApiClient(BASE_URL);
+// Create a configured client
+export const client = createClient(createConfig({
+  baseURL: BASE_URL,
+}));
 
-// Add authentication
-export function setAuthToken(token: string) {
-  const authHeader = { Authorization: `Bearer ${token}` };
-  personsClient.axios.defaults.headers.common = authHeader;
-  applicationsClient.axios.defaults.headers.common = authHeader;
-}
+// Bind SDK functions to your client
+export const listPersons = (options?: Parameters<typeof persons.listPersons>[0]) =>
+  persons.listPersons({ ...options, client });
+
+export const getPerson = (options: Parameters<typeof persons.getPerson>[0]) =>
+  persons.getPerson({ ...options, client });
+
+export const createPerson = (options: Parameters<typeof persons.createPerson>[0]) =>
+  persons.createPerson({ ...options, client });
+
+// Re-export types for convenience
+export type { Person, PersonList } from '@codeforamerica/safety-net-colorado/persons';
 ```
 
 ### Using in Components
@@ -98,37 +102,44 @@ export function setAuthToken(token: string) {
 ```typescript
 // src/components/PersonList.tsx
 import { useEffect, useState } from 'react';
-import { personsClient } from '../api/client';
-import type { Person } from '../schemas';
+import { listPersons, type Person } from '../api/client';
 
 export function PersonList() {
   const [persons, setPersons] = useState<Person[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    personsClient
-      .listPersons({ queries: { limit: 25 } })
-      .then((response) => setPersons(response.items));
+    async function fetchPersons() {
+      const response = await listPersons({ query: { limit: 25 } });
+      if ('data' in response && response.data) {
+        setPersons(response.data.items ?? []);
+      }
+      setLoading(false);
+    }
+    fetchPersons();
   }, []);
+
+  if (loading) return <div>Loading...</div>;
 
   return (
     <ul>
       {persons.map((person) => (
-        <li key={person.id}>{person.name.firstName}</li>
+        <li key={person.id}>{person.name?.firstName} {person.name?.lastName}</li>
       ))}
     </ul>
   );
 }
 ```
 
-### Runtime Validation
+### Runtime Validation with Zod
 
-Use the Zod schemas for runtime validation:
+For custom validation scenarios, import Zod schemas directly:
 
 ```typescript
-import { Person } from '../schemas';
+import { zPerson } from '@codeforamerica/safety-net-colorado/persons/zod.gen';
 
 // Validate API response
-const parseResult = Person.safeParse(apiResponse);
+const parseResult = zPerson.safeParse(apiResponse);
 if (parseResult.success) {
   return parseResult.data;
 } else {
@@ -149,7 +160,7 @@ cd safety-net-openapi
 npm install
 
 # Start the mock server
-npm run mock:start:all
+STATE=colorado npm start
 ```
 
 The mock server runs at http://localhost:1080 with realistic test data.
@@ -177,8 +188,7 @@ Browse the API documentation interactively:
 
 ```bash
 cd safety-net-openapi
-npm run mock:start:all
-npm run mock:swagger
+STATE=colorado npm start
 ```
 
 Visit http://localhost:3000 to see all endpoints and schemas.
@@ -198,22 +208,40 @@ curl http://localhost:1080/persons/{id}
 
 ## Package Contents
 
-Each state package exports:
+Each state package exports domain modules:
 
-| Module | Exports |
-|--------|---------|
-| `persons` | `schemas`, `api`, `createApiClient()` |
-| `applications` | `schemas`, `api`, `createApiClient()` |
-| `households` | `schemas`, `api`, `createApiClient()` |
-| `incomes` | `schemas`, `api`, `createApiClient()` |
+| Module | SDK Functions |
+|--------|---------------|
+| `persons` | `listPersons`, `getPerson`, `createPerson`, `updatePerson`, `deletePerson` |
+| `applications` | `listApplications`, `getApplication`, `createApplication`, `updateApplication`, `deleteApplication` |
+| `households` | `listHouseholds`, `getHousehold`, `createHousehold`, `updateHousehold`, `deleteHousehold` |
+| `incomes` | `listIncomes`, `getIncome`, `createIncome`, `updateIncome`, `deleteIncome` |
 
-Each `schemas` object contains:
-- Main schema (e.g., `Person`, `Application`)
-- List schema (e.g., `PersonList`, `ApplicationList`)
-- Create/Update variants
+Each module also exports:
+- TypeScript types (`Person`, `PersonList`, `PersonCreate`, etc.)
+- Zod schemas via `./zod.gen` subpath (`zPerson`, `zPersonList`, etc.)
+- Client utilities via `./client` subpath (`createClient`, `createConfig`)
+
+### Search Helpers
+
+The package also exports utilities for building search queries:
+
+```typescript
+import { q, search } from '@codeforamerica/safety-net-colorado';
+
+const query = q(
+  search.contains('name.firstName', 'john'),
+  search.gte('monthlyIncome', 2000),
+  search.eq('status', 'active')
+);
+
+const response = await listPersons({ query: { q: query } });
+```
+
+See [API Clients - Search Helpers](../integration/api-clients.md#search-helpers) for the full reference.
 
 ## Next Steps
 
-- [API Clients](../integration/api-clients.md) — Detailed client usage and React Query integration
+- [API Clients](../integration/api-clients.md) — Detailed client usage and framework integrations
 - [Mock Server](../guides/mock-server.md) — Search, pagination, and data management
 - [CI/CD for Frontend](../integration/ci-cd-frontend.md) — Testing setup

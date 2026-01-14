@@ -51,14 +51,15 @@ safety-net-openapi/
 │   │       ├── unit/
 │   │       └── integration/
 │   │
-│   └── clients/                    # Generated API clients
+│   └── clients/                    # API client generation
 │       ├── package.json
-│       ├── scripts/                # Generator scripts
-│       │   ├── generate-zodios.js
-│       │   └── generate-postman.js
-│       └── generated/              # Output directory
-│           ├── zodios/             # TypeScript clients
-│           └── postman-collection.json
+│       ├── scripts/
+│       │   └── build-state-package.js  # Main build script
+│       ├── templates/
+│       │   ├── package.template.json   # npm package template
+│       │   └── search-helpers.ts       # Query builder utilities (q, search)
+│       └── dist-packages/              # Output directory (gitignored)
+│           └── {state}/                # State-specific packages
 │
 └── docs/                           # Documentation
     ├── getting-started/            # Persona-based onboarding
@@ -74,7 +75,7 @@ safety-net-openapi/
 |---------|---------|------------------|
 | `@safety-net/schemas` | OpenAPI specs, validation, overlay resolution | `js-yaml`, `ajv` |
 | `@safety-net/mock-server` | Mock API server for development | `express`, `better-sqlite3` |
-| `@safety-net/clients` | Generate TypeScript clients, Postman collections | `openapi-zod-client` |
+| `@safety-net/clients` | Generate TypeScript SDK packages | `@hey-api/openapi-ts`, `zod` |
 
 ### CI/CD Usage
 
@@ -136,9 +137,8 @@ npm install -w @safety-net/schemas -w @safety-net/mock-server
 | File | Purpose | Regenerate |
 |------|---------|------------|
 | `packages/schemas/openapi/resolved/*.yaml` | State-resolved specs | `npm run overlay:resolve` |
-| `packages/clients/generated/zodios/*.ts` | TypeScript clients | `npm run clients:generate` |
-| `packages/clients/generated/postman-collection.json` | Postman collection | `npm run postman:generate` |
-| `generated/mock-data/*.db` | SQLite databases | `npm run mock:reset` |
+| `packages/clients/dist-packages/{state}/` | State npm packages | `node packages/clients/scripts/build-state-package.js` |
+| `packages/mock-server/data/*.db` | SQLite databases | `npm run mock:reset` |
 
 ## Adding New Resources
 
