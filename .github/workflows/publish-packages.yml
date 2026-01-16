@@ -75,6 +75,9 @@ jobs:
   publish:
     needs: setup
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -101,8 +104,6 @@ jobs:
       - name: Publish to npm
         working-directory: packages/clients/dist-packages/${{ matrix.state }}
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   summary:
     needs: [setup, publish]
