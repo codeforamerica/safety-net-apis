@@ -134,7 +134,7 @@ jobs:
 
       - name: Publish to npm
         working-directory: packages/clients/dist-packages/${{ matrix.state }}
-        run: npm publish --access public
+        run: npm publish --access public --provenance
 
   summary:
     needs: [setup, publish]
