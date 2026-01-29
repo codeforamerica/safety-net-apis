@@ -17,6 +17,10 @@ import { applyOverlay } from '../src/overlay/overlay-resolver.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Set of valid schema names (populated during main execution)
+// Used to only create links for schemas that actually exist
+let validSchemaNames = new Set();
+
 // Type translations for designers
 const TYPE_TRANSLATIONS = {
   string: 'Text',
@@ -741,10 +745,18 @@ function getEffectiveProperties(schema) {
 
 /**
  * Make type references clickable by wrapping schema names in links
+ * Only creates links for schemas that actually exist (uses global validSchemaNames)
+ * @param {string} typeString - The type string to process
  */
 function makeTypeClickable(typeString) {
   // Match patterns like "→ SchemaName" or "List of → SchemaName"
-  return typeString.replace(/→ (\w+)/g, '→ <a href="#$1" class="type-link">$1</a>');
+  return typeString.replace(/→ (\w+)/g, (match, schemaName) => {
+    if (validSchemaNames.has(schemaName)) {
+      return `→ <a href="#${schemaName}" class="type-link">${schemaName}</a>`;
+    }
+    // No link for schemas that don't exist
+    return `→ ${schemaName}`;
+  });
 }
 
 /**
@@ -2909,6 +2921,9 @@ async function main() {
     }
 
     console.log(`\nCollected ${Object.keys(baseSchemas).length} base schemas`);
+
+    // Populate valid schema names for link generation
+    validSchemaNames = new Set(Object.keys(baseSchemas));
 
     // Extract relationships
     console.log('Extracting relationships...');
