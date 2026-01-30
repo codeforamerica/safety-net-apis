@@ -23,7 +23,7 @@ FrontendAuthContext:
   type: object
   description: |
     Authorization context for frontend applications. Extends BackendAuthContext
-    with UI permissions and user preferences.
+    with display name, UI permissions, and user preferences.
 
     Used in enriched JWTs for frontends (via BFF/gateway) or returned by
     GET /users/me. States can customize this independently from BackendAuthContext.
@@ -31,6 +31,10 @@ FrontendAuthContext:
     - $ref: "./common.yaml#/BackendAuthContext"
     - type: object
       properties:
+        name:
+          type: string
+          description: User's display name.
+          example: "Jane Smith"
         ui:
           $ref: "#/UiPermissions"
         preferences:
@@ -70,10 +74,6 @@ User:
           format: email
           description: User's email address (from IdP or manually set).
           example: "jane.smith@alameda.gov"
-        name:
-          type: string
-          description: User's display name.
-          example: "Jane Smith"
         status:
           $ref: "#/UserStatus"
         createdAt:

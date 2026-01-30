@@ -63,12 +63,22 @@ BackendAuthContext:
     For frontend tokens that include UI permissions and preferences, see
     FrontendAuthContext in user.yaml.
   required:
-    - role
+    - userId
+    - roleAssignments
   properties:
     userId:
       type: string
       format: uuid
       description: User Service identifier.
+    roleAssignments:
+      $ref: "#/RoleAssignments"
+
+RoleAssignments:
+  type: object
+  description: Role and permissions for authorization.
+  required:
+    - role
+  properties:
     role:
       $ref: "#/RoleType"
     permissions:
@@ -81,34 +91,7 @@ BackendAuthContext:
       example:
         - "applications:read"
         - "applications:create"
-        - "applications:update"
         - "persons:read"
-    countyCode:
-      type: string
-      description: Primary county FIPS code for data scoping.
-      example: "06001"
-    counties:
-      type: array
-      items:
-        type: string
-      description: All county FIPS codes the user can access.
-      example: ["06001", "06013"]
-    organizationId:
-      type: string
-      format: uuid
-      description: Organization or agency identifier.
-    personId:
-      type: string
-      format: uuid
-      description: |
-        Link to Person record if user is an applicant.
-        Used to scope self-service access to own data.
-    caseWorkerId:
-      type: string
-      format: uuid
-      description: |
-        Link to CaseWorker record if user is staff.
-        Populated when Case Management domain is implemented.
 
 Email:
   type: string
@@ -149,7 +132,8 @@ JwtClaims:
     - iss
     - aud
     - exp
-    - role
+    - userId
+    - roleAssignments
   allOf:
     - type: object
       properties:
