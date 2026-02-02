@@ -322,6 +322,51 @@
       background: #f0f8ff;
       color: #18a0fb;
     }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .action-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 8px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .action-btn:hover {
+      border-color: #18a0fb;
+      background: #f8fcff;
+    }
+
+    .action-btn.active {
+      border-color: #18a0fb;
+      background: #e6f4ff;
+    }
+
+    .action-icon {
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+
+    .action-label {
+      font-weight: 500;
+      font-size: 11px;
+      color: #333;
+    }
+
+    .action-desc {
+      font-size: 10px;
+      color: #888;
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -384,9 +429,40 @@
       </div>
     </div>
 
+    <div class="section">
+      <label>Action</label>
+      <div class="action-buttons">
+        <button class="action-btn active" id="action-populate" data-action="populate">
+          <span class="action-icon">✎</span>
+          <span class="action-label">Populate Existing</span>
+          <span class="action-desc">Fill matching layers</span>
+        </button>
+        <button class="action-btn" id="action-generate" data-action="generate">
+          <span class="action-icon">+</span>
+          <span class="action-label">Generate Layout</span>
+          <span class="action-desc">Create new layers</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="layout-options" class="section" style="display: none;">
+      <label>Layout Style</label>
+      <div class="radio-group">
+        <label>
+          <input type="radio" name="layout-style" value="form" checked>
+          Form (label + value pairs)
+        </label>
+        <label>
+          <input type="radio" name="layout-style" value="autolayout">
+          Auto-layout (grouped)
+        </label>
+      </div>
+    </div>
+
     <div class="button-row">
       <button class="secondary" id="browse-cancel-btn">Cancel</button>
       <button class="primary" id="browse-populate-btn" disabled>Populate Selection</button>
+      <button class="primary" id="browse-generate-btn" disabled style="display: none;">Generate Layout</button>
     </div>
 
     <div id="browse-status" class="status" style="display: none;"></div>
@@ -638,9 +714,11 @@ Example format:
       if (examples.length > 0) {
         renderExamplePreview(examples[0], metadata);
         document.getElementById('browse-populate-btn').disabled = false;
+        document.getElementById('browse-generate-btn').disabled = false;
       } else {
         renderExamplePreview(null, metadata);
         document.getElementById('browse-populate-btn').disabled = true;
+        document.getElementById('browse-generate-btn').disabled = true;
       }
     }
 
@@ -850,6 +928,50 @@ Example format:
       parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*');
     });
 
+    // Browse tab: Action toggle (Populate vs Generate)
+    let currentAction = 'populate';
+    document.querySelectorAll('.action-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentAction = btn.dataset.action;
+
+        const layoutOptions = document.getElementById('layout-options');
+        const populateBtn = document.getElementById('browse-populate-btn');
+        const generateBtn = document.getElementById('browse-generate-btn');
+
+        if (currentAction === 'generate') {
+          layoutOptions.style.display = 'block';
+          populateBtn.style.display = 'none';
+          generateBtn.style.display = 'block';
+        } else {
+          layoutOptions.style.display = 'none';
+          populateBtn.style.display = 'block';
+          generateBtn.style.display = 'none';
+        }
+      });
+    });
+
+    // Browse tab: Generate button
+    document.getElementById('browse-generate-btn').addEventListener('click', () => {
+      if (!browseData) return;
+
+      const resourceType = document.getElementById('resource-select').value;
+      const examples = groupedExamples[resourceType] || [];
+      const exampleIndex = parseInt(document.getElementById('browse-example-select').value) || 0;
+      const layoutStyle = document.querySelector('input[name="layout-style"]:checked').value;
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'generate',
+          data: browseData,
+          example: examples[exampleIndex],
+          layoutStyle: layoutStyle,
+          resourceType: resourceType
+        }
+      }, '*');
+    });
+
     // Handle messages from plugin
     window.onmessage = (event) => {
       const msg = event.data.pluginMessage;
@@ -890,6 +1012,13 @@ Example format:
         const browseStatusEl = document.getElementById('browse-status');
         browseStatusEl.className = className;
         browseStatusEl.innerHTML = html;
+        browseStatusEl.style.display = 'block';
+      }
+
+      if (msg.type === 'generate-result') {
+        const browseStatusEl = document.getElementById('browse-status');
+        browseStatusEl.className = 'status success';
+        browseStatusEl.innerHTML = `Generated layout with ${msg.fieldCount} fields`;
         browseStatusEl.style.display = 'block';
       }
     };

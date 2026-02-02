@@ -226,6 +226,209 @@ async function populateDropdowns(
   return matched;
 }
 
+// Generate a form-style layout (label + value pairs)
+async function generateFormLayout(
+  example: Record<string, any>,
+  metadata: Record<string, FieldMetadata>,
+  resourceType: string
+): Promise<FrameNode> {
+  // Load a font
+  await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+  await figma.loadFontAsync({ family: 'Inter', style: 'Medium' });
+
+  // Create main frame
+  const frame = figma.createFrame();
+  frame.name = `${resourceType} Form`;
+  frame.layoutMode = 'VERTICAL';
+  frame.primaryAxisSizingMode = 'AUTO';
+  frame.counterAxisSizingMode = 'AUTO';
+  frame.paddingTop = 24;
+  frame.paddingBottom = 24;
+  frame.paddingLeft = 24;
+  frame.paddingRight = 24;
+  frame.itemSpacing = 16;
+  frame.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+  frame.cornerRadius = 8;
+
+  // Add title
+  const title = figma.createText();
+  title.fontName = { family: 'Inter', style: 'Medium' };
+  title.characters = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
+  title.fontSize = 18;
+  title.fills = [{ type: 'SOLID', color: { r: 0.1, g: 0.1, b: 0.1 } }];
+  frame.appendChild(title);
+
+  // Add fields
+  let fieldCount = 0;
+  for (const [fieldName, value] of Object.entries(example)) {
+    if (fieldName.startsWith('_')) continue;
+
+    const meta = metadata[fieldName];
+    const label = meta?.label || fieldName;
+    const displayValue = String(value ?? '');
+
+    // Create row frame
+    const row = figma.createFrame();
+    row.name = fieldName;
+    row.layoutMode = 'HORIZONTAL';
+    row.primaryAxisSizingMode = 'AUTO';
+    row.counterAxisSizingMode = 'AUTO';
+    row.itemSpacing = 16;
+    row.fills = [];
+
+    // Create label
+    const labelNode = figma.createText();
+    labelNode.name = `${fieldName}-label`;
+    labelNode.fontName = { family: 'Inter', style: 'Medium' };
+    labelNode.characters = label;
+    labelNode.fontSize = 12;
+    labelNode.fills = [{ type: 'SOLID', color: { r: 0.4, g: 0.4, b: 0.4 } }];
+    labelNode.resize(140, labelNode.height);
+    row.appendChild(labelNode);
+
+    // Create value
+    const valueNode = figma.createText();
+    valueNode.name = label; // Name it with the label for easy matching later
+    valueNode.fontName = { family: 'Inter', style: 'Regular' };
+    valueNode.characters = displayValue || '—';
+    valueNode.fontSize = 12;
+    valueNode.fills = [{ type: 'SOLID', color: { r: 0.1, g: 0.1, b: 0.1 } }];
+    row.appendChild(valueNode);
+
+    frame.appendChild(row);
+    fieldCount++;
+  }
+
+  return frame;
+}
+
+// Generate an auto-layout with grouped fields
+async function generateAutoLayout(
+  example: Record<string, any>,
+  metadata: Record<string, FieldMetadata>,
+  resourceType: string
+): Promise<FrameNode> {
+  // Load fonts
+  await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+  await figma.loadFontAsync({ family: 'Inter', style: 'Medium' });
+  await figma.loadFontAsync({ family: 'Inter', style: 'Semi Bold' });
+
+  // Group fields by prefix
+  const groups: Record<string, Array<{ fieldName: string; value: any; meta?: FieldMetadata }>> = {};
+
+  for (const [fieldName, value] of Object.entries(example)) {
+    if (fieldName.startsWith('_')) continue;
+
+    const parts = fieldName.split('.');
+    const groupName = parts.length > 1 ? parts[0] : 'general';
+
+    if (!groups[groupName]) {
+      groups[groupName] = [];
+    }
+    groups[groupName].push({ fieldName, value, meta: metadata[fieldName] });
+  }
+
+  // Create main frame
+  const frame = figma.createFrame();
+  frame.name = `${resourceType} Layout`;
+  frame.layoutMode = 'VERTICAL';
+  frame.primaryAxisSizingMode = 'AUTO';
+  frame.counterAxisSizingMode = 'AUTO';
+  frame.paddingTop = 24;
+  frame.paddingBottom = 24;
+  frame.paddingLeft = 24;
+  frame.paddingRight = 24;
+  frame.itemSpacing = 24;
+  frame.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+  frame.cornerRadius = 8;
+
+  // Add title
+  const title = figma.createText();
+  title.fontName = { family: 'Inter', style: 'Semi Bold' };
+  title.characters = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
+  title.fontSize = 20;
+  title.fills = [{ type: 'SOLID', color: { r: 0.1, g: 0.1, b: 0.1 } }];
+  frame.appendChild(title);
+
+  // Create groups
+  for (const [groupName, fields] of Object.entries(groups)) {
+    const groupFrame = figma.createFrame();
+    groupFrame.name = groupName;
+    groupFrame.layoutMode = 'VERTICAL';
+    groupFrame.primaryAxisSizingMode = 'AUTO';
+    groupFrame.counterAxisSizingMode = 'AUTO';
+    groupFrame.itemSpacing = 12;
+    groupFrame.paddingTop = 16;
+    groupFrame.paddingBottom = 16;
+    groupFrame.paddingLeft = 16;
+    groupFrame.paddingRight = 16;
+    groupFrame.fills = [{ type: 'SOLID', color: { r: 0.98, g: 0.98, b: 0.98 } }];
+    groupFrame.cornerRadius = 6;
+
+    // Group title
+    if (groupName !== 'general') {
+      const groupTitle = figma.createText();
+      groupTitle.fontName = { family: 'Inter', style: 'Medium' };
+      groupTitle.characters = groupName.charAt(0).toUpperCase() + groupName.slice(1).replace(/([A-Z])/g, ' $1');
+      groupTitle.fontSize = 14;
+      groupTitle.fills = [{ type: 'SOLID', color: { r: 0.2, g: 0.2, b: 0.2 } }];
+      groupFrame.appendChild(groupTitle);
+    }
+
+    // Field grid (2 columns)
+    const gridFrame = figma.createFrame();
+    gridFrame.name = 'fields';
+    gridFrame.layoutMode = 'HORIZONTAL';
+    gridFrame.layoutWrap = 'WRAP';
+    gridFrame.primaryAxisSizingMode = 'FIXED';
+    gridFrame.counterAxisSizingMode = 'AUTO';
+    gridFrame.resize(400, 10);
+    gridFrame.itemSpacing = 16;
+    gridFrame.counterAxisSpacing = 12;
+    gridFrame.fills = [];
+
+    for (const { fieldName, value, meta } of fields) {
+      const label = meta?.label || fieldName.split('.').pop() || fieldName;
+      const displayValue = String(value ?? '');
+
+      // Field container
+      const fieldFrame = figma.createFrame();
+      fieldFrame.name = fieldName;
+      fieldFrame.layoutMode = 'VERTICAL';
+      fieldFrame.primaryAxisSizingMode = 'AUTO';
+      fieldFrame.counterAxisSizingMode = 'FIXED';
+      fieldFrame.resize(180, 10);
+      fieldFrame.itemSpacing = 4;
+      fieldFrame.fills = [];
+
+      // Label
+      const labelNode = figma.createText();
+      labelNode.name = `${fieldName}-label`;
+      labelNode.fontName = { family: 'Inter', style: 'Regular' };
+      labelNode.characters = label;
+      labelNode.fontSize = 10;
+      labelNode.fills = [{ type: 'SOLID', color: { r: 0.5, g: 0.5, b: 0.5 } }];
+      fieldFrame.appendChild(labelNode);
+
+      // Value
+      const valueNode = figma.createText();
+      valueNode.name = label;
+      valueNode.fontName = { family: 'Inter', style: 'Medium' };
+      valueNode.characters = displayValue || '—';
+      valueNode.fontSize = 12;
+      valueNode.fills = [{ type: 'SOLID', color: { r: 0.1, g: 0.1, b: 0.1 } }];
+      fieldFrame.appendChild(valueNode);
+
+      gridFrame.appendChild(fieldFrame);
+    }
+
+    groupFrame.appendChild(gridFrame);
+    frame.appendChild(groupFrame);
+  }
+
+  return frame;
+}
+
 // Handle messages from the UI
 figma.ui.onmessage = async (msg: any) => {
   if (msg.type === 'populate') {
@@ -274,6 +477,47 @@ figma.ui.onmessage = async (msg: any) => {
 
     const total = totalTextMatched + totalDropdownMatched;
     figma.notify(`Populated ${total} field${total !== 1 ? 's' : ''}`);
+  }
+
+  if (msg.type === 'generate') {
+    const { data, example, layoutStyle, resourceType } = msg;
+
+    if (!example) {
+      figma.notify('No example selected', { error: true });
+      return;
+    }
+
+    const metadata = data.metadata || {};
+
+    try {
+      let frame: FrameNode;
+
+      if (layoutStyle === 'autolayout') {
+        frame = await generateAutoLayout(example, metadata, resourceType);
+      } else {
+        frame = await generateFormLayout(example, metadata, resourceType);
+      }
+
+      // Position at center of viewport
+      const center = figma.viewport.center;
+      frame.x = center.x - frame.width / 2;
+      frame.y = center.y - frame.height / 2;
+
+      // Select the new frame
+      figma.currentPage.selection = [frame];
+      figma.viewport.scrollAndZoomIntoView([frame]);
+
+      const fieldCount = Object.keys(example).filter(k => !k.startsWith('_')).length;
+
+      figma.ui.postMessage({
+        type: 'generate-result',
+        fieldCount: fieldCount
+      });
+
+      figma.notify(`Generated layout with ${fieldCount} fields`);
+    } catch (error: any) {
+      figma.notify(`Error generating layout: ${error.message}`, { error: true });
+    }
   }
 
   if (msg.type === 'cancel') {
