@@ -230,7 +230,7 @@ async function populateDropdowns(
 async function generateFormLayout(
   example: Record<string, any>,
   metadata: Record<string, FieldMetadata>,
-  resourceType: string
+  exampleName: string
 ): Promise<FrameNode> {
   // Load a font
   await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
@@ -238,7 +238,7 @@ async function generateFormLayout(
 
   // Create main frame
   const frame = figma.createFrame();
-  frame.name = `${resourceType} Form`;
+  frame.name = exampleName;
   frame.layoutMode = 'VERTICAL';
   frame.primaryAxisSizingMode = 'AUTO';
   frame.counterAxisSizingMode = 'AUTO';
@@ -253,7 +253,7 @@ async function generateFormLayout(
   // Add title
   const title = figma.createText();
   title.fontName = { family: 'Inter', style: 'Medium' };
-  title.characters = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
+  title.characters = exampleName;
   title.fontSize = 18;
   title.fills = [{ type: 'SOLID', color: { r: 0.1, g: 0.1, b: 0.1 } }];
   frame.appendChild(title);
@@ -306,7 +306,7 @@ async function generateFormLayout(
 async function generateAutoLayout(
   example: Record<string, any>,
   metadata: Record<string, FieldMetadata>,
-  resourceType: string
+  exampleName: string
 ): Promise<FrameNode> {
   // Load fonts
   await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
@@ -330,7 +330,7 @@ async function generateAutoLayout(
 
   // Create main frame
   const frame = figma.createFrame();
-  frame.name = `${resourceType} Layout`;
+  frame.name = exampleName;
   frame.layoutMode = 'VERTICAL';
   frame.primaryAxisSizingMode = 'AUTO';
   frame.counterAxisSizingMode = 'AUTO';
@@ -345,7 +345,7 @@ async function generateAutoLayout(
   // Add title
   const title = figma.createText();
   title.fontName = { family: 'Inter', style: 'Semi Bold' };
-  title.characters = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
+  title.characters = exampleName;
   title.fontSize = 20;
   title.fills = [{ type: 'SOLID', color: { r: 0.1, g: 0.1, b: 0.1 } }];
   frame.appendChild(title);
@@ -480,7 +480,7 @@ figma.ui.onmessage = async (msg: any) => {
   }
 
   if (msg.type === 'generate') {
-    const { data, example, layoutStyle, resourceType } = msg;
+    const { data, example, layoutStyle, exampleName } = msg;
 
     if (!example) {
       figma.notify('No example selected', { error: true });
@@ -488,14 +488,15 @@ figma.ui.onmessage = async (msg: any) => {
     }
 
     const metadata = data.metadata || {};
+    const frameName = exampleName || 'Generated Layout';
 
     try {
       let frame: FrameNode;
 
       if (layoutStyle === 'autolayout') {
-        frame = await generateAutoLayout(example, metadata, resourceType);
+        frame = await generateAutoLayout(example, metadata, frameName);
       } else {
-        frame = await generateFormLayout(example, metadata, resourceType);
+        frame = await generateFormLayout(example, metadata, frameName);
       }
 
       // Position at center of viewport
@@ -511,10 +512,11 @@ figma.ui.onmessage = async (msg: any) => {
 
       figma.ui.postMessage({
         type: 'generate-result',
-        fieldCount: fieldCount
+        fieldCount: fieldCount,
+        frameName: frameName
       });
 
-      figma.notify(`Generated layout with ${fieldCount} fields`);
+      figma.notify(`Generated "${frameName}" with ${fieldCount} fields`);
     } catch (error: any) {
       figma.notify(`Error generating layout: ${error.message}`, { error: true });
     }

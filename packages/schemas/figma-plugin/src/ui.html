@@ -24,7 +24,7 @@
     }
 
     .section {
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
     label {
@@ -34,7 +34,7 @@
       color: #666;
     }
 
-    select, textarea {
+    select {
       width: 100%;
       padding: 8px;
       border: 1px solid #ddd;
@@ -43,16 +43,9 @@
       font-family: inherit;
     }
 
-    select:focus, textarea:focus {
+    select:focus {
       outline: none;
       border-color: #18a0fb;
-    }
-
-    textarea {
-      height: 200px;
-      font-family: 'Monaco', 'Menlo', monospace;
-      font-size: 11px;
-      resize: vertical;
     }
 
     .radio-group {
@@ -131,42 +124,10 @@
       color: #0066cc;
     }
 
-    .unmatched-list {
-      margin-top: 8px;
-      padding-left: 16px;
-    }
-
-    .unmatched-list li {
-      margin-bottom: 2px;
-      color: #666;
-    }
-
     .help-text {
       font-size: 11px;
       color: #888;
       margin-top: 4px;
-    }
-
-    .schema-info {
-      background: #f5f5f5;
-      padding: 12px;
-      border-radius: 6px;
-      margin-bottom: 16px;
-    }
-
-    .schema-info h3 {
-      font-size: 12px;
-      margin-bottom: 8px;
-    }
-
-    .schema-info .stat {
-      display: inline-block;
-      margin-right: 16px;
-      color: #666;
-    }
-
-    .schema-info .stat strong {
-      color: #333;
     }
 
     .tabs {
@@ -200,7 +161,7 @@
     }
 
     .field-browser {
-      max-height: 150px;
+      max-height: 120px;
       overflow-y: auto;
       border: 1px solid #ddd;
       border-radius: 6px;
@@ -211,7 +172,7 @@
     .field-item {
       display: flex;
       align-items: flex-start;
-      padding: 6px 0;
+      padding: 4px 0;
       border-bottom: 1px solid #eee;
     }
 
@@ -222,15 +183,16 @@
     .field-name {
       font-weight: 500;
       color: #333;
-      min-width: 120px;
+      min-width: 100px;
       flex-shrink: 0;
+      font-size: 11px;
     }
 
     .field-type {
-      font-size: 10px;
-      padding: 2px 6px;
+      font-size: 9px;
+      padding: 2px 5px;
       border-radius: 10px;
-      margin-left: 8px;
+      margin-left: 6px;
       flex-shrink: 0;
     }
 
@@ -239,19 +201,12 @@
     .field-type.date { background: #fff3e0; color: #ef6c00; }
     .field-type.boolean { background: #e8f5e9; color: #2e7d32; }
 
-    .field-desc {
-      font-size: 11px;
-      color: #666;
-      margin-left: 8px;
-      flex-grow: 1;
-    }
-
     .example-preview {
       margin-bottom: 16px;
     }
 
     .preview-content {
-      max-height: 200px;
+      max-height: 150px;
       overflow-y: auto;
       border: 1px solid #ddd;
       border-radius: 6px;
@@ -262,7 +217,7 @@
 
     .preview-row {
       display: flex;
-      padding: 4px 0;
+      padding: 3px 0;
       border-bottom: 1px solid #eee;
     }
 
@@ -273,7 +228,7 @@
     .preview-label {
       font-weight: 500;
       color: #666;
-      min-width: 140px;
+      min-width: 120px;
       flex-shrink: 0;
     }
 
@@ -297,7 +252,7 @@
 
     .empty-state {
       text-align: center;
-      padding: 24px;
+      padding: 32px 24px;
       color: #666;
     }
 
@@ -309,7 +264,7 @@
       display: block;
       border: 2px dashed #ddd;
       border-radius: 8px;
-      padding: 24px;
+      padding: 32px 24px;
       margin-top: 16px;
       cursor: pointer;
       transition: all 0.2s;
@@ -333,7 +288,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 12px 8px;
+      padding: 10px 8px;
       border: 2px solid #ddd;
       border-radius: 8px;
       background: #fff;
@@ -352,8 +307,8 @@
     }
 
     .action-icon {
-      font-size: 18px;
-      margin-bottom: 4px;
+      font-size: 16px;
+      margin-bottom: 2px;
     }
 
     .action-label {
@@ -363,9 +318,19 @@
     }
 
     .action-desc {
-      font-size: 10px;
+      font-size: 9px;
       color: #888;
       margin-top: 2px;
+    }
+
+    .reload-link {
+      color: #18a0fb;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .reload-link:hover {
+      color: #0d8de5;
     }
   </style>
 </head>
@@ -374,18 +339,20 @@
 
   <div class="tabs">
     <button class="tab active" data-tab="browse">Browse</button>
-    <button class="tab" data-tab="paste">Paste JSON</button>
     <button class="tab" data-tab="help">Help</button>
   </div>
 
   <div id="browse-tab" class="tab-content active">
     <div id="browse-empty-state" class="empty-state">
-      <p>No data loaded yet.</p>
-      <p class="help-text">Paste your JSON in the "Paste JSON" tab, or drag and drop the all-data.json file here.</p>
+      <p><strong>Load your schema data</strong></p>
+      <p class="help-text">Drop the all-data.json file here or click to browse</p>
       <label class="file-drop-zone" id="file-drop-zone">
         <input type="file" id="file-input" accept=".json" style="display: none;">
-        <span>Drop JSON file here or click to browse</span>
+        <span>Drop JSON file here<br>or click to select</span>
       </label>
+      <p class="help-text" style="margin-top: 16px;">
+        Generate with: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;">npm run figma:export</code>
+      </p>
     </div>
 
     <div id="browse-content" style="display: none;">
@@ -396,170 +363,112 @@
         </select>
       </div>
 
-    <div class="section">
-      <label>Fields</label>
-      <div id="field-browser" class="field-browser">
-        <p class="help-text">Select a resource type to see available fields</p>
+      <div class="section">
+        <label for="browse-example-select">Example</label>
+        <select id="browse-example-select" disabled>
+          <option value="">-- Select resource type first --</option>
+        </select>
       </div>
-    </div>
 
-    <div class="section">
-      <label for="browse-example-select">Example</label>
-      <select id="browse-example-select" disabled>
-        <option value="">-- Select resource type first --</option>
-      </select>
-    </div>
-
-    <div id="example-preview" class="example-preview" style="display: none;">
-      <label>Preview</label>
-      <div id="preview-content" class="preview-content"></div>
-    </div>
-
-    <div class="section">
-      <label>Match Mode</label>
-      <div class="radio-group">
-        <label>
-          <input type="radio" name="browse-match-mode" value="fuzzy" checked>
-          Fuzzy (recommended)
-        </label>
-        <label>
-          <input type="radio" name="browse-match-mode" value="exact">
-          Exact
-        </label>
+      <div id="example-preview" class="example-preview" style="display: none;">
+        <label>Preview</label>
+        <div id="preview-content" class="preview-content"></div>
       </div>
-    </div>
 
-    <div class="section">
-      <label>Action</label>
-      <div class="action-buttons">
-        <button class="action-btn active" id="action-populate" data-action="populate">
-          <span class="action-icon">✎</span>
-          <span class="action-label">Populate Existing</span>
-          <span class="action-desc">Fill matching layers</span>
-        </button>
-        <button class="action-btn" id="action-generate" data-action="generate">
-          <span class="action-icon">+</span>
-          <span class="action-label">Generate Layout</span>
-          <span class="action-desc">Create new layers</span>
-        </button>
+      <div class="section">
+        <label>Fields</label>
+        <div id="field-browser" class="field-browser">
+          <p class="help-text">Select a resource type to see available fields</p>
+        </div>
       </div>
-    </div>
 
-    <div id="layout-options" class="section" style="display: none;">
-      <label>Layout Style</label>
-      <div class="radio-group">
-        <label>
-          <input type="radio" name="layout-style" value="form" checked>
-          Form (label + value pairs)
-        </label>
-        <label>
-          <input type="radio" name="layout-style" value="autolayout">
-          Auto-layout (grouped)
-        </label>
+      <div class="section">
+        <label>Action</label>
+        <div class="action-buttons">
+          <button class="action-btn active" id="action-populate" data-action="populate">
+            <span class="action-icon">&#9998;</span>
+            <span class="action-label">Populate Existing</span>
+            <span class="action-desc">Fill matching layers</span>
+          </button>
+          <button class="action-btn" id="action-generate" data-action="generate">
+            <span class="action-icon">+</span>
+            <span class="action-label">Generate Layout</span>
+            <span class="action-desc">Create new layers</span>
+          </button>
+        </div>
       </div>
-    </div>
 
-    <div class="button-row">
-      <button class="secondary" id="browse-cancel-btn">Cancel</button>
-      <button class="primary" id="browse-populate-btn" disabled>Populate Selection</button>
-      <button class="primary" id="browse-generate-btn" disabled style="display: none;">Generate Layout</button>
-    </div>
-
-    <div id="browse-status" class="status" style="display: none;"></div>
-    </div>
-  </div>
-
-  <div id="paste-tab" class="tab-content">
-    <div class="section">
-      <label for="json-input">Schema Data (JSON)</label>
-      <textarea id="json-input" placeholder='Paste your exported JSON here...
-
-Example format:
-{
-  "metadata": {
-    "firstName": { "type": "text", "label": "First Name" },
-    "status": { "type": "dropdown", "label": "Status", "options": ["Active", "Inactive"] }
-  },
-  "examples": [
-    { "firstName": "John", "status": "Active" }
-  ]
-}'></textarea>
-      <p class="help-text">Export this JSON using: npm run figma:export</p>
-    </div>
-
-    <div id="schema-info" class="schema-info" style="display: none;">
-      <h3>Loaded Schema</h3>
-      <span class="stat"><strong id="field-count">0</strong> fields</span>
-      <span class="stat"><strong id="example-count">0</strong> examples</span>
-      <span class="stat"><strong id="dropdown-count">0</strong> dropdowns</span>
-    </div>
-
-    <div class="section" id="example-select-section" style="display: none;">
-      <label for="example-select">Select Example</label>
-      <select id="example-select"></select>
-    </div>
-
-    <div class="section">
-      <label>Match Mode</label>
-      <div class="radio-group">
-        <label>
-          <input type="radio" name="match-mode" value="fuzzy" checked>
-          Fuzzy (recommended)
-        </label>
-        <label>
-          <input type="radio" name="match-mode" value="exact">
-          Exact
-        </label>
+      <div id="layout-options" class="section" style="display: none;">
+        <label>Layout Style</label>
+        <div class="radio-group">
+          <label>
+            <input type="radio" name="layout-style" value="form" checked>
+            Form (label + value)
+          </label>
+          <label>
+            <input type="radio" name="layout-style" value="autolayout">
+            Grouped (auto-layout)
+          </label>
+        </div>
       </div>
-      <p class="help-text">Fuzzy matching finds layers even if names don't match exactly</p>
-    </div>
 
-    <div class="button-row">
-      <button class="secondary" id="cancel-btn">Cancel</button>
-      <button class="primary" id="populate-btn" disabled>Populate Selection</button>
-    </div>
+      <div class="button-row">
+        <button class="secondary" id="browse-cancel-btn">Cancel</button>
+        <button class="primary" id="browse-populate-btn" disabled>Populate Selection</button>
+        <button class="primary" id="browse-generate-btn" disabled style="display: none;">Generate Layout</button>
+      </div>
 
-    <div id="status" class="status" style="display: none;"></div>
+      <div id="browse-status" class="status" style="display: none;"></div>
+
+      <p class="help-text" style="margin-top: 12px; text-align: center;">
+        <span class="reload-link" id="reload-data">Load different data</span>
+      </p>
+    </div>
   </div>
 
   <div id="help-tab" class="tab-content">
     <div class="section">
-      <h3 style="margin-bottom: 12px;">How to Use</h3>
+      <h3 style="margin-bottom: 12px;">Quick Start</h3>
       <ol style="padding-left: 20px; line-height: 1.8;">
         <li>Export your schema data:<br>
           <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;">npm run figma:export</code>
         </li>
-        <li>Copy the contents of the generated JSON file</li>
-        <li>Paste it in the "Paste JSON" tab</li>
-        <li>Select the example data you want to use</li>
-        <li>Select frames/layers in Figma (or select nothing for whole page)</li>
-        <li>Click "Populate Selection"</li>
+        <li>Drop the generated <code>all-data.json</code> file into the plugin</li>
+        <li>Select a resource type and example</li>
+        <li>Choose an action:
+          <ul style="padding-left: 16px; margin-top: 4px;">
+            <li><strong>Populate Existing</strong> - fills matching text layers in your selection</li>
+            <li><strong>Generate Layout</strong> - creates a new frame with all fields</li>
+          </ul>
+        </li>
       </ol>
     </div>
 
     <div class="section">
-      <h3 style="margin-bottom: 12px;">Layer Naming</h3>
+      <h3 style="margin-bottom: 12px;">Populate Existing</h3>
       <p style="line-height: 1.6;">
-        Name your text layers to match field names. The plugin will match:
+        Name your text layers to match field names. The plugin uses fuzzy matching:
       </p>
       <ul style="padding-left: 20px; margin-top: 8px; line-height: 1.8;">
-        <li><strong>First Name</strong> → firstName, first_name, FirstName</li>
-        <li><strong>Date of Birth</strong> → dateOfBirth, DOB, date_of_birth</li>
-        <li><strong>SSN</strong> → socialSecurityNumber, ssn</li>
+        <li><strong>First Name</strong> matches firstName, first_name</li>
+        <li><strong>Date of Birth</strong> matches dateOfBirth, DOB</li>
+        <li><strong>Address Line 1</strong> matches address.addressLine1</li>
       </ul>
     </div>
 
     <div class="section">
-      <h3 style="margin-bottom: 12px;">Dropdowns</h3>
+      <h3 style="margin-bottom: 12px;">Generate Layout</h3>
       <p style="line-height: 1.6;">
-        For dropdown fields, create a Component Set with variants for each option.
-        Name the component to match the field name (e.g., "maritalStatus" or "Marital Status").
+        Creates a new frame with all fields from the selected example:
       </p>
+      <ul style="padding-left: 20px; margin-top: 8px; line-height: 1.8;">
+        <li><strong>Form</strong> - simple vertical list of label + value pairs</li>
+        <li><strong>Grouped</strong> - fields grouped by category with auto-layout</li>
+      </ul>
     </div>
   </div>
 
   <script>
-    let schemaData = null;
     let browseData = null;
     let groupedExamples = {};
 
@@ -578,6 +487,17 @@ Example format:
       return 'other';
     }
 
+    // Get display name for an example
+    function getExampleDisplayName(example, index) {
+      const name = example.__exampleName || example._name || '';
+      if (name) {
+        return name
+          .replace(/([a-z])([A-Z])/g, '$1 $2')
+          .replace(/(\D)(\d)/g, '$1 $2');
+      }
+      return `Example ${index + 1}`;
+    }
+
     // Group examples by resource type
     function groupExamplesByResource(examples) {
       const grouped = {};
@@ -589,16 +509,6 @@ Example format:
         grouped[resourceType].push(example);
       }
       return grouped;
-    }
-
-    // Get fields relevant to a resource type
-    function getFieldsForResource(metadata, resourceType) {
-      // Get all fields and filter by what appears in examples for this resource
-      const fields = [];
-      for (const [key, meta] of Object.entries(metadata)) {
-        fields.push({ key, ...meta });
-      }
-      return fields.sort((a, b) => a.label.localeCompare(b.label));
     }
 
     // Render field browser
@@ -622,14 +532,13 @@ Example format:
           <div class="field-item">
             <span class="field-name">${f.label}</span>
             <span class="field-type ${f.type}">${f.type}</span>
-            ${f.description ? `<span class="field-desc">${f.description}</span>` : ''}
           </div>
         `).join('')}
-        ${filtered.length > 50 ? `<p class="help-text">...and ${filtered.length - 50} more fields</p>` : ''}
+        ${filtered.length > 50 ? `<p class="help-text">...and ${filtered.length - 50} more</p>` : ''}
       `;
 
       // Add filter event listener
-      document.getElementById('field-filter-input').addEventListener('input', (e) => {
+      document.getElementById('field-filter-input')?.addEventListener('input', (e) => {
         renderFieldBrowser(fields, e.target.value);
       });
     }
@@ -648,7 +557,7 @@ Example format:
 
       const entries = Object.entries(example)
         .filter(([key]) => !key.startsWith('_'))
-        .slice(0, 30);
+        .slice(0, 20);
 
       container.innerHTML = entries.map(([key, value]) => {
         const meta = metadata[key];
@@ -661,7 +570,7 @@ Example format:
         `;
       }).join('');
 
-      if (Object.keys(example).filter(k => !k.startsWith('_')).length > 30) {
+      if (Object.keys(example).filter(k => !k.startsWith('_')).length > 20) {
         container.innerHTML += '<p class="help-text">...and more fields</p>';
       }
     }
@@ -694,19 +603,28 @@ Example format:
       const examples = groupedExamples[resourceType] || [];
       const metadata = browseData?.metadata || {};
 
-      // Update fields
-      const fields = getFieldsForResource(metadata, resourceType);
+      // Update fields - get fields that appear in examples for this resource
+      const fieldsInExamples = new Set();
+      for (const ex of examples) {
+        for (const key of Object.keys(ex)) {
+          if (!key.startsWith('_')) fieldsInExamples.add(key);
+        }
+      }
+
+      const fields = [];
+      for (const [key, meta] of Object.entries(metadata)) {
+        if (fieldsInExamples.has(key)) {
+          fields.push({ key, ...meta });
+        }
+      }
+      fields.sort((a, b) => a.label.localeCompare(b.label));
       renderFieldBrowser(fields);
 
       // Update examples dropdown
       const exampleSelect = document.getElementById('browse-example-select');
       exampleSelect.disabled = examples.length === 0;
       exampleSelect.innerHTML = examples.map((ex, i) => {
-        const name = ex.__exampleName || ex._name || `Example ${i + 1}`;
-        // Format name nicely
-        const displayName = name
-          .replace(/([a-z])([A-Z])/g, '$1 $2')
-          .replace(/(\D)(\d)/g, '$1 $2');
+        const displayName = getExampleDisplayName(ex, i);
         return `<option value="${i}">${displayName}</option>`;
       }).join('');
 
@@ -731,16 +649,7 @@ Example format:
           if (!data.examples || !Array.isArray(data.examples)) {
             throw new Error('JSON must have an "examples" array');
           }
-          schemaData = data;
           updateBrowseTab(data);
-
-          // Show browse content, hide empty state
-          document.getElementById('browse-empty-state').style.display = 'none';
-          document.getElementById('browse-content').style.display = 'block';
-
-          // Also update the paste tab textarea
-          document.getElementById('json-input').value = e.target.result;
-          document.getElementById('json-input').dispatchEvent(new Event('input'));
         } catch (err) {
           alert('Error loading file: ' + err.message);
         }
@@ -782,115 +691,12 @@ Example format:
       });
     });
 
-    // Parse JSON input
-    document.getElementById('json-input').addEventListener('input', (e) => {
-      const statusEl = document.getElementById('status');
-      const schemaInfoEl = document.getElementById('schema-info');
-      const exampleSectionEl = document.getElementById('example-select-section');
-      const populateBtn = document.getElementById('populate-btn');
-
-      try {
-        const text = e.target.value.trim();
-        if (!text) {
-          schemaData = null;
-          schemaInfoEl.style.display = 'none';
-          exampleSectionEl.style.display = 'none';
-          populateBtn.disabled = true;
-          statusEl.style.display = 'none';
-          return;
-        }
-
-        schemaData = JSON.parse(text);
-
-        // Validate structure
-        if (!schemaData.examples || !Array.isArray(schemaData.examples)) {
-          throw new Error('JSON must have an "examples" array');
-        }
-
-        // Update schema info
-        const fieldCount = schemaData.metadata ? Object.keys(schemaData.metadata).length : 0;
-        const exampleCount = schemaData.examples.length;
-        const dropdownCount = schemaData.metadata
-          ? Object.values(schemaData.metadata).filter(m => m.type === 'dropdown').length
-          : 0;
-
-        document.getElementById('field-count').textContent = fieldCount;
-        document.getElementById('example-count').textContent = exampleCount;
-        document.getElementById('dropdown-count').textContent = dropdownCount;
-        schemaInfoEl.style.display = 'block';
-
-        // Populate example selector
-        const selectEl = document.getElementById('example-select');
-        selectEl.innerHTML = schemaData.examples.map((ex, i) => {
-          // Use metadata fields for label if available (support both old _name and new __exampleName)
-          const exampleName = ex['__exampleName'] || ex['_name'] || '';
-          const resourceType = ex['__resourceType'] || '';
-
-          let displayLabel;
-          if (exampleName) {
-            // Format "ApplicationExample1" → "Application Example 1"
-            displayLabel = exampleName
-              .replace(/([a-z])([A-Z])/g, '$1 $2')
-              .replace(/(\D)(\d)/g, '$1 $2');
-            if (resourceType) {
-              displayLabel += ` (${resourceType})`;
-            }
-          } else {
-            // Fallback to name fields
-            const firstName = ex['name.firstName'] || ex['firstName'] || '';
-            const lastName = ex['name.lastName'] || ex['lastName'] || '';
-            displayLabel = firstName && lastName ? `${firstName} ${lastName}` : `Example ${i + 1}`;
-          }
-          return `<option value="${i}">${displayLabel}</option>`;
-        }).join('');
-        exampleSectionEl.style.display = 'block';
-
-        populateBtn.disabled = false;
-        statusEl.style.display = 'none';
-
-        // Also update browse tab
-        updateBrowseTab(schemaData);
-
-      } catch (err) {
-        schemaData = null;
-        schemaInfoEl.style.display = 'none';
-        exampleSectionEl.style.display = 'none';
-        populateBtn.disabled = true;
-
-        statusEl.className = 'status error';
-        statusEl.textContent = 'Invalid JSON: ' + err.message;
-        statusEl.style.display = 'block';
-      }
-    });
-
-    // Populate button
-    document.getElementById('populate-btn').addEventListener('click', () => {
-      if (!schemaData) return;
-
-      const exampleIndex = parseInt(document.getElementById('example-select').value) || 0;
-      const matchMode = document.querySelector('input[name="match-mode"]:checked').value;
-
-      parent.postMessage({
-        pluginMessage: {
-          type: 'populate',
-          data: schemaData,
-          exampleIndex: exampleIndex,
-          matchMode: matchMode
-        }
-      }, '*');
-    });
-
-    // Cancel button
-    document.getElementById('cancel-btn').addEventListener('click', () => {
-      parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*');
-    });
-
-    // Browse tab: Resource type change
+    // Resource type change
     document.getElementById('resource-select').addEventListener('change', (e) => {
       onResourceTypeChange(e.target.value);
     });
 
-    // Browse tab: Example change
+    // Example change
     document.getElementById('browse-example-select').addEventListener('change', (e) => {
       const resourceType = document.getElementById('resource-select').value;
       const examples = groupedExamples[resourceType] || [];
@@ -898,37 +704,30 @@ Example format:
       renderExamplePreview(examples[exampleIndex], browseData?.metadata || {});
     });
 
-    // Browse tab: Populate button
+    // Populate button
     document.getElementById('browse-populate-btn').addEventListener('click', () => {
       if (!browseData) return;
 
       const resourceType = document.getElementById('resource-select').value;
       const examples = groupedExamples[resourceType] || [];
       const exampleIndex = parseInt(document.getElementById('browse-example-select').value) || 0;
-      const matchMode = document.querySelector('input[name="browse-match-mode"]:checked').value;
-
-      // Create data payload with just the selected example
-      const payload = {
-        metadata: browseData.metadata,
-        examples: [examples[exampleIndex]]
-      };
 
       parent.postMessage({
         pluginMessage: {
           type: 'populate',
-          data: payload,
+          data: { metadata: browseData.metadata, examples: [examples[exampleIndex]] },
           exampleIndex: 0,
-          matchMode: matchMode
+          matchMode: 'fuzzy'
         }
       }, '*');
     });
 
-    // Browse tab: Cancel button
+    // Cancel button
     document.getElementById('browse-cancel-btn').addEventListener('click', () => {
       parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*');
     });
 
-    // Browse tab: Action toggle (Populate vs Generate)
+    // Action toggle (Populate vs Generate)
     let currentAction = 'populate';
     document.querySelectorAll('.action-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -952,7 +751,7 @@ Example format:
       });
     });
 
-    // Browse tab: Generate button
+    // Generate button
     document.getElementById('browse-generate-btn').addEventListener('click', () => {
       if (!browseData) return;
 
@@ -960,16 +759,27 @@ Example format:
       const examples = groupedExamples[resourceType] || [];
       const exampleIndex = parseInt(document.getElementById('browse-example-select').value) || 0;
       const layoutStyle = document.querySelector('input[name="layout-style"]:checked').value;
+      const example = examples[exampleIndex];
+      const exampleName = getExampleDisplayName(example, exampleIndex);
 
       parent.postMessage({
         pluginMessage: {
           type: 'generate',
           data: browseData,
-          example: examples[exampleIndex],
+          example: example,
           layoutStyle: layoutStyle,
-          resourceType: resourceType
+          resourceType: resourceType,
+          exampleName: exampleName
         }
       }, '*');
+    });
+
+    // Reload data link
+    document.getElementById('reload-data').addEventListener('click', () => {
+      document.getElementById('browse-empty-state').style.display = 'block';
+      document.getElementById('browse-content').style.display = 'none';
+      browseData = null;
+      groupedExamples = {};
     });
 
     // Handle messages from plugin
@@ -977,48 +787,24 @@ Example format:
       const msg = event.data.pluginMessage;
       if (!msg) return;
 
+      const browseStatusEl = document.getElementById('browse-status');
+
       if (msg.type === 'populate-result') {
         const total = msg.textMatched + msg.dropdownMatched;
 
-        let html;
-        let className;
         if (total > 0) {
-          className = 'status success';
-          html = `Populated ${total} field${total !== 1 ? 's' : ''} `;
-          html += `(${msg.textMatched} text, ${msg.dropdownMatched} dropdown)`;
-
-          if (msg.unmatched && msg.unmatched.length > 0) {
-            html += `<br><br>Unmatched fields (no matching layer found):`;
-            html += '<ul class="unmatched-list">';
-            msg.unmatched.slice(0, 10).forEach(f => {
-              html += `<li>${f}</li>`;
-            });
-            if (msg.unmatched.length > 10) {
-              html += `<li>...and ${msg.unmatched.length - 10} more</li>`;
-            }
-            html += '</ul>';
-          }
+          browseStatusEl.className = 'status success';
+          browseStatusEl.innerHTML = `Populated ${total} field${total !== 1 ? 's' : ''}`;
         } else {
-          className = 'status info';
-          html = 'No matching layers found. Make sure your layer names match the field names.';
+          browseStatusEl.className = 'status info';
+          browseStatusEl.innerHTML = 'No matching layers found. Make sure your layer names match the field labels.';
         }
-
-        // Update both status elements
-        const statusEl = document.getElementById('status');
-        statusEl.className = className;
-        statusEl.innerHTML = html;
-        statusEl.style.display = 'block';
-
-        const browseStatusEl = document.getElementById('browse-status');
-        browseStatusEl.className = className;
-        browseStatusEl.innerHTML = html;
         browseStatusEl.style.display = 'block';
       }
 
       if (msg.type === 'generate-result') {
-        const browseStatusEl = document.getElementById('browse-status');
         browseStatusEl.className = 'status success';
-        browseStatusEl.innerHTML = `Generated layout with ${msg.fieldCount} fields`;
+        browseStatusEl.innerHTML = `Generated "${msg.frameName}" with ${msg.fieldCount} fields`;
         browseStatusEl.style.display = 'block';
       }
     };
