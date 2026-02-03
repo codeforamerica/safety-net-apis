@@ -302,3 +302,34 @@ See [api-patterns.yaml](../../packages/schemas/openapi/patterns/api-patterns.yam
 
 *Future direction*: When an Experience Layer becomes necessary, GraphQL is likely the best choice. It allows clients to request exactly the fields they need, reducing over-fetching and enabling frontend teams to evolve independently. A GraphQL gateway could sit above Process APIs without changing the underlying architecture.
 
+---
+
+### How to organize API specs by domain and type?
+
+| Option | Considered | Chosen |
+|--------|------------|--------|
+| Folder-based organization | Nested folders (`system/intake/`, `cross-cutting/`) | No |
+| OpenAPI x-extensions | Metadata tags (`x-domain`, `x-api-type`, `x-status`) | Yes |
+
+*Rationale*: Folder-based organization requires updating tooling (loaders, validation scripts, Spectral globs) whenever the structure changes. Using x-extensions provides the same logical organization without breaking existing tooling. Extensions are machine-readable for filtering, documentation generation, and future folder reorganization if needed.
+
+*Extensions defined*:
+- `x-domain`: Business domain (intake, client-management, workflow, eligibility, etc.)
+- `x-api-type`: Architectural layer (system, process, cross-cutting)
+- `x-status`: Implementation status (planned, alpha, beta, stable, deprecated)
+- `x-visibility`: Access scope (public, partner, internal)
+
+*Example*:
+```yaml
+info:
+  title: Applications API
+  x-domain: intake
+  x-api-type: system
+  x-status: stable
+  x-visibility: public
+```
+
+See [api-patterns.yaml](../../packages/schemas/openapi/patterns/api-patterns.yaml) for full documentation.
+
+*Reconsider if*: The flat file structure becomes unwieldy with many APIs, or if physical separation is needed for access control or separate deployment.
+

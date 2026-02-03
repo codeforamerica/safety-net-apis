@@ -36,9 +36,10 @@ async function main() {
   console.log('='.repeat(70));
   
   try {
-    // Discover API specs
+    // Discover API specs (always use base specs, not resolved)
+    // State-specific validation is handled by validate-state.js
     console.log('\nDiscovering OpenAPI specifications...');
-    const apiSpecs = discoverApiSpecs();
+    const apiSpecs = discoverApiSpecs({ useResolved: false });
     
     if (apiSpecs.length === 0) {
       console.error('\n❌ No OpenAPI specifications found in openapi/ directory');
@@ -47,7 +48,7 @@ async function main() {
     
     console.log(`✓ Found ${apiSpecs.length} specification(s)\n`);
     
-    // Add examples paths
+    // Add examples paths (base examples for base specs)
     const specsWithExamples = apiSpecs.map(spec => ({
       ...spec,
       examplesPath: join(__dirname, '../openapi/examples', `${spec.name}.yaml`)

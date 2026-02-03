@@ -2,6 +2,10 @@ openapi: 3.1.0
 info:
   title: Income Service API
   version: 1.0.0
+  x-domain: intake
+  x-api-type: system
+  x-status: stable
+  x-visibility: internal
   description: |
     REST API for managing income records. The specification defines CRUD operations
     for creating, reading, updating, and deleting income items.

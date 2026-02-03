@@ -1,6 +1,7 @@
 # User Examples
 # Example data for testing and documentation.
-# These examples are validated against the schema by npm run validate
+# These examples are validated against the BASE schema (not state overlays).
+# State-specific examples should be included in overlay files.
 
 UserExample1:
   id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"

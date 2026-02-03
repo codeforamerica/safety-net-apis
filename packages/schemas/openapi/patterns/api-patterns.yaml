@@ -349,16 +349,26 @@ schema_patterns:
 # =============================================================================
 # File Structure [BOTH]
 # =============================================================================
-# System APIs in openapi/domains/, Process APIs in openapi/processes/
+# API specs are organized flat with x-extensions for classification.
+# See "API Classification" section for x-domain, x-api-type, x-status.
 file_structure:
-  # Main API specs go in openapi/ root
+  # Main API specs go in openapi/ root (flat structure)
   api_specs:
     location: "openapi/"
     pattern: "{resource-plural}.yaml"
+    organization: |
+      APIs are organized logically using x-extensions rather than folders:
+      - x-domain: Business domain (intake, client-management, etc.)
+      - x-api-type: Architectural layer (system, process, cross-cutting)
+      - x-status: Implementation status (planned, stable, deprecated)
+
+      This avoids tooling changes while enabling filtering and documentation.
     examples:
-      - openapi/persons.yaml
-      - openapi/applications.yaml
-      - openapi/households.yaml
+      - openapi/applications.yaml   # x-domain: intake, x-api-type: system
+      - openapi/persons.yaml        # x-domain: client-management, x-api-type: system
+      - openapi/households.yaml     # x-domain: intake, x-api-type: system
+      - openapi/incomes.yaml        # x-domain: intake, x-api-type: system
+      - openapi/users.yaml          # x-domain: identity-access, x-api-type: cross-cutting
 
   # Shared components in openapi/components/
   components:
@@ -496,6 +506,175 @@ process_api_metadata:
     - Group endpoints by x-capability
     - Show which roles can access each endpoint
     - Generate role-specific API documentation
+
+# =============================================================================
+# API Classification [BOTH]
+# =============================================================================
+# Extensions for organizing and identifying APIs without folder restructuring.
+# These extensions enable filtering, documentation generation, and tooling
+# without requiring physical file reorganization.
+api_classification:
+  description: |
+    Instead of organizing APIs into nested folders (which requires tooling changes),
+    use OpenAPI extensions to classify APIs by domain, type, and status. This enables:
+    - Filtering APIs in documentation
+    - Generating domain-specific views
+    - Tracking implementation status
+    - Future folder reorganization (extensions inform structure)
+
+  extensions:
+    x-domain:
+      description: The business domain this API belongs to
+      type: string
+      location: Info level (under info:) or Operation level
+      required: true for all API specs
+      values:
+        # Core domains (from domain-design.md)
+        - client-management     # Persistent client identity and relationships
+        - intake                # Application submission from client perspective
+        - eligibility           # Program-specific interpretation and determination
+        - case-management       # Ongoing client relationships and staff assignments
+        - workflow              # Tasks, SLAs, verification
+        - scheduling            # Appointments and interviews
+        - document-management   # Files and uploads
+        # Cross-cutting (not domains, but API groupings)
+        - identity-access       # Authentication and authorization (Users API)
+        - communication         # Notices and correspondence
+        - configuration         # Business rules and settings
+        - reporting             # Aggregated data and audit events
+      example: |
+        info:
+          title: Applications API
+          x-domain: intake
+
+        # Or at operation level for multi-domain specs:
+        paths:
+          /applications:
+            get:
+              x-domain: intake
+
+    x-api-type:
+      description: The architectural layer this API belongs to
+      type: string
+      location: Info level (under info:)
+      required: true for all API specs
+      values:
+        - system        # RESTful CRUD access to domain data
+        - process       # RPC-style orchestration of business operations
+        - cross-cutting # Shared services (auth, config, etc.)
+      note: |
+        See design-decisions.md "System APIs vs Process APIs?" for rationale.
+        - System APIs: GET/POST/PATCH/DELETE on resources
+        - Process APIs: POST /processes/{domain}/{resource}/{action}
+        - Cross-cutting: Services used by multiple domains
+      example: |
+        info:
+          title: Applications API
+          x-api-type: system
+          x-domain: intake
+
+        info:
+          title: Users API
+          x-api-type: cross-cutting
+          x-domain: identity-access
+
+    x-status:
+      description: Implementation/lifecycle status of the API or operation
+      type: string
+      location: Info level (entire API) or Operation level (specific endpoints)
+      default: stable (if not specified)
+      values:
+        - planned       # Designed but not implemented
+        - alpha         # Early implementation, breaking changes expected
+        - beta          # Feature complete, stabilizing
+        - stable        # Production ready, follows semver
+        - deprecated    # Still works but being phased out (use OpenAPI deprecated: true)
+      note: |
+        For visibility in Swagger UI, also add a description banner:
+        > **Status: Planned** - Not yet implemented
+
+        This ensures status is visible regardless of tooling support for x-extensions.
+      example: |
+        # API-level status
+        info:
+          title: Workflow API
+          x-status: planned
+          description: |
+            > **Status: Planned** - Not yet implemented
+
+            Task management and workflow orchestration.
+
+        # Operation-level status (for partial implementations)
+        paths:
+          /tasks:
+            get:
+              x-status: stable
+              summary: List tasks
+            post:
+              x-status: beta
+              summary: Create task
+              description: |
+                > **Status: Beta** - API may change
+
+                Creates a new task...
+
+    x-visibility:
+      description: Who can see/use this API
+      type: string
+      location: Info level or Operation level
+      default: internal
+      values:
+        - public        # Available to external consumers (clients, partners)
+        - partner       # Available to authorized integration partners
+        - internal      # Internal use only (staff, system-to-system)
+      example: |
+        info:
+          title: Applications API
+          x-visibility: public  # Clients can submit applications
+
+        paths:
+          /applications/{id}/internal-notes:
+            get:
+              x-visibility: internal  # Staff only
+
+  usage_patterns:
+    filtering_by_domain: |
+      # Find all Intake domain APIs
+      grep -l "x-domain: intake" openapi/*.yaml
+
+    documentation_generation: |
+      # Generate docs grouped by domain
+      for domain in intake workflow case-management; do
+        generate-docs --filter "x-domain: $domain" --output "docs/$domain/"
+      done
+
+    status_reporting: |
+      # List all planned APIs
+      grep -l "x-status: planned" openapi/*.yaml
+
+    validation: |
+      # Spectral rule to require x-domain
+      rules:
+        require-x-domain:
+          description: All APIs must specify x-domain
+          given: "$.info"
+          then:
+            field: "x-domain"
+            function: truthy
+
+  migration_to_folders: |
+    If folder-based organization is later desired, x-domain and x-api-type
+    provide the classification needed:
+
+    Current:
+      openapi/applications.yaml  (x-api-type: system, x-domain: intake)
+      openapi/persons.yaml       (x-api-type: system, x-domain: client-management)
+      openapi/users.yaml         (x-api-type: cross-cutting, x-domain: identity-access)
+
+    Future (if reorganized):
+      openapi/system/intake/applications.yaml
+      openapi/system/client-management/persons.yaml
+      openapi/cross-cutting/users.yaml
 
 # =============================================================================
 # Validation Rules [BOTH]
@@ -730,7 +909,7 @@ batch_operations:
         items:
           index: Position in request array
           action: The action attempted
-          status: "succeeded" | "failed"
+          status: '"succeeded" | "failed"'
           id: Resource ID (for successful creates)
           error: Error details (for failures)
 
@@ -1243,7 +1422,7 @@ long_running_operations:
         Location: URL to poll for status
       body:
         operationId: UUID
-        status: "pending" | "running"
+        status: '"pending" | "running"'
         statusUrl: "/operations/{operationId}"
         estimatedCompletionTime: ISO 8601 datetime (optional)
 
@@ -1256,7 +1435,7 @@ long_running_operations:
       status: 200
       body:
         operationId: UUID
-        status: "pending" | "running"
+        status: '"pending" | "running"'
         progress: 0-100 (optional)
         message: Human-readable status (optional)
 
