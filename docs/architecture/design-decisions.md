@@ -59,7 +59,7 @@ See also: [Domain Design](domain-design.md) | [API Architecture](api-architectur
 | Combined | Simpler, fewer domains | No |
 | Separate | Clear separation of concerns | Yes |
 
-*Rationale*: They answer different questions. Workflow = "What needs to be done?" Case Management = "Who's responsible for this relationship?"
+*Rationale*: They answer different questions. Workflow = "What needs to be done?" Case Management = "Who's responsible for getting this done?"
 
 *Reconsider if*: The separation creates too much complexity in practice, or if case workers primarily interact with the system through tasks (making them effectively the same).
 
@@ -76,6 +76,43 @@ See also: [Domain Design](domain-design.md) | [API Architecture](api-architectur
 *Rationale*: Verification tasks are work items with SLAs and outcomes - fits naturally with Workflow.
 
 *Reconsider if*: Verification becomes a complex subsystem with its own rules engine, third-party integrations, and document processing pipelines.
+
+---
+
+### How to handle verification failures?
+
+| Option | Considered | Chosen |
+|--------|------------|--------|
+| Immediate denial | Fail verification → deny application | No |
+| Manual escalation | Worker decides next steps | No |
+| Rule-driven outcomes | Workflow rules determine next task based on failure reason | Yes |
+
+*Rationale*: Verification failure isn't necessarily application denial—it often means "need more information." The Task entity captures the outcome (`failed`, `passed`, `inconclusive`) and reason. Workflow rules evaluate the outcome and create appropriate follow-up tasks:
+
+- `documents_insufficient` → Create "Request additional documentation" task, set case to `pending_information`
+- `unable_to_verify` → Escalate to supervisor queue
+- `fraud_suspected` → Route to fraud investigation workflow
+
+This keeps verification logic declarative (in workflow rules) rather than hardcoded.
+
+*Example workflow rule*:
+```json
+{
+  "condition": {
+    "and": [
+      { "==": [{ "var": "task.type" }, "verify_income"] },
+      { "==": [{ "var": "task.outcome" }, "failed"] },
+      { "==": [{ "var": "task.outcomeReason" }, "documents_insufficient"] }
+    ]
+  },
+  "actions": [
+    { "createTask": { "type": "request_documents", "assignTo": "client" } },
+    { "updateCase": { "status": "pending_information" } }
+  ]
+}
+```
+
+*Reconsider if*: Failure handling becomes complex enough to warrant a dedicated state machine or if business users need a visual workflow editor for defining failure paths.
 
 ---
 
