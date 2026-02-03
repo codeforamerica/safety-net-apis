@@ -1,10 +1,10 @@
 /**
- * Swagger UI Server
- * Auto-discovers and serves OpenAPI specifications with Swagger UI
+ * API Documentation Server (Scalar)
+ * Auto-discovers and serves OpenAPI specifications with Scalar API Reference
  */
 
 import express from 'express';
-import swaggerUi from 'swagger-ui-express';
+import { apiReference } from '@scalar/express-api-reference';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import $RefParser from '@apidevtools/json-schema-ref-parser';
@@ -75,7 +75,7 @@ function createLandingPage(apis) {
     }
     h1 {
       color: #333;
-      border-bottom: 2px solid #49cc90;
+      border-bottom: 2px solid #5a67d8;
       padding-bottom: 10px;
     }
     .container {
@@ -92,7 +92,7 @@ function createLandingPage(apis) {
       margin: 15px 0;
     }
     a {
-      color: #49cc90;
+      color: #5a67d8;
       text-decoration: none;
       font-size: 18px;
       padding: 10px 15px;
@@ -102,7 +102,7 @@ function createLandingPage(apis) {
       transition: all 0.3s;
     }
     a:hover {
-      background: #49cc90;
+      background: #5a67d8;
       color: white;
       transform: translateX(5px);
     }
@@ -140,7 +140,7 @@ ${apiLinks}
  */
 async function startSwaggerServer() {
   console.log('='.repeat(70));
-  console.log('📚 Starting Swagger UI Server');
+  console.log('📚 Starting Scalar API Documentation Server');
   console.log('='.repeat(70));
   
   try {
@@ -184,30 +184,29 @@ async function startSwaggerServer() {
       res.send(createLandingPage(loadedApis));
     });
     
-    // Serve Swagger UI for each API
+    // Serve Scalar API Reference for each API
     for (const api of loadedApis) {
-      const swaggerOptions = {
-        swaggerOptions: {
-          url: `/${api.name}/spec.json`,
-          displayRequestDuration: true,
-          persistAuthorization: true,
-          tryItOutEnabled: true
-        }
-      };
-      
       // Serve the spec as JSON
       app.get(`/${api.name}/spec.json`, (req, res) => {
         res.json(api.spec);
       });
-      
-      // Serve Swagger UI
-      app.use(`/${api.name}`, swaggerUi.serveFiles(api.spec, swaggerOptions), swaggerUi.setup(api.spec, swaggerOptions));
+
+      // Serve Scalar API Reference
+      app.use(`/${api.name}`, apiReference({
+        spec: { content: api.spec },
+        theme: 'default',
+        layout: 'modern',
+        darkMode: true,
+        metaData: {
+          title: api.title,
+        },
+      }));
     }
     
     // Start server
     app.listen(PORT, HOST, () => {
       console.log('\n' + '='.repeat(70));
-      console.log('✓ Swagger UI Server Started Successfully!');
+      console.log('✓ Scalar API Documentation Server Started Successfully!');
       console.log('='.repeat(70));
       console.log(`\n📚 Documentation:  http://${HOST}:${PORT}`);
       console.log(`📡 Mock Server:    ${MOCK_SERVER_URL}`);
@@ -221,7 +220,7 @@ async function startSwaggerServer() {
       
       console.log('\n' + '='.repeat(70));
       console.log('\n💡 Tip: Start the mock server first with: npm run mock:start');
-      console.log('    Then use "Try it out" buttons in Swagger UI to test endpoints.\n');
+      console.log('    Then use the "Test Request" feature in Scalar to test endpoints.\n');
     });
     
   } catch (error) {
@@ -233,12 +232,12 @@ async function startSwaggerServer() {
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
-  console.log('\n\nStopping Swagger UI server...');
+  console.log('\n\nStopping Scalar API documentation server...');
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('\n\nStopping Swagger UI server...');
+  console.log('\n\nStopping Scalar API documentation server...');
   process.exit(0);
 });
 

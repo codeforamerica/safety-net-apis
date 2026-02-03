@@ -21,7 +21,7 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "js-yaml": "^4.1.0",
-    "swagger-ui-express": "^5.0.1"
+    "@scalar/express-api-reference": "^0.8.19"
   },
   "devDependencies": {
     "newman": "^6.2.1"
