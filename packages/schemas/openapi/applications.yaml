@@ -2,6 +2,10 @@ openapi: 3.1.0
 info:
   title: Application Service API
   version: 1.0.0
+  x-domain: intake
+  x-api-type: system
+  x-status: stable
+  x-visibility: public
   description: |
     REST API for managing public assistance applications. The specification defines CRUD operations
     for creating, reading, updating, and deleting applications for SNAP, Cash Programs, and Medical Assistance.
