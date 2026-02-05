@@ -31,6 +31,8 @@
     "design:figma-data": "node scripts/export-figma-data.js",
     "figma:export": "node scripts/export-figma-plugin-data.js",
     "figma:build": "cd figma-plugin && npm run build",
+    "figjam:export": "node scripts/export-figjam-widget-data.js",
+    "figjam:build": "cd figjam-widget && npm run build",
     "design:export": "npm run design:reference && npm run design:figma-data"
   },
   "dependencies": {

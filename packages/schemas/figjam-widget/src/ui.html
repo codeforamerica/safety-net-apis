@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 12px;
+      color: #333;
+      padding: 16px;
+      background: #fff;
+    }
+
+    h2 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+    h3 { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #555; }
+
+    .section { margin-bottom: 16px; }
+
+    label { display: block; font-weight: 500; margin-bottom: 4px; color: #666; font-size: 11px; }
+
+    select, input[type="text"], textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    select:focus, input:focus, textarea:focus {
+      outline: none;
+      border-color: #1A73E8;
+    }
+
+    textarea { resize: vertical; min-height: 60px; }
+
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    button.primary { background: #1A73E8; color: white; }
+    button.primary:hover { background: #1557B0; }
+    button.primary:disabled { background: #ccc; cursor: not-allowed; }
+    button.secondary { background: #f0f0f0; color: #333; }
+    button.secondary:hover { background: #e0e0e0; }
+    button.danger { background: #C62828; color: white; }
+
+    .button-row { display: flex; gap: 8px; margin-top: 12px; }
+
+    .hidden { display: none; }
+
+    .file-drop-zone {
+      display: block;
+      border: 2px dashed #ddd;
+      border-radius: 8px;
+      padding: 24px;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #888;
+      text-align: center;
+    }
+    .file-drop-zone:hover, .file-drop-zone.drag-over {
+      border-color: #1A73E8;
+      background: #f0f8ff;
+      color: #1A73E8;
+    }
+
+    .action-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid #eee;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .action-option:hover { border-color: #1A73E8; background: #f8fcff; }
+    .action-option.selected { border-color: #1A73E8; background: #EBF5FF; }
+    .action-option .tag {
+      font-size: 9px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 3px;
+      color: white;
+    }
+
+    .proposal-list { max-height: 250px; overflow-y: auto; }
+    .proposal-item {
+      padding: 8px;
+      border: 1px solid #eee;
+      border-radius: 6px;
+      margin-bottom: 6px;
+    }
+    .proposal-item .header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .proposal-item .meta { font-size: 10px; color: #888; }
+
+    .export-box {
+      background: #f8f9fa;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 12px;
+      font-family: 'Source Code Pro', monospace;
+      font-size: 11px;
+      max-height: 300px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .schema-selector {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .schema-chip {
+      padding: 4px 10px;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .schema-chip:hover { border-color: #1A73E8; }
+    .schema-chip.active { background: #1A73E8; color: white; border-color: #1A73E8; }
+
+    .help-text { font-size: 11px; color: #888; margin-top: 4px; }
+
+    .vote-btn {
+      background: none;
+      border: 1px solid #ddd;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+    }
+    .vote-btn:hover { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+
+  <!-- MODE: Load Data -->
+  <div id="load-panel" class="hidden">
+    <h2>Load Schema Data</h2>
+
+    <label class="file-drop-zone" id="file-drop-zone">
+      <input type="file" id="file-input" accept=".json" style="display: none;">
+      <span>Drop schema JSON here or click to select</span>
+    </label>
+    <p class="help-text" style="margin-top: 8px; text-align: center;">
+      Generate with: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;">npm run figjam:export</code>
+    </p>
+
+    <div id="schema-picker" class="hidden" style="margin-top: 16px;">
+      <h3>Select a schema to display</h3>
+      <div id="schema-chips" class="schema-selector"></div>
+      <div class="button-row">
+        <button class="secondary" onclick="closeUI()">Cancel</button>
+        <button class="primary" id="confirm-schema-btn" disabled onclick="confirmSchema()">Show Schema</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODE: Add Proposal -->
+  <div id="propose-panel" class="hidden">
+    <h2>Add Proposal</h2>
+
+    <div class="section">
+      <label>Schema</label>
+      <select id="propose-schema"></select>
+    </div>
+
+    <div class="section">
+      <label>Action</label>
+      <div id="action-options">
+        <div class="action-option" data-action="addField" onclick="selectAction('addField')">
+          <span class="tag" style="background: #2E7D32;">+ Add</span>
+          <span>Add a new field</span>
+        </div>
+        <div class="action-option" data-action="removeField" onclick="selectAction('removeField')">
+          <span class="tag" style="background: #C62828;">- Remove</span>
+          <span>Remove an existing field</span>
+        </div>
+        <div class="action-option" data-action="changeType" onclick="selectAction('changeType')">
+          <span class="tag" style="background: #E65100;">~ Type</span>
+          <span>Change a field's type</span>
+        </div>
+        <div class="action-option" data-action="rename" onclick="selectAction('rename')">
+          <span class="tag" style="background: #6A1B9A;">~ Rename</span>
+          <span>Rename a field</span>
+        </div>
+        <div class="action-option" data-action="addEnumValue" onclick="selectAction('addEnumValue')">
+          <span class="tag" style="background: #00695C;">+ Enum</span>
+          <span>Add an enum value</span>
+        </div>
+        <div class="action-option" data-action="question" onclick="selectAction('question')">
+          <span class="tag" style="background: #F9A825;">?</span>
+          <span>Ask a question</span>
+        </div>
+        <div class="action-option" data-action="note" onclick="selectAction('note')">
+          <span class="tag" style="background: #546E7A;">#</span>
+          <span>Add a note</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dynamic fields based on action -->
+    <div id="propose-fields" class="hidden">
+      <div id="field-name-section" class="section hidden">
+        <label>Existing Field</label>
+        <select id="propose-field-name"></select>
+      </div>
+
+      <div id="proposed-name-section" class="section hidden">
+        <label id="proposed-name-label">New Field Name</label>
+        <input type="text" id="propose-proposed-name" placeholder="e.g., primaryLanguage">
+      </div>
+
+      <div id="proposed-type-section" class="section hidden">
+        <label>Type</label>
+        <select id="propose-proposed-type">
+          <option value="string">string</option>
+          <option value="integer">integer</option>
+          <option value="number">number</option>
+          <option value="boolean">boolean</option>
+          <option value="array">array</option>
+          <option value="object">object</option>
+        </select>
+      </div>
+
+      <div id="proposed-value-section" class="section hidden">
+        <label>New Enum Value</label>
+        <input type="text" id="propose-proposed-value" placeholder="e.g., non_binary">
+      </div>
+
+      <div class="section">
+        <label>Description / Rationale</label>
+        <textarea id="propose-description" placeholder="Why is this change needed?"></textarea>
+      </div>
+
+      <div class="button-row">
+        <button class="secondary" onclick="closeUI()">Cancel</button>
+        <button class="primary" id="submit-proposal-btn" onclick="submitProposal()">Add Proposal</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODE: Export -->
+  <div id="export-panel" class="hidden">
+    <h2>Export Proposals</h2>
+
+    <div class="section">
+      <label>Filter by Schema</label>
+      <select id="export-schema-filter">
+        <option value="">All schemas</option>
+      </select>
+    </div>
+
+    <div id="export-summary" class="section"></div>
+
+    <div class="section">
+      <div id="export-output" class="export-box"></div>
+    </div>
+
+    <div class="button-row">
+      <button class="secondary" onclick="closeUI()">Close</button>
+      <button class="primary" onclick="copyExport()">Copy to Clipboard</button>
+      <button class="secondary" onclick="downloadExport()">Download JSON</button>
+    </div>
+  </div>
+
+  <script>
+    let state = {
+      mode: 'load',
+      schemas: null,
+      proposals: [],
+      selectedSchema: '',
+      selectedAction: '',
+      loadedBundle: null,
+    };
+
+    // --- Init from widget ---
+
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      if (!msg) return;
+
+      if (msg.type === 'init') {
+        state.mode = msg.mode;
+        state.schemas = msg.schemas;
+        state.proposals = msg.proposals || [];
+        state.selectedSchema = msg.schemaName || '';
+        showPanel(msg.mode);
+      }
+    };
+
+    function showPanel(mode) {
+      document.getElementById('load-panel').classList.toggle('hidden', mode !== 'load');
+      document.getElementById('propose-panel').classList.toggle('hidden', mode !== 'propose');
+      document.getElementById('export-panel').classList.toggle('hidden', mode !== 'export');
+
+      if (mode === 'propose') initProposePanel();
+      if (mode === 'export') initExportPanel();
+    }
+
+    function closeUI() {
+      parent.postMessage({ pluginMessage: { type: 'close' } }, '*');
+    }
+
+    // --- Load panel ---
+
+    const dropZone = document.getElementById('file-drop-zone');
+    const fileInput = document.getElementById('file-input');
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) loadFile(e.target.files[0]);
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length > 0) loadFile(e.dataTransfer.files[0]);
+    });
+
+    function loadFile(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (!data.schemas) throw new Error('Invalid format: missing "schemas" key');
+          state.loadedBundle = data;
+
+          // Show schema picker
+          const picker = document.getElementById('schema-picker');
+          const chips = document.getElementById('schema-chips');
+          picker.classList.remove('hidden');
+
+          const names = Object.keys(data.schemas).sort();
+          chips.innerHTML = names.map(name =>
+            `<span class="schema-chip" data-name="${name}" onclick="pickSchema('${name}')">${name} (${data.schemas[name].fields.length})</span>`
+          ).join('');
+        } catch (err) {
+          alert('Error loading file: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function pickSchema(name) {
+      state.selectedSchema = name;
+      document.querySelectorAll('.schema-chip').forEach(c => c.classList.remove('active'));
+      document.querySelector(`.schema-chip[data-name="${name}"]`).classList.add('active');
+      document.getElementById('confirm-schema-btn').disabled = false;
+    }
+
+    function confirmSchema() {
+      // First send the data bundle, then the schema selection
+      parent.postMessage({ pluginMessage: { type: 'load-data', data: state.loadedBundle } }, '*');
+
+      setTimeout(() => {
+        parent.postMessage({ pluginMessage: { type: 'set-schema', schemaName: state.selectedSchema } }, '*');
+      }, 100);
+    }
+
+    // --- Propose panel ---
+
+    function initProposePanel() {
+      const schemaSelect = document.getElementById('propose-schema');
+      if (state.schemas) {
+        const names = Object.keys(state.schemas.schemas).sort();
+        schemaSelect.innerHTML = names.map(n =>
+          `<option value="${n}" ${n === state.selectedSchema ? 'selected' : ''}>${n}</option>`
+        ).join('');
+      }
+    }
+
+    function selectAction(action) {
+      state.selectedAction = action;
+      document.querySelectorAll('.action-option').forEach(o => o.classList.remove('selected'));
+      document.querySelector(`[data-action="${action}"]`).classList.add('selected');
+
+      const fields = document.getElementById('propose-fields');
+      fields.classList.remove('hidden');
+
+      // Show/hide fields based on action
+      const needsExistingField = ['removeField', 'changeType', 'rename', 'addEnumValue'].includes(action);
+      const needsProposedName = ['addField', 'rename'].includes(action);
+      const needsProposedType = ['addField', 'changeType'].includes(action);
+      const needsProposedValue = ['addEnumValue'].includes(action);
+
+      document.getElementById('field-name-section').classList.toggle('hidden', !needsExistingField);
+      document.getElementById('proposed-name-section').classList.toggle('hidden', !needsProposedName);
+      document.getElementById('proposed-type-section').classList.toggle('hidden', !needsProposedType);
+      document.getElementById('proposed-value-section').classList.toggle('hidden', !needsProposedValue);
+
+      // Update label
+      if (action === 'rename') {
+        document.getElementById('proposed-name-label').textContent = 'New Name';
+      } else {
+        document.getElementById('proposed-name-label').textContent = 'New Field Name';
+      }
+
+      // Populate field dropdown
+      if (needsExistingField && state.schemas) {
+        const schemaName = document.getElementById('propose-schema').value;
+        const schema = state.schemas.schemas[schemaName];
+        if (schema) {
+          const fieldSelect = document.getElementById('propose-field-name');
+          fieldSelect.innerHTML = schema.fields.map(f =>
+            `<option value="${f.name}">${f.name} (${f.type})</option>`
+          ).join('');
+        }
+      }
+    }
+
+    function submitProposal() {
+      const schemaName = document.getElementById('propose-schema').value;
+      const action = state.selectedAction;
+      const description = document.getElementById('propose-description').value;
+
+      if (!action || !description) {
+        alert('Please select an action and provide a description.');
+        return;
+      }
+
+      const proposal = {
+        action: action,
+        schemaName: schemaName,
+        fieldName: document.getElementById('propose-field-name')?.value || undefined,
+        proposedName: document.getElementById('propose-proposed-name')?.value || undefined,
+        proposedType: document.getElementById('propose-proposed-type')?.value || undefined,
+        proposedValue: document.getElementById('propose-proposed-value')?.value || undefined,
+        description: description,
+        author: figma?.currentUser?.name || 'Anonymous',
+      };
+
+      parent.postMessage({ pluginMessage: { type: 'add-proposal', proposal } }, '*');
+
+      // Reset form
+      document.getElementById('propose-description').value = '';
+      document.getElementById('propose-proposed-name').value = '';
+      document.getElementById('propose-proposed-value').value = '';
+      state.selectedAction = '';
+      document.querySelectorAll('.action-option').forEach(o => o.classList.remove('selected'));
+      document.getElementById('propose-fields').classList.add('hidden');
+    }
+
+    // --- Export panel ---
+
+    function initExportPanel() {
+      const filter = document.getElementById('export-schema-filter');
+      if (state.schemas) {
+        const names = Object.keys(state.schemas.schemas).sort();
+        filter.innerHTML = '<option value="">All schemas</option>' +
+          names.map(n => `<option value="${n}">${n}</option>`).join('');
+      }
+      filter.addEventListener('change', renderExport);
+      renderExport();
+    }
+
+    function getFilteredProposals() {
+      const filterSchema = document.getElementById('export-schema-filter').value;
+      return filterSchema
+        ? state.proposals.filter(p => p.schemaName === filterSchema)
+        : state.proposals;
+    }
+
+    function renderExport() {
+      const proposals = getFilteredProposals();
+      const summary = document.getElementById('export-summary');
+      const output = document.getElementById('export-output');
+
+      // Count by action
+      const counts = {};
+      for (const p of proposals) {
+        counts[p.action] = (counts[p.action] || 0) + 1;
+      }
+
+      summary.innerHTML = `<p><strong>${proposals.length}</strong> proposal${proposals.length !== 1 ? 's' : ''}</p>` +
+        Object.entries(counts).map(([action, count]) =>
+          `<span style="margin-right: 8px; font-size: 11px;">${action}: ${count}</span>`
+        ).join('');
+
+      const exportData = {
+        source: 'figjam-schema-explorer',
+        exportedAt: new Date().toISOString(),
+        proposals: proposals.map(p => ({
+          action: p.action,
+          schemaName: p.schemaName,
+          fieldName: p.fieldName,
+          proposedName: p.proposedName,
+          proposedType: p.proposedType,
+          proposedValue: p.proposedValue,
+          description: p.description,
+          author: p.author,
+          votes: p.votes,
+          replies: p.replies,
+        }))
+      };
+
+      output.textContent = JSON.stringify(exportData, null, 2);
+    }
+
+    function copyExport() {
+      const text = document.getElementById('export-output').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard!');
+      });
+    }
+
+    function downloadExport() {
+      const text = document.getElementById('export-output').textContent;
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `schema-proposals-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>

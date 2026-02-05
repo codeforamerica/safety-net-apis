@@ -1,0 +1,16 @@
+{
+  "name": "Safety Net Schema Explorer",
+  "id": "safety-net-schema-explorer",
+  "api": "1.0.0",
+  "main": "dist/widget.js",
+  "ui": "dist/ui.html",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "editorType": ["figjam"],
+  "containsWidget": true,
+  "widgetApi": "1.0.0",
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
+}

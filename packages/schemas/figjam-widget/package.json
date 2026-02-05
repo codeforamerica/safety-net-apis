@@ -1,0 +1,16 @@
+{
+  "name": "safety-net-figjam-widget",
+  "version": "1.0.0",
+  "description": "FigJam widget for exploring, annotating, and proposing changes to Safety Net API schemas",
+  "main": "dist/widget.js",
+  "scripts": {
+    "build": "node build.js",
+    "watch": "node build.js --watch"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.50.0",
+    "@figma/widget-typings": "^1.9.0",
+    "esbuild": "^0.19.0",
+    "typescript": "^5.3.0"
+  }
+}
