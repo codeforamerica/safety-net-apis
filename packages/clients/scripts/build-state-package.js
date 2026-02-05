@@ -166,23 +166,18 @@ async function main() {
     const domain = file.replace('.yaml', '');
     domains.push(domain);
     const specPath = join(resolvedDir, file);
-    const domainBundled = join(outputDir, `${domain}-bundled.yaml`);
     const domainSrcDir = join(srcDir, domain);
     const domainConfigPath = join(outputDir, `${domain}.config.js`);
 
     console.log(`\n  Processing ${domain}...`);
 
-    // Bundle spec (dereference $refs)
-    await exec('npx', [
-      '@apidevtools/swagger-cli', 'bundle',
-      specPath,
-      '-o', domainBundled,
-      '--dereference'
-    ]);
+    // EXPERIMENT: Skip bundling, pass resolved spec directly to @hey-api
+    // The resolved spec has external $refs like ./components/common.yaml
+    // Let's see if @hey-api can handle them without bundling
 
     // Generate client for this domain
     mkdirSync(domainSrcDir, { recursive: true });
-    const configContent = createOpenApiTsConfig(domainBundled, domainSrcDir);
+    const configContent = createOpenApiTsConfig(specPath, domainSrcDir);  // Use specPath instead of domainBundled
     writeFileSync(domainConfigPath, configContent);
 
     await exec('npx', ['@hey-api/openapi-ts', '-f', domainConfigPath], { cwd: outputDir });
@@ -196,7 +191,6 @@ async function main() {
     }
 
     // Clean up temp files
-    rmSync(domainBundled, { force: true });
     rmSync(domainConfigPath, { force: true });
 
     console.log(`    Generated: ${domain}`);
