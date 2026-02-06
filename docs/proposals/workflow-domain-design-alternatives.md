@@ -1,4 +1,4 @@
-# Proposal: Workflow Domain — Semantic Contract + Mock Implementation
+# Proposal: Adapter Pattern for Vendor Independence
 
 **Status:** Draft
 
@@ -6,83 +6,156 @@
 
 ## Context
 
-### Why not the adapter pattern?
+This project uses the adapter pattern to avoid vendor lock-in. APIs are defined as contracts, and adapters translate between those contracts and vendor-specific systems. This proposal describes how to define contracts for two types of APIs, using examples from this project.
 
-The adapter pattern works well for **data-shaped** APIs (CRUD operations on resources like persons, applications, households) but poorly for **behavior-shaped** systems like workflow management.
+## API Types
 
-A workflow management system provides far more than state storage: state machine enforcement, task routing and assignment via rules engines, SLA tracking with timers and auto-escalation, audit trails with causal context, event-driven triggers, and integration hooks. Abstracting this behind a generic adapter leads to one of two outcomes:
+### Object APIs
 
-1. **Thin adapter** (`createTask()`, `updateStatus()`, `assignUser()`) — loses 80% of the system's value. The application layer must reimplement workflow orchestration without the primitives the engine provides.
-2. **Thick adapter** that exposes all vendor capabilities — but the interface becomes so vendor-shaped that swapping vendors requires rewriting all calling code anyway. The abstraction provides no real portability.
+Object APIs are CRUD operations on resources — create, read, update, delete, list, search. Every domain has these. The contract is an OpenAPI spec that defines the resource schemas, endpoints, and query parameters.
 
-This is the **least common denominator problem**: the generic interface can only expose what every vendor supports, which for workflow systems is basically CRUD. Everything that makes a workflow engine valuable is vendor-specific.
+**Examples:**
+- `GET /persons`, `POST /persons`, `GET /persons/:id`
+- `GET /applications`, `POST /applications`
+- `GET /workflow/tasks`, `GET /workflow/queues`
 
-When you abstract away a system-level API, you don't eliminate the complexity — you move it into your own process layer. You end up building a workflow engine on top of a workflow engine, maintaining custom orchestration code that duplicates what the vendor already provides, and losing vendor-specific optimizations, monitoring, and tooling. The total cost of ownership often exceeds the cost of a future vendor migration, which may never happen.
+Object APIs are straightforward to make portable. A `Person` looks the same regardless of whether it's stored in PostgreSQL, Salesforce, or a legacy system. The adapter maps between the OpenAPI contract and the vendor's data model.
 
-### When the adapter pattern works
+Some domains only need Object APIs — persons, applications, households, income, documents. The data model is the value, and CRUD is the full interface.
 
-These are genuinely portable because the interface is data-centric:
+### Action APIs
 
-- **Data access APIs** (persons, applications, households, incomes) — CRUD-shaped, the data model is ours
-- **Identity/auth** — standard protocols (OAuth2, SAML) already provide the abstraction
-- **Document storage** — simple put/get/list semantics transfer across vendors
+Action APIs are behavioral operations on resources — they trigger state transitions, enforce business rules, and produce side effects. Some domains need these in addition to Object APIs.
 
-| Question | If Yes | If No |
-|----------|--------|-------|
-| Is the value primarily in the data model? | Adapter works | Don't abstract |
-| Are the operations simple CRUD? | Adapter works | Don't abstract |
-| Do standard protocols exist (OAuth2, S3, SMTP)? | Adapter works | Don't abstract |
-| Does the system's value come from orchestration/behavior? | Don't abstract | Adapter works |
-| Would the generic interface lose >50% of capabilities? | Don't abstract | Adapter works |
+**Examples:**
+- `POST /workflow/tasks/:id/claim` — transitions a task from `pending` to `in_progress`, enforces assignment rules
+- `POST /workflow/tasks/:id/escalate` — transitions to `escalated`, creates audit event, may trigger notifications
+- `POST /workflow/tasks/:id/complete` — validates the caller is the assignee, transitions to `completed`
 
-### Contract at the semantic level instead
+Action APIs are harder to make portable because the value is in orchestration and enforcement, not just data. A workflow engine provides state machine enforcement, task routing, SLA tracking, auto-escalation, audit trails, and event-driven triggers. A rules engine provides evaluation, conflict resolution, and explanation capabilities. A notification system provides multi-channel orchestration, retry logic, and delivery tracking.
 
-Rather than abstracting the workflow engine behind a generic API, this proposal defines **domain events and state transitions** as the contract:
+A generic CRUD adapter loses most of this value. The adapter pattern still applies, but the contract needs to be richer than just an OpenAPI spec.
 
-- The specs describe the **what** — a task moves from `pending` to `in_progress`, a task is assigned, an SLA warning fires
-- The workflow engine is the **how** — it enforces transitions, routes tasks, manages SLAs
-- States choose their workflow system and configure it to emit the agreed-upon events and enforce the defined transitions
+### Contracts by API type
 
-This gives portability at the **semantic level** (states agree on what the workflow steps and outcomes are) without pretending you can swap workflow engines through a code adapter.
+**Object APIs** need one contract artifact:
+- **OpenAPI spec** — resource schemas, endpoints, query parameters
+
+**Action APIs** need three contract artifacts:
+- **OpenAPI spec** — same resource schemas used by the Object APIs
+- **Behavioral contract** (state machine YAML) — valid states, transitions, guards, timeouts, SLA behavior
+- **Event catalog** (inline in state machine) — domain events the system must emit on specific transitions
+
+```
+Object APIs only:              Object + Action APIs:
+
+  OpenAPI Spec                   OpenAPI Spec
+  ┌────────────┐                 ┌────────────┐
+  │ Schemas    │                 │ Schemas    │
+  │ Endpoints  │                 │ Endpoints  │
+  │ Parameters │                 │ Parameters │
+  └────────────┘                 └────────────┘
+                                       +
+                                 State Machine YAML
+                                 ┌────────────────┐
+                                 │ States         │
+                                 │ Transitions    │
+                                 │ Guards         │
+                                 │ Events         │
+                                 │ SLA behavior   │
+                                 └────────────────┘
+```
 
 ---
 
-## Goal
+## How the Adapter Works
 
-Create a semantic-level contract for the workflow management domain that:
+### For Object APIs
 
-1. Defines the task lifecycle as a state machine (transitions, guards, events, timeouts)
-2. Provides a data model for workflow resources (Task, Queue, WorkflowRule, etc.) as OpenAPI schemas
-3. Provides a mock server reference implementation for frontend development and integration testing
-4. Serves as a vendor evaluation checklist and conformance verification tool
+The adapter wraps a vendor's data store with a standard interface defined by the OpenAPI spec. Swap vendors by reimplementing the adapter.
+
+```
+[Frontend] → [Adapter] → [Vendor/DB]
+                 ↑
+           OpenAPI contract
+```
+
+A `Person` or `Application` adapter translates between the OpenAPI contract and the vendor's data model. The frontend sees the same API regardless of what's behind the adapter.
+
+### For Action APIs
+
+The adapter wraps a vendor system (workflow engine, rules engine) and exposes both Object APIs and Action APIs. The adapter is validated against the full contract — OpenAPI spec, state machine, and event catalog.
+
+```
+[Frontend] → [Adapter] → [Vendor System]
+                 ↑              ↑
+           Object APIs    Action APIs validated
+          (OpenAPI spec)  against behavioral contract
+```
+
+The frontend calls Object APIs for data reads (`GET /workflow/tasks`) and Action APIs for behavioral operations (`POST /workflow/tasks/:id/claim`). The adapter translates both to the vendor's system.
+
+When you switch vendors, the behavioral contract tells you exactly what the new adapter must do — including state transitions, guard conditions, SLA behavior, and event triggers that an OpenAPI spec alone can't express.
 
 ---
 
-## Contract Layers
+## Mock Server Extensibility
 
-The contract is three artifacts. Together they define what any workflow implementation must satisfy — without prescribing how.
+Both API types are designed so that adding a new domain to the mock server is declarative — you define artifacts, not code.
 
-### 1. State Machine (behavioral contract)
+**Object APIs:** Add an OpenAPI spec with schemas and example data. The mock server auto-discovers the spec and generates CRUD endpoints (list, get, create, update, delete) with an in-memory database seeded from examples. No handler code required.
 
-The primary artifact. Defines valid states, transitions, guards, domain events, SLA behavior, and timeout triggers. Written as YAML with a JSON Schema defining the format.
+**Action APIs:** Add a state machine YAML, OpenAPI data schemas, and example data. The mock server auto-discovers the state machine and generates:
+- Object API endpoints for the data schemas (same as above)
+- Action API endpoints derived from named transition triggers (e.g., a `claim` trigger on a `Task` resource in the `workflow` domain becomes `POST /workflow/tasks/:id/claim`)
+- State machine enforcement — the engine validates transitions and guards automatically
+- Event emission on successful transitions
 
-A vendor translates this to their engine's native configuration (BPMN for Camunda, workflow definitions for Temporal, state config for ServiceNow, etc.). The state machine is the requirements document — it says "your system must support these transitions with these guards and emit these events."
+The state machine engine is domain-agnostic. Adding a second domain with Action APIs (e.g., notification campaigns with states like `draft`, `scheduled`, `sending`, `delivered`) follows the same pattern: define the state machine YAML and data schemas, and the mock server generates the endpoints with enforcement. No new handler code is needed.
 
-### 2. Data Schemas (data contract)
+## Production Adapter Reusability
 
-OpenAPI schemas for workflow resources: Task, Queue, WorkflowRule, TaskAuditEvent, VerificationTask, VerificationSource, and configuration schemas (TaskType, SLAType). These define what the data looks like regardless of vendor.
+The same auto-discovery pattern extends to production. The production adapter splits into a shared framework and per-domain vendor modules:
 
-Data schemas are CRUD-shaped, so the adapter pattern works here. A vendor maps their internal data model to these schemas. The CRUD API surface (read/write tasks, list queues) is straightforwardly portable.
+```
+Shared Adapter Framework (reusable across all domains)
+  ├── Object API endpoint generation from OpenAPI specs
+  ├── Pagination, filtering, error handling
+  ├── Data schema validation
+  ├── Action API endpoint generation from state machine YAML
+  ├── State machine enforcement and guard evaluation
+  └── Event emission
 
-### 3. Event Catalog (integration contract)
+Per-domain vendor modules
+  ├── persons/        → PostgreSQL queries
+  ├── applications/   → Salesforce API calls
+  ├── documents/      → S3 translation
+  ├── workflow/       → Camunda translation
+  └── notifications/  → Twilio translation
+```
 
-Domain events with payload schemas, defined inline with the state machine transitions that emit them. Event payloads reference the OpenAPI data schemas by name.
+Adding a new domain means writing a vendor translation module. The framework handles endpoint routing, schema validation, and (for domains with Action APIs) state machine enforcement. If multiple domains use the same vendor, more of the translation layer (auth, API client, error handling) carries over.
 
-Any workflow implementation must emit these events on the defined transitions. The mechanism (webhooks, event bus, polling) is vendor-specific; the event names and payload shapes are the contract.
+---
 
-### How the layers connect
+## Behavioral Contract Details
 
-The state machine references data schemas for event payloads and guard context. The validation script ensures consistency: state machine states match the Task status enum, referenced events have valid payload schemas, and guard conditions reference real schema fields.
+### State machine format
+
+The behavioral contract is written as custom YAML with a JSON Schema defining the format.
+
+| Format | Strengths | Weaknesses for this use case |
+|--------|-----------|------------------------------|
+| **XState JSON/YAML** | Large ecosystem, visual editor (Stately.ai), executable for testing | Doesn't natively express SLA clocks, actor-based guards, or event payload schema references. Custom extensions wouldn't benefit from XState tooling. |
+| **SCXML** | W3C standard | XML-based, verbose, less accessible to domain experts |
+| **OpenAPI extensions** | Same ecosystem as data schemas | Can't express transitions, guards, timeouts, or SLA behavior |
+| **Custom YAML** | Expresses domain concerns as first-class fields. JSON Schema provides validation and editor autocompletion. | No existing ecosystem — we build the validator ourselves |
+
+Custom YAML follows statechart semantics (states, transitions, guards, entry/exit actions) and adds domain-specific fields (SLA clock behavior, actor restrictions, event payloads with schema references) as first-class concepts. If visualization becomes valuable, a script can translate the YAML to XState format for Stately.ai's visual editor.
+
+### How the contracts connect
+
+The state machine references OpenAPI data schemas for event payloads and guard context. A validation script ensures consistency: state machine states match the resource's status enum, referenced events have valid payload schemas, and guard conditions reference real schema fields.
 
 ```
 State Machine YAML                    OpenAPI Schemas
@@ -106,47 +179,11 @@ State Machine YAML                    OpenAPI Schemas
 └──────────────────────┘
 ```
 
----
+### Extensibility
 
-## Format Decisions
+Because the contract is declarative (YAML + OpenAPI), all changes are diffable and reviewable in PRs.
 
-### State machine: Custom YAML with JSON Schema
-
-**Why not XState, SCXML, or OpenAPI extensions?**
-
-| Format | Strengths | Weaknesses for this use case |
-|--------|-----------|------------------------------|
-| **XState JSON/YAML** | Large ecosystem, visual editor (Stately.ai), executable for testing, well-documented statechart semantics. Format is separate from runtime — you don't need the XState library to use it. | Doesn't natively express SLA clock behavior (running/paused/stopped), actor-based guards (caseworker vs. supervisor vs. system), or domain events with payload schema references. We'd need custom extensions, and those extensions wouldn't benefit from the XState tooling. |
-| **SCXML** | W3C standard, many implementations | XML-based, verbose, less accessible to domain experts |
-| **OpenAPI extensions** | Same ecosystem as data schemas | Can't express transitions, guards, timeouts, or SLA behavior. Extensions would be so extensive that the OpenAPI wrapper adds no value. |
-| **Custom YAML** | Can express SLA/actor/event concerns exactly as needed. Matches project's YAML-centric tooling. JSON Schema provides validation, editor autocompletion, and format documentation. | No existing ecosystem — no visualization tools, no execution engine. We build the validator ourselves. |
-
-The tradeoff is ecosystem vs. expressiveness. XState has the best tooling but can't natively express the domain-specific concerns (SLA clocks, actor guards, event payloads with schema references) that are central to the contract. We'd end up with XState plus custom extensions that the tooling ignores.
-
-Custom YAML with a JSON Schema strikes the right balance:
-
-- **Follows statechart semantics** — states, transitions, guards, entry/exit actions are well-understood concepts from Harel statecharts. Anyone familiar with state machines can read the format.
-- **Adds domain-specific fields** — SLA clock behavior, actor restrictions, event payloads with schema references, timeout triggers. These are first-class, not extensions.
-- **JSON Schema provides tooling** — validation, editor autocompletion (VS Code YAML extension), and format documentation in a single artifact. Adding a new field to the format is a reviewable change to the JSON Schema.
-- **Readable by domain experts** — program managers and policy staff can review the state machine without learning a runtime-specific format.
-
-If visualization becomes valuable, a script can translate the YAML to XState format for use with Stately.ai's visual editor. The custom format doesn't preclude this — it just doesn't depend on it.
-
-### Data schemas: OpenAPI
-
-The project's existing tooling chain (validation, mock server, client generation, Postman) consumes OpenAPI. Data schemas are CRUD-shaped, which is exactly what OpenAPI handles well. No reason to introduce a different format for the data layer.
-
-### Events: Inline in state machine YAML, payloads reference OpenAPI schemas
-
-Events are defined where they're triggered — in the state machine transitions. This keeps cause and effect together. Event payload schemas reference the OpenAPI data schemas by name (e.g., `payload.task: Task`), and the validation script verifies those references resolve.
-
----
-
-## Extensibility
-
-Because the contract is declarative (YAML + OpenAPI), all changes are diffable and reviewable in PRs. The extensibility model mirrors API versioning:
-
-### Non-breaking changes
+**Non-breaking changes:**
 
 | Change | Why it's safe |
 |--------|---------------|
@@ -156,7 +193,7 @@ Because the contract is declarative (YAML + OpenAPI), all changes are diffable a
 | Add an optional field to an event payload | Existing listeners ignore it |
 | Add a new guard (on a new transition) | New transitions don't affect existing paths |
 
-### Breaking changes
+**Breaking changes:**
 
 | Change | Impact |
 |--------|--------|
@@ -166,124 +203,105 @@ Because the contract is declarative (YAML + OpenAPI), all changes are diffable a
 | Remove or rename a field in an event payload | Listeners expecting the field break |
 | Change SLA behavior for a state | Runtime behavior changes; doesn't break structure but affects outcomes |
 
-### Versioning
-
-The state machine YAML includes a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes. The JSON Schema for the YAML format is also versioned — when a new concept is needed (e.g., parallel states, compensation logic), it's added to the schema as a reviewable change. Existing state machine files that don't use the new concept remain valid.
+The state machine YAML includes a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes.
 
 ---
 
-## Vendor Handoff and Transition
+## Vendor Handoff
 
 ### What we provide to the vendor
 
-1. **State machine YAML** — behavioral requirements. "Your system must enforce these states, transitions, and guards."
-2. **Data schemas (OpenAPI)** — data model requirements. "A Task looks like this. A Queue looks like this."
-3. **Event catalog (in state machine YAML)** — integration requirements. "Emit these events with these payloads on these transitions."
-4. **JSON Schema for state machine format** — so the vendor can validate their configuration against the format.
-5. **Validation script** — conformance verification. The vendor runs this against their implementation.
-6. **Example data** — for setup and testing.
+1. **Behavioral contract** — "your system must enforce these states, transitions, and guards"
+2. **Data schemas** — "resources look like this"
+3. **Event catalog** — "emit these events with these payloads on these transitions"
+4. **JSON Schema for the contract format** — so the vendor can validate their configuration
+5. **Validation script** — conformance verification
+6. **Example data** — for setup and testing
 
 The contract doubles as a **vendor evaluation checklist**: can this system support these transitions? These SLA behaviors? These event triggers? If a vendor can't satisfy the contract, you know before you buy.
 
 ### How the transition works
 
-During development, the frontend talks to the mock server. In production, it talks to a **BFF (backend for frontend)** that translates between the contract's API surface and the vendor's system:
+During development, the frontend talks to the mock server. In production, it talks to the production adapter:
 
 ```
 Development:
   [Frontend] → [Mock Server] → [State Machine Engine + In-memory DB]
 
 Production:
-  [Frontend] → [BFF] → [Vendor Workflow System]
-                 ↑
-         Validated against contract
+  [Frontend] → [Adapter] → [Vendor System]
+                   ↑
+           Validated against contract
 ```
 
-The mock server IS the development BFF. It exposes convenient REST endpoints (claim a task, complete a task, list queues) that the frontend codes against. The mock server enforces the state machine contract internally.
-
-The production BFF:
-- Exposes the **same API surface** the mock server did (same endpoints, same request/response shapes)
-- Translates internally to the **vendor's API calls**
-- Translates **vendor events** into the event catalog format
-- Is **explicitly vendor-specific** — no pretense of being a generic adapter
+The mock server is the development adapter. It exposes the same API surface the production adapter will — same Object API endpoints, same Action API endpoints, same request/response shapes. Swapping from mock to production changes the adapter internals, not the frontend code.
 
 ### Transition steps
 
-1. **Evaluate** vendors against the state machine contract
-2. **Select** vendor and configure their engine to match the state machine
-3. **Build** a vendor-specific BFF that exposes the same API surface as the mock server
-4. **Validate** — run the validation script against BFF + vendor to verify conformance
-5. **Swap** — point frontend to BFF instead of mock server
-6. **Retire** mock server for workflow domain
+1. **Evaluate** vendors against the behavioral contract
+2. **Select** vendor and configure their engine to match the contract
+3. **Build** a vendor-specific adapter module that exposes the same API surface as the mock server
+4. **Validate** — run the validation script against adapter + vendor to verify conformance
+5. **Swap** — point frontend to production adapter instead of mock server
+6. **Retire** mock server for that domain
 
-**What changes:** BFF internals (vendor-specific translation layer).
-**What doesn't change:** Frontend code (same API surface), event handlers (same event catalog), data types (same schemas).
+**What changes:** adapter internals (vendor-specific translation module).
+**What doesn't change:** frontend code (same API surface), event handlers (same event catalog), data types (same schemas).
 
-### How this differs from the adapter pattern
-
-The adapter pattern says "write one generic interface, implement it per vendor." The interface is an API contract — swap the implementation, calling code doesn't change.
-
-This approach says "here's a behavioral contract (state machine + events + schemas) that your BFF must satisfy." The contract is richer — it includes transition rules, guards, SLA behavior, and event triggers that an API interface alone can't express.
-
-If you switch vendors, you rewrite the BFF. But the contract tells you exactly what the new BFF must do, including behavioral requirements. The CRUD parts (task read/write, queue listing) are straightforward adapter-shaped translations. The behavioral parts (claim, complete, escalate, route) are where the BFF calls the vendor's workflow engine — which handles the actual behavior — and translates the request/response.
-
----
-
-## What Survives Vendor Selection
+### What survives vendor selection
 
 | Artifact | Survives | Role after vendor selection |
 |----------|----------|----------------------------|
-| State machine YAML | Yes | Requirements doc, vendor evaluation checklist, conformance verification |
-| JSON Schema for state machine format | Yes | Format validation for any future state machine changes |
-| Data schemas (OpenAPI) | Yes | Data contract — the BFF maps vendor data to these schemas |
+| Behavioral contract (state machine) | Yes | Requirements doc, vendor evaluation, conformance verification |
+| JSON Schema for contract format | Yes | Format validation for future changes |
+| Data schemas (OpenAPI) | Yes | Data contract — the adapter maps vendor data to these schemas |
 | Event catalog | Yes | Integration contract — vendor must emit these events |
-| Validation script | Yes | Verifies vendor + BFF conform to the contract |
-| Mock server | Retired | Replaced by vendor-specific BFF |
-| State machine engine (mock) | Retired | Replaced by vendor's workflow engine |
+| Validation script | Yes | Verifies vendor + adapter conform to the contract |
+| Mock server | Retired | Replaced by vendor-specific adapter |
 | Example data | Partially | Useful for testing; may need vendor-specific seed format |
 
 ---
 
-## File Organization
+## Worked Example: Workflow Management
+
+The remainder of this document applies the pattern to the workflow management domain.
+
+### File organization
 
 ```
 state-machines/
-  task-lifecycle.yaml               # State machine contract (primary artifact)
-  task-lifecycle.schema.json        # JSON Schema for the state machine format
+  task-lifecycle.yaml               # Behavioral contract (primary artifact)
+  task-lifecycle.schema.json        # JSON Schema for the format
   verification-lifecycle.yaml       # Verification state machine (simpler)
 
 openapi/
   domains/
     workflow/
       components/
-        schemas.yaml                # Canonical schemas (Task, Queue, WorkflowRule, etc.)
+        schemas.yaml                # Data contract (Task, Queue, WorkflowRule, etc.)
 
 openapi/examples/
   workflow/
-    tasks.json                      # Example task data for seeding
+    tasks.json                      # Example data for seeding
     queues.json
     workflow-rules.json
-    task-types.json                  # TaskType config data
-    sla-types.json                   # SLAType config data
+    task-types.json
+    sla-types.json
 
 packages/mock-server/src/
-  state-machine-engine.js           # Validates transitions against YAML contract
+  state-machine-engine.js           # Validates transitions against contract
   handlers/
-    workflow.js                     # Mock API handlers (claim, complete, etc.)
+    workflow.js                     # Mock adapter (claim, complete, etc.)
 
 scripts/
-  validate-state-machine.js         # Ensures YAML <-> OpenAPI consistency
+  validate-state-machine.js         # Ensures contract <-> schema consistency
 ```
 
-Note: No separate System API or Process API OpenAPI specs for workflow behavior. The state machine YAML is the behavioral contract. The mock server exposes convenient REST endpoints for development, but those endpoints are the mock's API surface — not a vendor contract. The data schemas in OpenAPI define the portable data model.
+### Implementation steps
 
----
+**Step 1: State Machine Format + JSON Schema**
 
-## Implementation Steps
-
-### Step 1: State Machine Format + JSON Schema
-
-Define the JSON Schema for the state machine YAML format. This establishes the vocabulary:
+Define the JSON Schema for the state machine YAML format:
 
 - `states` — map of state name to state definition
 - `states.*.transitions` — array of transitions with `to`, `trigger`, `guard`, `actors`, `event`
@@ -294,90 +312,67 @@ Define the JSON Schema for the state machine YAML format. This establishes the v
 - `guards` — named guard definitions with descriptions
 - `version` — contract version for change tracking
 
-### Step 2: Task Lifecycle State Machine (state-machines/task-lifecycle.yaml)
-
-Create the task lifecycle based on the Task status enum and capabilities from `docs/architecture/domains/workflow.md`.
+**Step 2: Task Lifecycle State Machine**
 
 States: `pending`, `in_progress`, `awaiting_client`, `awaiting_verification`, `awaiting_review`, `returned_to_queue`, `completed`, `cancelled`, `escalated`
 
-Each state defines transitions, events, SLA behavior, and timeout triggers. Guards reference actor roles and task field conditions. Events include payload definitions referencing the OpenAPI schemas.
+Each state defines transitions, events, SLA behavior, and timeout triggers. Guards reference actor roles and task field conditions.
 
-Create `state-machines/verification-lifecycle.yaml` for the simpler verification flow: `pending` -> `awaiting_verification` -> `completed` / `not_verified` / `discrepancy_found` / `waived`.
+Verification lifecycle (simpler): `pending` -> `awaiting_verification` -> `completed` / `not_verified` / `discrepancy_found` / `waived`.
 
-### Step 3: Workflow Data Schemas (openapi/domains/workflow/components/schemas.yaml)
+**Step 3: Workflow Data Schemas**
 
-Formalize the pseudo-YAML schemas from `docs/architecture/domains/workflow.md` into proper OpenAPI component schemas:
-
-- Task, Queue, WorkflowRule, TaskSLAInfo, TaskAuditEvent, VerificationTask, VerificationSource
-- TaskType, SLAType (configuration schemas)
-- Supporting schemas: TaskSourceInfo, TaskOutcomeInfo
+OpenAPI component schemas: Task, Queue, WorkflowRule, TaskSLAInfo, TaskAuditEvent, VerificationTask, VerificationSource, TaskType, SLAType, TaskSourceInfo, TaskOutcomeInfo.
 
 Follow existing patterns: `id`, `createdAt`, `updatedAt` on all resources. Use `$ref` to shared components.
 
-### Step 4: Validation Script (scripts/validate-state-machine.js)
+**Step 4: Validation Script**
 
-Node script that:
+- Validates state machine YAML against JSON Schema
+- Validates states match Task status enum
+- Validates event payload schema references resolve
+- Validates guard conditions reference real schema fields
+- Can diff two versions and report breaking vs. non-breaking changes
+- Add to `npm run validate` pipeline
 
-- Reads state machine YAML files and validates against the JSON Schema
-- Reads OpenAPI schemas
-- Validates that state machine states match the Task status enum
-- Validates that event payload schema references resolve to real OpenAPI schemas
-- Validates that guard conditions reference real schema fields
-- Can diff two state machine versions and report breaking vs. non-breaking changes
-- Reports mismatches with clear error messages
+**Step 5: Example Data**
 
-Add to `npm run validate` pipeline.
+Seed data: tasks in various states, queues (by program, office, skill), workflow rules (JSON Logic conditions), TaskType and SLAType configuration records.
 
-### Step 5: Example Data (openapi/examples/workflow/)
+**Step 6: State Machine Engine (mock)**
 
-Seed data for mock server:
-
-- Tasks in various states (pending, in_progress, completed, escalated)
-- Queues (by program, office, skill)
-- WorkflowRules (assignment and priority rules with JSON Logic conditions)
-- TaskType and SLAType configuration records
-
-### Step 6: State Machine Engine (packages/mock-server/src/state-machine-engine.js)
-
-Lightweight engine that:
+Lightweight engine for the mock server:
 
 - Loads state machine YAML at startup
 - Exposes `canTransition(currentState, targetState, context)` and `getValidTransitions(currentState)`
-- Validates transition guards against request context (actor role, task fields)
+- Validates transition guards against request context
 - Returns events to emit on successful transition
-- Tracks SLA clock state (running, paused, stopped)
+- Tracks SLA clock state
 
 This is the mock's enforcement layer. A real vendor's engine replaces it entirely.
 
-### Step 7: Mock API Handlers (packages/mock-server/src/handlers/workflow.js)
+**Step 7: Mock Adapter Handlers**
 
-Express route handlers that serve as the development BFF:
+Express route handlers that serve as the development adapter:
 
-- **`POST /workflow/tasks`** — Create task, calculate SLA, apply routing rules
-- **`POST /workflow/tasks/:id/claim`** — Validate unassigned, transition pending -> in_progress, create audit event
-- **`POST /workflow/tasks/:id/complete`** — Validate assigned to caller, transition to completed, create audit event
-- **`POST /workflow/tasks/:id/release`** — Transition to returned_to_queue, clear assignment, create audit event
-- **`POST /workflow/tasks/:id/reassign`** — Update assignment, create audit event
-- **`POST /workflow/tasks/:id/escalate`** — Transition to escalated, create audit event
-- **`POST /workflow/tasks/:id/route`** — Evaluate WorkflowRules (JSON Logic), assign queue/worker
-- **`GET /workflow/tasks`**, **`GET /workflow/queues`**, etc. — CRUD reads from mock DB
+**Object APIs:**
+- **`GET /workflow/tasks`**, **`GET /workflow/queues`**, etc. — CRUD reads
+- **`POST /workflow/tasks`** — create task, calculate SLA, apply routing rules
 
-Each handler calls the state machine engine for transition validation. Invalid transitions return 409 Conflict with an explanation of what transitions are valid from the current state. CRUD operations use the existing `database-manager.js`.
+**Action APIs:**
+- **`POST /workflow/tasks/:id/claim`** — validate unassigned, transition pending -> in_progress
+- **`POST /workflow/tasks/:id/complete`** — validate assigned to caller, transition to completed
+- **`POST /workflow/tasks/:id/release`** — transition to returned_to_queue, clear assignment
+- **`POST /workflow/tasks/:id/reassign`** — update assignment
+- **`POST /workflow/tasks/:id/escalate`** — transition to escalated
+- **`POST /workflow/tasks/:id/route`** — evaluate WorkflowRules (JSON Logic), assign queue/worker
 
-These endpoints are the mock's API surface — the same surface a production BFF would expose. They are not formal OpenAPI specs because the behavioral contract lives in the state machine, not in endpoint definitions.
+Each Action API handler calls the state machine engine for transition validation. Invalid transitions return 409 Conflict with valid transitions listed.
 
-### Step 8: Mock Server Integration
-
-Wire up handlers in mock server setup:
-
-- Register workflow routes alongside auto-discovered routes
-- State machine engine initializes from YAML files at startup
-- Handlers use existing `database-manager.js` for persistence
-
-### Step 9: Testing
+**Step 8: Testing**
 
 - Unit tests for state machine engine (valid transitions, rejected transitions, guard evaluation, SLA clock behavior)
-- Integration tests for mock API handlers (claim flow, complete flow, escalation flow, full task lifecycle)
+- Integration tests for mock adapter (claim flow, complete flow, escalation flow, full task lifecycle)
 - Validation script runs as part of `npm run validate`
 
 ---
@@ -386,11 +381,11 @@ Wire up handlers in mock server setup:
 
 After implementation:
 
-1. `npm run validate` passes — state machine YAML validates against JSON Schema, states match Task status enum, event references resolve
+1. `npm run validate` passes — state machine validates against JSON Schema, states match Task status enum, event references resolve
 2. `npm run mock:start` starts with workflow routes available
 3. Can create a task via `POST /workflow/tasks`
-4. Can claim -> complete a task via mock API handlers
+4. Can claim -> complete a task via mock adapter
 5. Invalid transitions return 409 Conflict with explanation of valid transitions
 6. Audit events are created automatically on state transitions
-7. SLA tracking updates on state transitions (clock runs, pauses, stops per state definition)
-8. Validation script catches intentional mismatches (e.g., adding a state to the YAML without updating the OpenAPI enum)
+7. SLA tracking updates on state transitions
+8. Validation script catches mismatches (e.g., adding a state to the YAML without updating the OpenAPI enum)
