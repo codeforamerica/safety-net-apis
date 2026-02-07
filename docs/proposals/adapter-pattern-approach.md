@@ -180,22 +180,24 @@ The state machine references OpenAPI data schemas for event payloads and guard c
 ```
 State Machine YAML                    OpenAPI Schemas
 ┌──────────────────────┐             ┌──────────────────────┐
-│ states:              │             │ Task:                │
-│   pending:           │  references │   status: enum       │◄── states must match
-│     transitions:     │────────────►│   assignedToId: uuid │
-│       - to: in_progress            │   ...                │
+│ object: Task         │             │ Task:                │
+│ stateField: status   │  references │   status: enum       │◄── states must match
+│                      │────────────►│   assignedToId: uuid │
+│ states:              │             │   ...                │
+│   pending:           │             │                      │
+│     sla: running     │             │ TaskClaimedEvent:    │
+│     transitions:     │  references │   taskId: uuid       │
+│       - to: in_progress────────────►│   claimedById: uuid │◄── payload schema
+│         trigger: claim│            │   claimedAt: datetime│
 │         event:       │             │                      │
-│           name: task.claimed       │ TaskAuditEvent:      │
-│           payload:   │────────────►│   eventType: enum    │◄── events must match
-│             task: Task│            │   ...                │
-│             assignment: ...        └──────────────────────┘
-│         guard:       │
-│           taskIsUnassigned: true
-│         actors: [caseworker]
-│     sla: running     │
-│     onTimeout:       │
+│           name: task.claimed       │ TaskSLAWarningEvent: │
+│           payload: TaskClaimedEvent│   taskId: uuid       │
+│         guard: ...   │             │   elapsedMs: integer │
+│     onTimeout:       │             └──────────────────────┘
 │       - after: warningThresholdDays
-│         event: task.sla_warning
+│         event:
+│           name: task.sla_warning
+│           payload: TaskSLAWarningEvent
 └──────────────────────┘
 ```
 
@@ -316,7 +318,57 @@ ApprovalRequest:
     updatedAt:
       type: string
       format: date-time
+
+# Event payload schemas — separate from the object schema
+ApprovalDecisionEvent:
+  type: object
+  required: [requestId, decision, decidedById, decidedAt]
+  properties:
+    requestId:
+      type: string
+      format: uuid
+    decision:
+      type: string
+      enum: [approved, rejected]
+    decidedById:
+      type: string
+      format: uuid
+    reviewNote:
+      type: string
+    decidedAt:
+      type: string
+      format: date-time
+
+ApprovalResubmittedEvent:
+  type: object
+  required: [requestId, resubmittedById, resubmittedAt]
+  properties:
+    requestId:
+      type: string
+      format: uuid
+    resubmittedById:
+      type: string
+      format: uuid
+    resubmittedAt:
+      type: string
+      format: date-time
+
+ApprovalOverdueEvent:
+  type: object
+  required: [requestId, submittedById, pendingSince]
+  properties:
+    requestId:
+      type: string
+      format: uuid
+    submittedById:
+      type: string
+      format: uuid
+    pendingSince:
+      type: string
+      format: date-time
 ```
+
+Event payload schemas are defined alongside the object schema but are independent — they carry the information relevant to the event, which may differ from the object's shape.
 
 The mock server auto-discovers this spec and generates Object APIs: `GET /approvals/approval-requests`, `POST /approvals/approval-requests`, etc.
 
@@ -341,6 +393,7 @@ actors:
 
 states:
   pending:
+    sla: running                   # SLA clock runs while pending
     transitions:
       - to: approved
         trigger: approve
@@ -348,8 +401,7 @@ states:
         guard: callerIsNotSubmitter
         event:
           name: approval.approved
-          payload:
-            request: ApprovalRequest
+          payload: ApprovalDecisionEvent
 
       - to: rejected
         trigger: reject
@@ -357,24 +409,27 @@ states:
         guard: callerIsNotSubmitter
         event:
           name: approval.rejected
-          payload:
-            request: ApprovalRequest
+          payload: ApprovalDecisionEvent
 
     onTimeout:
       - after: reviewDeadlineDays
-        event: approval.overdue
+        event:
+          name: approval.overdue
+          payload: ApprovalOverdueEvent
 
-  approved: {}    # terminal state — no transitions out
+  approved:
+    sla: stopped                   # SLA clock stops
+    transitions: []                # terminal state — no transitions out
 
   rejected:
+    sla: stopped
     transitions:
       - to: pending
         trigger: resubmit
         actors: [submitter]
         event:
           name: approval.resubmitted
-          payload:
-            request: ApprovalRequest
+          payload: ApprovalResubmittedEvent
 
 guards:
   callerIsNotSubmitter:
@@ -422,7 +477,90 @@ curl -X POST /approvals/approval-requests/a1b2c3d4/approve \
 # → 409 Conflict: guard 'callerIsNotSubmitter' failed — submittedById (user-1) equals caller.id (user-1)
 ```
 
-### Step 3: Add example data
+### Step 3: Events, timeouts, and SLA tracking
+
+#### Event delivery
+
+Events are emitted when transitions occur. The contract defines the event names and payload schemas; the delivery mechanism is an implementation concern.
+
+**In the mock server**, events are delivered two ways:
+
+1. **Stored events** — every event is persisted and queryable via Object APIs:
+   ```
+   GET /approvals/events                              → all events
+   GET /approvals/events?type=approval.approved        → filtered by type
+   GET /approvals/events?objectId=a1b2c3d4             → events for a specific object
+   ```
+
+2. **Real-time stream** — the mock server exposes a Server-Sent Events (SSE) endpoint for frontends that need to react immediately (e.g., updating a queue when someone else claims a task):
+   ```
+   GET /events/stream                                  → all domain events
+   GET /events/stream?domain=approvals                 → filtered by domain
+   GET /events/stream?type=approval.approved            → filtered by type
+   ```
+
+   ```javascript
+   // Frontend subscribing to events
+   const events = new EventSource('/events/stream?domain=approvals');
+   events.addEventListener('approval.approved', (e) => {
+     const payload = JSON.parse(e.data);  // ApprovalDecisionEvent shape
+     refreshQueue();
+   });
+   ```
+
+**In production**, the adapter must deliver events through the same two interfaces — stored events via Object APIs and real-time events via SSE — so the frontend works the same way regardless of what's behind the adapter. The adapter translates vendor-specific event mechanisms (webhooks, event bus, vendor APIs) into these interfaces.
+
+#### Timeout emulation
+
+Real calendar-based timeouts (fire after 3 days) don't make sense during development. The mock server provides a manual trigger:
+
+```bash
+# Evaluate all objects against their timeout thresholds
+POST /mock/trigger-timeouts
+
+# Response shows which timeouts fired
+{
+  "triggered": [
+    {
+      "domain": "approvals",
+      "objectId": "a1b2c3d4",
+      "event": "approval.overdue",
+      "reason": "pending for 5 days, threshold is reviewDeadlineDays (3)"
+    }
+  ]
+}
+```
+
+The mock server uses the object's `updatedAt` timestamp and the current clock to determine if a timeout threshold has been exceeded. Timeout thresholds (like `reviewDeadlineDays`) are defined in example configuration data.
+
+In production, the vendor system handles timeouts natively (timers, schedulers, cron jobs). The adapter translates vendor timeout events into the contract's event format and delivers them through the same event interfaces.
+
+#### SLA tracking
+
+Each state in the YAML declares whether the SLA clock is `running`, `paused`, or `stopped`. The mock server tracks this automatically:
+
+- When an object enters a state with `sla: running`, the clock starts (or resumes)
+- When it enters a state with `sla: paused`, the clock pauses (elapsed time is preserved)
+- When it enters a state with `sla: stopped`, the clock stops (final elapsed time is recorded)
+
+The mock server exposes SLA status on each object via an `_sla` field:
+
+```json
+{
+  "id": "a1b2c3d4",
+  "status": "pending",
+  "submittedById": "user-1",
+  "_sla": {
+    "clock": "running",
+    "elapsedMs": 172800000,
+    "stateEnteredAt": "2025-01-15T10:00:00Z"
+  }
+}
+```
+
+In production, the vendor system typically provides its own SLA tracking. The adapter maps vendor SLA data to this same `_sla` shape so the frontend can display SLA status consistently.
+
+### Step 4: Add example data
 
 ```json
 // openapi/examples/approvals/approval-requests.json
@@ -453,20 +591,25 @@ curl -X POST /approvals/approval-requests/a1b2c3d4/approve \
 npm run validate
 # ✓ approval-lifecycle.yaml validates against JSON Schema
 # ✓ States [pending, approved, rejected] match ApprovalRequest.status enum
-# ✓ Event payload references resolve (ApprovalRequest found in schemas)
-# ✓ Guard references are valid
+# ✓ Event payload schemas resolve (ApprovalDecisionEvent, ApprovalResubmittedEvent, ApprovalOverdueEvent)
+# ✓ Guard field references are valid (submittedById exists on ApprovalRequest)
 
-# Start mock server — both API types auto-generate
+# Start mock server — all API types auto-generate
 npm run mock:start
 # Object APIs:
 #   GET  /approvals/approval-requests
 #   GET  /approvals/approval-requests/:id
 #   POST /approvals/approval-requests
+#   GET  /approvals/events
 #   ...
 # Action APIs (from state machine triggers):
 #   POST /approvals/approval-requests/:id/approve
 #   POST /approvals/approval-requests/:id/reject
 #   POST /approvals/approval-requests/:id/resubmit
+# Event stream:
+#   GET  /events/stream
+# Mock utilities:
+#   POST /mock/trigger-timeouts
 ```
 
 ### File structure
@@ -500,7 +643,10 @@ The generic infrastructure must be built before any specific domain can use it.
 **Phase 1: State machine format + tooling**
 - Define the JSON Schema for the state machine YAML format
 - Build the validation script (contract ↔ schema consistency checks)
-- Build the state machine engine for the mock server (auto-discovery, route generation, guard evaluation, event emission)
+- Build the state machine engine for the mock server (auto-discovery, route generation, guard evaluation)
+- Build event infrastructure (stored events via Object APIs, real-time delivery via SSE)
+- Build SLA tracking (clock state per object, `_sla` field on responses)
+- Build timeout trigger endpoint (`POST /mock/trigger-timeouts`)
 - Add to `npm run validate` and `npm run mock:start` pipelines
 
 **Phase 2: First domain (workflow management)**
