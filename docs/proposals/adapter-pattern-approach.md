@@ -47,12 +47,13 @@ A generic CRUD adapter loses most of this value. The adapter pattern still appli
 **Object APIs** need one contract artifact:
 - **OpenAPI spec** — object schemas, endpoints, query parameters
 
-**Action APIs** need two or three contract artifacts:
+**Action APIs** need two or more contract artifacts:
 - **OpenAPI spec** — same object schemas used by the Object APIs
 - **State machine YAML** (required) — valid states, transitions, guards, effects, timeouts, SLA behavior, and event catalog
-- **Rules YAML** (optional) — declarative rules with JSON Logic conditions and actions. Rule types include assignment, priority, eligibility, escalation, and more. Only needed when the domain involves condition-based decisions beyond what guards express (e.g., routing objects to queues based on context, setting priority based on application data).
+- **Rules YAML** (optional) — declarative rules with JSON Logic conditions and actions. Rule types include assignment, priority, eligibility, escalation, alert, and more. Only needed when the domain involves condition-based decisions beyond what guards express (e.g., routing objects to queues based on context, setting priority based on application data, alert thresholds for operational monitoring).
+- **Metrics YAML** (optional) — defines what to measure for operational monitoring. Metric names, labels, and targets — not implementation details (Prometheus vs. Datadog is a deployment concern).
 
-Every behavior-shaped domain needs a state machine — that's what makes it behavior-shaped. Rules are an additional artifact for domains that need condition-based decisions evaluated against broader context. For example, workflow management needs both (task lifecycle state machine + rules for routing and prioritization). A simple approval process only needs the state machine.
+Every behavior-shaped domain needs a state machine — that's what makes it behavior-shaped. Rules are an additional artifact for domains that need condition-based decisions evaluated against broader context. Metrics are an additional artifact for domains that need operational monitoring. For example, workflow management needs all three (state machine + rules + metrics). A simple approval process may only need the state machine.
 
 **Contract terminology:**
 - **State** — a status an object can be in (e.g., `pending`, `in_progress`, `completed`)
@@ -160,7 +161,8 @@ This project provides contracts and development tooling. States build their own 
 |----------|---------|---------------------|
 | OpenAPI specs | Define the Object API surface (schemas, endpoints, parameters) | Yes — as the contract the backend must satisfy |
 | State machine YAML | Define the Action API surface (states, transitions, guards, effects, events) | Yes — as behavioral requirements |
-| Rules YAML | Define condition-based decisions: routing, assignment, priority, etc. (JSON Logic) | Yes — as behavioral requirements (if applicable) |
+| Rules YAML | Define condition-based decisions: routing, assignment, priority, alerts (JSON Logic) | Yes — as behavioral requirements (if applicable) |
+| Metrics YAML | Define what to measure: metric names, labels, targets | Yes — as monitoring requirements (if applicable) |
 | Mock server | Frontend development and integration testing before a real backend exists | No — replaced by the state's production backend |
 | Validation script | Verify that the contract artifacts are internally consistent (state machine ↔ OpenAPI schemas, effects ↔ entity schemas, rules ↔ context variables) | Yes — run in CI to catch contract mismatches |
 | Example data | Seed the mock server; useful for testing production backends | Partially |
@@ -434,6 +436,72 @@ rules:
 
 The mock server evaluates rules when `POST /workflow/tasks/:id/route` is called: it loads active rules in `evaluationOrder`, evaluates JSON Logic conditions against the task and its related context (application, case), and applies the first matching rule's action.
 
+**Alert rules:**
+
+Rules with `ruleType: alert` define operational alert thresholds. These use the same JSON Logic format but fire alerts instead of modifying objects:
+
+```yaml
+  - name: SLA breach imminent
+    ruleType: alert
+    conditions:
+      ">": [{ "var": "queue.atRiskCount" }, 10]
+    action:
+      severity: high
+      message: "More than 10 tasks at risk of SLA breach in queue"
+
+  - name: Verification source degraded
+    ruleType: alert
+    conditions:
+      "<": [{ "var": "verificationSource.availabilityPercent" }, 95]
+    action:
+      severity: medium
+      message: "Verification source availability below 95%"
+```
+
+Alert rules are evaluated periodically (or on-demand via `POST /mock/evaluate-alerts` in the mock server) rather than on individual transitions. The mock server emits alert events through the same SSE stream; in production, the adapter maps these to the state's alerting system (PagerDuty, email, Slack, etc.).
+
+### Metrics artifact
+
+Metrics are a lightweight YAML artifact that defines what to measure for a domain. It specifies metric names, descriptions, labels, and targets — not how to collect or store them (that's a deployment concern).
+
+```yaml
+# metrics/workflow-metrics.yaml
+domain: workflow
+version: "1.0.0"
+
+metrics:
+  - name: task_completion_time_seconds
+    description: Time from task creation to completion
+    labels: [taskTypeCode, programType, priority]
+    target: "p95 < SLA duration"
+
+  - name: task_wait_time_seconds
+    description: Time task spends unassigned in queue
+    labels: [queueId, programType]
+    target: "p95 < 4 hours"
+
+  - name: tasks_in_queue
+    description: Current tasks waiting in queue
+    labels: [queueId, programType, priority]
+
+  - name: sla_breach_rate
+    description: Percentage of tasks that breach SLA
+    labels: [slaTypeCode, programType]
+    target: "< 5%"
+
+  - name: reassignment_rate
+    description: Rate of tasks being reassigned
+    labels: [queueId]
+    target: "< 10%"
+```
+
+This artifact serves three purposes:
+1. **Vendor evaluation** — can this system expose these metrics?
+2. **Cross-state consistency** — same metric names enable benchmarking across implementations
+3. **Dashboard development** — frontends know what metrics to expect from the adapter
+
+The mock server can compute basic metrics from its in-memory data (task counts by status, queue depths, SLA breach counts) and expose them via `GET /metrics`. Production adapters map vendor-specific monitoring to these metric definitions.
+
 ### Extensibility
 
 Because the contract is declarative (YAML + OpenAPI), all changes are diffable and reviewable in PRs.
@@ -449,6 +517,8 @@ Because the contract is declarative (YAML + OpenAPI), all changes are diffable a
 | Add a new guard (on a new transition) | New transitions don't affect existing paths |
 | Add a new effect to a transition | Side effects are backend concerns; frontend is unaffected |
 | Add a new rule | New rules only affect newly evaluated objects |
+| Add a new metric | Informational; doesn't affect behavior |
+| Add an alert rule | Alerts are advisory; don't affect transitions |
 
 **Breaking changes:**
 
@@ -471,13 +541,14 @@ The state machine YAML and rules YAML each include a `version` field. The valida
 
 1. **State machine YAML** — "your system must enforce these states, transitions, guards, and effects"
 2. **Rules YAML** (if applicable) — "your system must evaluate these conditions and apply these actions"
-3. **Data schemas** — "objects look like this"
-4. **Event catalog** — "emit these events with these payloads on these transitions"
-5. **JSON Schema for the contract formats** — so the vendor can validate their configuration
-6. **Validation script** — conformance verification
-7. **Example data** — for setup and testing
+3. **Metrics YAML** (if applicable) — "your system must expose these metrics"
+4. **Data schemas** — "objects look like this"
+5. **Event catalog** — "emit these events with these payloads on these transitions"
+6. **JSON Schema for the contract formats** — so the vendor can validate their configuration
+7. **Validation script** — conformance verification
+8. **Example data** — for setup and testing
 
-The contracts double as a **vendor evaluation checklist**: can this system support these transitions? These effects and cross-domain orchestration steps? These rule conditions and actions? These SLA behaviors? These event triggers? If a vendor can't satisfy the contracts, you know before you buy.
+The contracts double as a **vendor evaluation checklist**: can this system support these transitions? These effects and cross-domain orchestration steps? These rule conditions and actions? These SLA behaviors? These event triggers? These operational metrics? If a vendor can't satisfy the contracts, you know before you buy.
 
 ### How the transition works
 
@@ -513,6 +584,7 @@ The mock server is the development adapter. It exposes the same API surface the 
 |----------|----------|----------------------------|
 | State machine YAML | Yes | Requirements doc, vendor evaluation, conformance verification |
 | Rules YAML | Yes | Decision logic the vendor must implement |
+| Metrics YAML | Yes | Monitoring requirements — vendor must expose these metrics |
 | JSON Schema for contract formats | Yes | Format validation for future changes |
 | Data schemas (OpenAPI) | Yes | Data contract — the adapter maps vendor data to these schemas |
 | Event catalog | Yes | Integration contract — vendor must emit these events |
@@ -906,8 +978,11 @@ npm run mock:start
 #   POST /approvals/approval-requests/:id/resubmit
 # Event stream:
 #   GET  /events/stream
+# Metrics:
+#   GET  /metrics
 # Mock utilities:
 #   POST /mock/trigger-timeouts
+#   POST /mock/evaluate-alerts
 ```
 
 ### File structure
@@ -922,6 +997,10 @@ state-machines/
 rules/
   workflow-rules.yaml               # Domain rules (optional, only if domain needs condition-based decisions)
   rules.schema.json                 # JSON Schema for rules format (shared)
+
+metrics/
+  workflow-metrics.yaml             # Metric definitions (optional, only if domain needs monitoring)
+  metrics.schema.json               # JSON Schema for metrics format (shared)
 
 openapi/
   domains/
@@ -1071,6 +1150,7 @@ The "Effects" column uses plain English descriptions. The conversion script maps
 |----------|--------------------------|-------------------|
 | Rules | Decision table (spreadsheet) | Rules YAML (JSON Logic) |
 | State machine (states, transitions) | State transition table (spreadsheet) | State machine YAML |
+| Metrics | Metric table (spreadsheet: name, description, target) | Metrics YAML |
 | Effects (orchestration details) | Plain English descriptions in transition table | Effect definitions in YAML (developer-authored) |
 | Guards (conditions) | Plain English in transition table | Guard definitions in YAML (developer-authored) |
 | Schemas (data model) | Review only | OpenAPI YAML |
@@ -1087,8 +1167,9 @@ The generic infrastructure must be built before any specific domain can use it.
 
 **Phase 1: Contract format + tooling**
 - Define the JSON Schema for the state machine YAML format (states, transitions, guards, effects, events, SLA, onCreate, bulkActions)
-- Define the JSON Schema for the rules YAML format (JSON Logic conditions, rule types, actions)
-- Build the validation script (state machine ↔ OpenAPI schema consistency, effect target resolution, rules context variable validation)
+- Define the JSON Schema for the rules YAML format (JSON Logic conditions, rule types including alerts, actions)
+- Define the JSON Schema for the metrics YAML format (metric names, labels, targets)
+- Build the validation script (state machine ↔ OpenAPI schema consistency, effect target resolution, rules context variable validation, metric label validation)
 - Build the state machine engine for the mock server (auto-discovery, route generation, guard evaluation, effect execution against shared persistence layer)
 - Build the rules engine for the mock server (JSON Logic evaluation, action execution)
 - Build event infrastructure (stored events via Object APIs, real-time delivery via SSE)
@@ -1099,9 +1180,10 @@ The generic infrastructure must be built before any specific domain can use it.
 
 **Phase 2: First domain (workflow management)**
 - Define workflow state machines (task lifecycle, verification lifecycle)
-- Define workflow rules (priority, assignment, escalation rules)
+- Define workflow rules (priority, assignment, escalation, alert rules)
+- Define workflow metrics (task completion time, queue depth, SLA breach rate, etc.)
 - Define workflow OpenAPI schemas (Task, Queue, WorkflowRule, Assignment, Caseload, TaskAuditEvent, etc.)
-- Create decision tables for workflow rules and state transitions (business-readable source)
+- Create decision tables for workflow rules, state transitions, and metrics (business-readable source)
 - Add example data (including configuration data like TaskType, SLAType)
 - Validate and test end-to-end (transitions, effects, cross-domain writes, rule evaluation)
 
