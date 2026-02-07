@@ -610,6 +610,172 @@ This artifact serves three purposes:
 
 The mock server can compute basic metrics from its in-memory data (task counts by status, queue depths, SLA breach counts) and expose them via `GET /metrics`. Production adapters map vendor-specific monitoring to these metric definitions.
 
+### Form definition artifact
+
+Form definitions are a YAML artifact for domains with structured data collection — benefits applications, enrollment forms, intake questionnaires. The form definition captures the questionnaire's behavior: which sections to show, which questions to ask, under what conditions, and for which programs. It uses JSON Logic for conditional logic (consistent with the rules artifact).
+
+```yaml
+# forms/integrated-application.yaml
+domain: intake
+version: "1.0.0"
+title: Integrated Benefits Application
+defaultLocale: en
+
+sections:
+  - id: identity
+    title: Personal Information
+    scope: member                          # collected per household member
+    requiredForPrograms: [snap, medicaid, tanf]
+    questions:
+      - id: name
+        field: name
+        label: What is your full legal name?
+        type: name
+        required: true
+
+      - id: dateOfBirth
+        field: dateOfBirth
+        label: What is your date of birth?
+        type: date
+        required: true
+
+      - id: ssn
+        field: socialSecurityNumber
+        label: What is your Social Security number?
+        type: ssn
+        required: true
+
+  - id: citizenship
+    title: Citizenship & Immigration
+    scope: member
+    requiredForPrograms: [snap, medicaid, tanf]
+    questions:
+      - id: citizenshipStatus
+        field: citizenshipInfo.status
+        label: What is your citizenship status?
+        type: enum
+        options: [us_citizen, us_national, permanent_resident, qualified_noncitizen, other_noncitizen]
+        required: true
+
+      - id: immigrationDocumentType
+        field: citizenshipInfo.immigrationInfo.documentType
+        label: What type of immigration document do you have?
+        type: enum
+        options: [permanent_resident_card, employment_authorization, refugee_travel_document, other]
+        showWhen:
+          "!=": [{ "var": "citizenshipInfo.status" }, "us_citizen"]
+
+  - id: income
+    title: Income
+    scope: member
+    requiredForPrograms: [snap, medicaid, tanf]
+    description: Enter each income source as a separate record.
+    resourceType: income                   # this section manages an API resource, not nested fields
+    programRelevance:                      # how data types map to programs
+      employment:
+        relevantToPrograms: [snap, medicaid, tanf]
+      self_employment:
+        relevantToPrograms: [snap, medicaid, tanf]
+      unearned:
+        child_support:
+          relevantToPrograms: [snap, tanf]
+        social_security_benefits:
+          relevantToPrograms: [snap, medicaid, tanf]
+          notes:
+            medicaid: Excluded from MAGI for most recipients
+
+  - id: tax_filing
+    title: Tax Filing Information
+    scope: member
+    requiredForPrograms: [medicaid]
+    questions:
+      - id: willFileTaxes
+        field: taxFilingInfo.willFileTaxes
+        label: Will you file a federal tax return this year?
+        type: boolean
+        required: true
+        relevantToPrograms: [medicaid]
+
+      - id: filingJointly
+        field: taxFilingInfo.filingJointlyWithSpouse
+        label: Will you file jointly with your spouse?
+        type: boolean
+        showWhen:
+          "==": [{ "var": "taxFilingInfo.willFileTaxes" }, true]
+
+  - id: housing
+    title: Housing
+    scope: household                       # collected once per household
+    requiredForPrograms: [snap]
+    questions:
+      - id: monthlyRent
+        field: housingInfo.monthlyRent
+        label: How much is your monthly rent?
+        type: currency
+        showWhen:
+          "==": [{ "var": "housingInfo.housingType" }, "rent"]
+```
+
+**Key concepts:**
+
+**Scope** — sections are either `member` (collected per household member) or `household` (collected once). This determines how many times the section appears and how review records are created.
+
+**`requiredForPrograms`** — evaluated against each member's `programsApplyingFor`. If Jane applies for SNAP + Medicaid, she sees sections required by either. Her child applying for Medicaid only sees Medicaid-required sections. Household-scope sections appear if any member is applying for a program that requires them.
+
+**`showWhen`** — JSON Logic condition that controls when a question appears. Evaluated against the current member's data. Questions without `showWhen` always appear (within required sections).
+
+**`resourceType`** — indicates this section manages an API resource (income records, assets, expenses) rather than nested fields. The form engine presents an "add/edit/remove" interface instead of a fixed set of questions.
+
+**`programRelevance`** — maps data types to programs, with optional notes explaining how each program uses the data differently. This enables program-specific views during caseworker review: the same data is entered once but the UI can show which items feed into which program's determination.
+
+**`relevantToPrograms`** — on individual questions, indicates which programs care about this field. The UI can use this to annotate or highlight fields during review.
+
+#### Translations
+
+The form definition uses a default locale for labels and descriptions. Translation files provide overrides per locale, keyed by section and question ID:
+
+```yaml
+# forms/translations/integrated-application.es.yaml
+locale: es
+sections:
+  identity:
+    title: Información Personal
+    questions:
+      name:
+        label: "¿Cuál es su nombre legal completo?"
+      dateOfBirth:
+        label: "¿Cuál es su fecha de nacimiento?"
+      ssn:
+        label: "¿Cuál es su número de Seguro Social?"
+  citizenship:
+    title: Ciudadanía e Inmigración
+    questions:
+      citizenshipStatus:
+        label: "¿Cuál es su estado de ciudadanía?"
+        options:
+          us_citizen: Ciudadano estadounidense
+          us_national: Nacional estadounidense
+          permanent_resident: Residente permanente
+          qualified_noncitizen: No ciudadano calificado
+          other_noncitizen: Otro no ciudadano
+      immigrationDocumentType:
+        label: "¿Qué tipo de documento de inmigración tiene?"
+```
+
+Translation files follow a consistent pattern: `forms/translations/{form-id}.{locale}.yaml`. The mock server merges translations at request time based on an `Accept-Language` header or `?locale=es` parameter. Enum option labels, section titles, question labels, and descriptions are all translatable. Validation messages and error text follow the same pattern.
+
+States can add translations via overlay — both for new languages and for overriding default translations (e.g., adjusting terminology to match a state's preferred phrasing).
+
+#### How the mock server handles form definitions
+
+The mock server auto-discovers form definition files and exposes:
+
+- `GET /forms/:formId` — returns the form structure (sections, questions, conditions)
+- `GET /forms/:formId?locale=es` — returns the form with translated labels
+- `POST /forms/:formId/evaluate` — given the current answers and selected programs, returns which sections and questions are active (evaluates `showWhen` conditions and `requiredForPrograms` against member data)
+
+In production, the adapter may map the form definition to a commercial form engine, a custom frontend, or an in-person intake tool. The form definition is the contract — the rendering and storage are implementation concerns.
+
 ### Extensibility
 
 Because the contract is declarative (YAML + OpenAPI), all changes are diffable and reviewable in PRs.
@@ -1117,6 +1283,9 @@ metrics/
 forms/
   integrated-application.yaml      # Form definition (optional, only if domain has structured intake)
   form-definition.schema.json      # JSON Schema for form definition format (shared)
+  translations/
+    integrated-application.es.yaml # Spanish translations
+    integrated-application.zh.yaml # Chinese translations
 
 openapi/
   domains/
@@ -1285,17 +1454,47 @@ State machines can also be authored as a table — each row is a transition:
 
 The "Effects" column uses plain English descriptions. The conversion script maps these to the structured YAML format — a developer defines the effect implementations once, and the business analyst references them by description.
 
+### Form section tables for form definitions
+
+Form definitions can be authored as a pair of tables — one for sections and one for questions:
+
+**Section table:**
+
+| Section | Scope | Required For | Description |
+|---------|-------|-------------|-------------|
+| Identity | per member | SNAP, Medicaid, TANF | Name, DOB, SSN, demographics |
+| Citizenship | per member | SNAP, Medicaid, TANF | Citizenship status, immigration documents |
+| Income | per member | SNAP, Medicaid, TANF | Employment, self-employment, unearned income |
+| Tax Filing | per member | Medicaid | Filing status, dependents, MAGI deductions |
+| Housing | per household | SNAP | Address, rent/mortgage, utilities |
+
+**Question table (per section):**
+
+| Section | Question ID | Label | Type | Required | Show When | Programs |
+|---------|------------|-------|------|----------|-----------|----------|
+| Identity | name | What is your full legal name? | name | yes | — | all |
+| Identity | dateOfBirth | What is your date of birth? | date | yes | — | all |
+| Identity | ssn | What is your Social Security number? | ssn | yes | — | all |
+| Citizenship | citizenshipStatus | What is your citizenship status? | enum | yes | — | all |
+| Citizenship | immigrationDocumentType | What type of immigration document do you have? | enum | no | status != us_citizen | all |
+| Tax Filing | willFileTaxes | Will you file a federal tax return? | boolean | yes | — | Medicaid |
+| Tax Filing | filingJointly | Will you file jointly with your spouse? | boolean | no | willFileTaxes = yes | Medicaid |
+
+The "Show When" column uses plain English conditions. The conversion script maps these to JSON Logic. The "Programs" column populates `relevantToPrograms`. Translations are authored in a separate spreadsheet with columns for each locale.
+
 ### Recommended tooling
 
 | Artifact | Business user authors via | Developer artifact |
 |----------|--------------------------|-------------------|
 | Rules | Decision table (spreadsheet) | Rules YAML (JSON Logic) |
 | State machine (states, transitions) | State transition table (spreadsheet) | State machine YAML |
+| Form definition (sections, questions) | Section table + question table (spreadsheet) | Form definition YAML |
+| Form translations | Translation table (spreadsheet per locale) | Translation YAML files |
 | Metrics | Metric table (spreadsheet: name, description, target) | Metrics YAML |
 | Effects (orchestration details) | Plain English descriptions in transition table | Effect definitions in YAML (developer-authored) |
 | Guards (conditions) | Plain English in transition table | Guard definitions in YAML (developer-authored) |
 | Schemas (data model) | Review only | OpenAPI YAML |
 
-The split is intentional: business users define **what** should happen (which transitions exist, which rules apply, who can do what) in spreadsheet format. Developers define **how** it's implemented (effect mechanics, guard logic, schema structure) in YAML. The conversion scripts bridge the two, and the validation script ensures they're consistent.
+The split is intentional: business users define **what** should happen (which transitions exist, which rules apply, which questions to ask, who can do what) in spreadsheet format. Developers define **how** it's implemented (effect mechanics, guard logic, schema structure) in YAML. The conversion scripts bridge the two, and the validation script ensures they're consistent.
 
 If a visual tool becomes valuable, the state machine YAML can be translated to XState format for [Stately.ai's visual editor](https://stately.ai/), which provides a drag-and-drop state machine designer. This would be a read/export capability rather than the primary authoring path, since the YAML includes domain-specific fields (SLA behavior, effects, actor restrictions) that XState doesn't natively support.
