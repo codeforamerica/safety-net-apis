@@ -9,7 +9,7 @@
 3. **[How the Adapter Works](#how-the-adapter-works)** — Adapter pattern for both API types
 4. **[Mock Server Extensibility](#mock-server-extensibility)** — Declarative domain addition, no handler code
 5. **[What States Get From This Project](#what-states-get-from-this-project)** — Contracts and tooling, not a runtime framework
-6. **[Behavioral Contract Details](#behavioral-contract-details)** — State machine format, effects, rules, metrics, form definition, extensibility
+6. **[Behavioral Contract Details](#behavioral-contract-details)** — State machine format, effects, rules, metrics, extensibility
 7. **[Vendor Handoff](#vendor-handoff)** — What we provide, what survives vendor selection
 8. **[Adding a Behavior-Shaped Domain](#adding-a-behavior-shaped-domain)** — Step-by-step tutorial with worked example
 9. **[Domains with Complex Calculation Logic](#domains-with-complex-calculation-logic)** — Eligibility, tax, risk scoring — where the contract wraps an external engine
@@ -65,9 +65,8 @@ A generic CRUD adapter loses most of this value. The adapter pattern still appli
 - **State machine YAML** (required) — valid states, transitions, guards, effects, timeouts, SLA behavior, and event catalog
 - **Rules YAML** (optional) — declarative rules with JSON Logic conditions and actions. Rule types include assignment, priority, eligibility, escalation, alert, and more. Only needed when the domain involves condition-based decisions beyond what guards express (e.g., routing objects to queues based on context, setting priority based on application data, alert thresholds for operational monitoring).
 - **Metrics YAML** (optional) — defines what to measure for operational monitoring. Metric names, labels, and targets — not implementation details (Prometheus vs. Datadog is a deployment concern).
-- **Form definition YAML** (optional) — defines structured data collection: sections, questions, conditional logic (JSON Logic), and program requirements. Only needed for domains with a structured intake process (e.g., benefits applications, enrollment forms) where the questionnaire itself has behavior — conditional branching, program-dependent sections, validation rules.
 
-Every behavior-shaped domain needs a state machine — that's what makes it behavior-shaped. Rules are an additional artifact for domains that need condition-based decisions evaluated against broader context. Metrics are an additional artifact for domains that need operational monitoring. Form definitions are an additional artifact for domains with structured data collection. For example, workflow management needs state machine + rules + metrics. An eligibility intake domain needs state machine + form definition. A simple approval process may only need the state machine.
+Every behavior-shaped domain needs a state machine — that's what makes it behavior-shaped. Rules are an additional artifact for domains that need condition-based decisions evaluated against broader context. Metrics are an additional artifact for domains that need operational monitoring. For example, workflow management needs all three (state machine + rules + metrics). A simple approval process may only need the state machine.
 
 **Contract terminology:**
 - **State** — a status an object can be in (e.g., `pending`, `in_progress`, `completed`)
@@ -113,14 +112,6 @@ Object APIs only:              Object + Action APIs:
                                  │ Labels         │
                                  │ Targets        │
                                  └────────────────┘
-                                       +
-                                 Form Definition YAML (optional)
-                                 ┌────────────────┐
-                                 │ Sections       │
-                                 │ Questions      │
-                                 │ Conditions     │
-                                 │ Program req's  │
-                                 └────────────────┘
 ```
 
 ---
@@ -135,10 +126,12 @@ The adapter wraps a vendor's data store with a standard interface defined by the
 [Frontend] → [Adapter] → [Vendor/DB]
                  ↑
               Object APIs (GET /tasks, POST /tasks)
+
 ```
 
 The adapter must satisfy one contract:
 - **OpenAPI spec** — defines the Object API surface (schemas, endpoints, parameters)
+
 
 ### For Action APIs
 
@@ -156,7 +149,6 @@ The adapter must satisfy two or more contracts:
 - **State machine YAML** — defines valid state transitions, guards, effects, and events for Action APIs
 - **Rules YAML** (if the domain uses rules) — defines condition-based decisions (routing, assignment, priority, etc.)
 - **Metrics YAML** (if the domain needs monitoring) — defines what to measure (metric names, labels, targets)
-- **Form definition YAML** (if the domain has structured intake) — defines data collection: sections, questions, conditional logic, program requirements
 
 A validation script verifies that the contract artifacts are internally consistent (state machine states match OpenAPI enums, effect targets reference real schemas, event payloads resolve, rule context variables exist, etc.). Conformance testing (verifying the production backend actually satisfies the contracts) is done via integration test suites. When you switch vendors, the contracts tell you exactly what the new backend must do — state transitions, guard conditions, orchestration effects, SLA behavior, event triggers, and rule-based decisions — that an OpenAPI spec alone can't express.
 
@@ -178,8 +170,6 @@ Both API types are designed so that adding a new domain to the mock server is de
 
 The mock server's in-memory database is shared across all domains, so effects that reference entities from other domains (creating an Assignment when claiming a Task, updating a Caseload) work naturally — the mock has all the schemas loaded and can write to any collection.
 
-**Form definitions:** If a domain includes a form definition YAML, the mock server serves the form structure via `GET /forms/:formId` and evaluates conditions for a given application state via `POST /forms/:formId/evaluate` (returns which sections and questions are active given current answers and selected programs). This enables frontend development against the form contract without a real form engine.
-
 The state machine engine is domain-agnostic. Adding a second domain with Action APIs (e.g., notification campaigns with states like `draft`, `scheduled`, `sending`, `delivered`) follows the same pattern: define the state machine YAML and data schemas, and the mock server generates the endpoints with enforcement. No new handler code is needed.
 
 ## What States Get From This Project
@@ -194,7 +184,6 @@ This project provides contracts and development tooling. States build their own 
 | State machine YAML | Define the Action API surface (states, transitions, guards, effects, events) | Yes — as behavioral requirements |
 | Rules YAML | Define condition-based decisions: routing, assignment, priority, alerts (JSON Logic) | Yes — as behavioral requirements (if applicable) |
 | Metrics YAML | Define what to measure: metric names, labels, targets | Yes — as monitoring requirements (if applicable) |
-| Form definition YAML | Define structured data collection: sections, questions, conditional logic, program requirements | Yes — as data collection requirements (if applicable) |
 | Mock server | Frontend development and integration testing before a real backend exists | No — replaced by the state's production backend |
 | Validation script | Verify that the contract artifacts are internally consistent (state machine ↔ OpenAPI schemas, effects ↔ entity schemas, rules ↔ context variables) | Yes — run in CI to catch contract mismatches |
 | Example data | Seed the mock server; useful for testing production backends | Partially |
@@ -608,172 +597,6 @@ This artifact serves three purposes:
 
 The mock server can compute basic metrics from its in-memory data (task counts by status, queue depths, SLA breach counts) and expose them via `GET /metrics`. Production adapters map vendor-specific monitoring to these metric definitions.
 
-### Form definition artifact
-
-Form definitions are a YAML artifact for domains with structured data collection — benefits applications, enrollment forms, intake questionnaires. The form definition captures the questionnaire's behavior: which sections to show, which questions to ask, under what conditions, and for which programs. It uses JSON Logic for conditional logic (consistent with the rules artifact).
-
-```yaml
-# forms/integrated-application.yaml
-domain: intake
-version: "1.0.0"
-title: Integrated Benefits Application
-defaultLocale: en
-
-sections:
-  - id: identity
-    title: Personal Information
-    scope: member                          # collected per household member
-    requiredForPrograms: [snap, medicaid, tanf]
-    questions:
-      - id: name
-        field: name
-        label: What is your full legal name?
-        type: name
-        required: true
-
-      - id: dateOfBirth
-        field: dateOfBirth
-        label: What is your date of birth?
-        type: date
-        required: true
-
-      - id: ssn
-        field: socialSecurityNumber
-        label: What is your Social Security number?
-        type: ssn
-        required: true
-
-  - id: citizenship
-    title: Citizenship & Immigration
-    scope: member
-    requiredForPrograms: [snap, medicaid, tanf]
-    questions:
-      - id: citizenshipStatus
-        field: citizenshipInfo.status
-        label: What is your citizenship status?
-        type: enum
-        options: [us_citizen, us_national, permanent_resident, qualified_noncitizen, other_noncitizen]
-        required: true
-
-      - id: immigrationDocumentType
-        field: citizenshipInfo.immigrationInfo.documentType
-        label: What type of immigration document do you have?
-        type: enum
-        options: [permanent_resident_card, employment_authorization, refugee_travel_document, other]
-        showWhen:
-          "!=": [{ "var": "citizenshipInfo.status" }, "us_citizen"]
-
-  - id: income
-    title: Income
-    scope: member
-    requiredForPrograms: [snap, medicaid, tanf]
-    description: Enter each income source as a separate record.
-    resourceType: income                   # this section manages an API resource, not nested fields
-    programRelevance:                      # how data types map to programs
-      employment:
-        relevantToPrograms: [snap, medicaid, tanf]
-      self_employment:
-        relevantToPrograms: [snap, medicaid, tanf]
-      unearned:
-        child_support:
-          relevantToPrograms: [snap, tanf]
-        social_security_benefits:
-          relevantToPrograms: [snap, medicaid, tanf]
-          notes:
-            medicaid: Excluded from MAGI for most recipients
-
-  - id: tax_filing
-    title: Tax Filing Information
-    scope: member
-    requiredForPrograms: [medicaid]
-    questions:
-      - id: willFileTaxes
-        field: taxFilingInfo.willFileTaxes
-        label: Will you file a federal tax return this year?
-        type: boolean
-        required: true
-        relevantToPrograms: [medicaid]
-
-      - id: filingJointly
-        field: taxFilingInfo.filingJointlyWithSpouse
-        label: Will you file jointly with your spouse?
-        type: boolean
-        showWhen:
-          "==": [{ "var": "taxFilingInfo.willFileTaxes" }, true]
-
-  - id: housing
-    title: Housing
-    scope: household                       # collected once per household
-    requiredForPrograms: [snap]
-    questions:
-      - id: monthlyRent
-        field: housingInfo.monthlyRent
-        label: How much is your monthly rent?
-        type: currency
-        showWhen:
-          "==": [{ "var": "housingInfo.housingType" }, "rent"]
-```
-
-**Key concepts:**
-
-**Scope** — sections are either `member` (collected per household member) or `household` (collected once). This determines how many times the section appears and how review records are created.
-
-**`requiredForPrograms`** — evaluated against each member's `programsApplyingFor`. If Jane applies for SNAP + Medicaid, she sees sections required by either. Her child applying for Medicaid only sees Medicaid-required sections. Household-scope sections appear if any member is applying for a program that requires them.
-
-**`showWhen`** — JSON Logic condition that controls when a question appears. Evaluated against the current member's data. Questions without `showWhen` always appear (within required sections).
-
-**`resourceType`** — indicates this section manages an API resource (income records, assets, expenses) rather than nested fields. The form engine presents an "add/edit/remove" interface instead of a fixed set of questions.
-
-**`programRelevance`** — maps data types to programs, with optional notes explaining how each program uses the data differently. This enables program-specific views during caseworker review: the same data is entered once but the UI can show which items feed into which program's determination.
-
-**`relevantToPrograms`** — on individual questions, indicates which programs care about this field. The UI can use this to annotate or highlight fields during review.
-
-#### Translations
-
-The form definition uses a default locale for labels and descriptions. Translation files provide overrides per locale, keyed by section and question ID:
-
-```yaml
-# forms/translations/integrated-application.es.yaml
-locale: es
-sections:
-  identity:
-    title: Información Personal
-    questions:
-      name:
-        label: "¿Cuál es su nombre legal completo?"
-      dateOfBirth:
-        label: "¿Cuál es su fecha de nacimiento?"
-      ssn:
-        label: "¿Cuál es su número de Seguro Social?"
-  citizenship:
-    title: Ciudadanía e Inmigración
-    questions:
-      citizenshipStatus:
-        label: "¿Cuál es su estado de ciudadanía?"
-        options:
-          us_citizen: Ciudadano estadounidense
-          us_national: Nacional estadounidense
-          permanent_resident: Residente permanente
-          qualified_noncitizen: No ciudadano calificado
-          other_noncitizen: Otro no ciudadano
-      immigrationDocumentType:
-        label: "¿Qué tipo de documento de inmigración tiene?"
-```
-
-Translation files follow a consistent pattern: `forms/translations/{form-id}.{locale}.yaml`. The mock server merges translations at request time based on an `Accept-Language` header or `?locale=es` parameter. Enum option labels, section titles, question labels, and descriptions are all translatable. Validation messages and error text follow the same pattern.
-
-States can add translations via overlay — both for new languages and for overriding default translations (e.g., adjusting terminology to match a state's preferred phrasing).
-
-#### How the mock server handles form definitions
-
-The mock server auto-discovers form definition files and exposes:
-
-- `GET /forms/:formId` — returns the form structure (sections, questions, conditions)
-- `GET /forms/:formId?locale=es` — returns the form with translated labels
-- `POST /forms/:formId/evaluate` — given the current answers and selected programs, returns which sections and questions are active (evaluates `showWhen` conditions and `requiredForPrograms` against member data)
-
-In production, the adapter may map the form definition to a commercial form engine, a custom frontend, or an in-person intake tool. The form definition is the contract — the rendering and storage are implementation concerns.
-
 ### Extensibility
 
 Because the contract is declarative (YAML + OpenAPI), all changes are diffable and reviewable in PRs.
@@ -791,7 +614,6 @@ Because the contract is declarative (YAML + OpenAPI), all changes are diffable a
 | Add a new rule | New rules only affect newly evaluated objects |
 | Add a new metric | Informational; doesn't affect behavior |
 | Add an alert rule | Alerts are advisory; don't affect transitions |
-| Add a new form section or question | New questions are optional until required; existing flows unaffected |
 
 **Breaking changes:**
 
@@ -803,9 +625,8 @@ Because the contract is declarative (YAML + OpenAPI), all changes are diffable a
 | Remove or rename a field in an event payload | Listeners expecting the field break |
 | Change SLA behavior for a state | Runtime behavior changes; doesn't break structure but affects outcomes |
 | Remove or reorder rules | Changes behavior for newly evaluated objects |
-| Remove a form question or change conditions | Frontends expecting the question break; condition changes alter intake flow |
 
-All contract artifacts (state machine YAML, rules YAML, metrics YAML, and form definition YAML) include a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes.
+The state machine YAML and rules YAML each include a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes.
 
 ---
 
@@ -816,12 +637,11 @@ All contract artifacts (state machine YAML, rules YAML, metrics YAML, and form d
 1. **State machine YAML** — "your system must enforce these states, transitions, guards, and effects"
 2. **Rules YAML** (if applicable) — "your system must evaluate these conditions and apply these actions"
 3. **Metrics YAML** (if applicable) — "your system must expose these metrics"
-4. **Form definition YAML** (if applicable) — "your intake process must collect this data with these conditions"
-5. **Data schemas** — "objects look like this"
-6. **Event catalog** — "emit these events with these payloads on these transitions"
-7. **JSON Schema for the contract formats** — so the vendor can validate their configuration
-8. **Validation script** — conformance verification
-9. **Example data** — for setup and testing
+4. **Data schemas** — "objects look like this"
+5. **Event catalog** — "emit these events with these payloads on these transitions"
+6. **JSON Schema for the contract formats** — so the vendor can validate their configuration
+7. **Validation script** — conformance verification
+8. **Example data** — for setup and testing
 
 The contracts double as a **vendor evaluation checklist**: can this system support these transitions? These effects and cross-domain orchestration steps? These rule conditions and actions? These SLA behaviors? These event triggers? These operational metrics? If a vendor can't satisfy the contracts, you know before you buy.
 
@@ -860,7 +680,6 @@ The mock server is the development adapter. It exposes the same API surface the 
 | State machine YAML | Yes | Requirements doc, vendor evaluation, conformance verification |
 | Rules YAML | Yes | Decision logic the vendor must implement |
 | Metrics YAML | Yes | Monitoring requirements — vendor must expose these metrics |
-| Form definition YAML | Yes | Data collection requirements — intake process must follow this structure |
 | JSON Schema for contract formats | Yes | Format validation for future changes |
 | Data schemas (OpenAPI) | Yes | Data contract — the adapter maps vendor data to these schemas |
 | Event catalog | Yes | Integration contract — vendor must emit these events |
@@ -1278,13 +1097,6 @@ metrics/
   workflow-metrics.yaml             # Metric definitions (optional, only if domain needs monitoring)
   metrics.schema.json               # JSON Schema for metrics format (shared)
 
-forms/
-  integrated-application.yaml      # Form definition (optional, only if domain has structured intake)
-  form-definition.schema.json      # JSON Schema for form definition format (shared)
-  translations/
-    integrated-application.es.yaml # Spanish translations
-    integrated-application.zh.yaml # Chinese translations
-
 openapi/
   domains/
     approvals/
@@ -1296,7 +1108,7 @@ openapi/examples/
     approval-requests.json          # Example data for seeding
 ```
 
-No domain-specific handler code, no changes to the mock server. A domain that only needs a state machine (like approvals) omits the optional artifacts. A domain that needs condition-based decisions (like workflow management) adds a rules file. A domain that needs operational monitoring adds a metrics file. A domain with structured data collection (like eligibility intake) adds a form definition file. The same pattern applies to workflow management (Task with 9 states + rules + metrics), notification campaigns (Campaign with states like `draft`, `scheduled`, `sending`, `delivered`), eligibility intake (Application with state machine + form definition), or any other domain with state transitions.
+No domain-specific handler code, no changes to the mock server. A domain that only needs a state machine (like approvals) omits the rules artifact. A domain that needs both (like workflow management) adds a rules file. The same pattern applies to workflow management (Task with 9 states + rules), notification campaigns (Campaign with states like `draft`, `scheduled`, `sending`, `delivered`), or any other domain with state transitions.
 
 ---
 
@@ -1452,47 +1264,17 @@ State machines can also be authored as a table — each row is a transition:
 
 The "Effects" column uses plain English descriptions. The conversion script maps these to the structured YAML format — a developer defines the effect implementations once, and the business analyst references them by description.
 
-### Form section tables for form definitions
-
-Form definitions can be authored as a pair of tables — one for sections and one for questions:
-
-**Section table:**
-
-| Section | Scope | Required For | Description |
-|---------|-------|-------------|-------------|
-| Identity | per member | SNAP, Medicaid, TANF | Name, DOB, SSN, demographics |
-| Citizenship | per member | SNAP, Medicaid, TANF | Citizenship status, immigration documents |
-| Income | per member | SNAP, Medicaid, TANF | Employment, self-employment, unearned income |
-| Tax Filing | per member | Medicaid | Filing status, dependents, MAGI deductions |
-| Housing | per household | SNAP | Address, rent/mortgage, utilities |
-
-**Question table (per section):**
-
-| Section | Question ID | Label | Type | Required | Show When | Programs |
-|---------|------------|-------|------|----------|-----------|----------|
-| Identity | name | What is your full legal name? | name | yes | — | all |
-| Identity | dateOfBirth | What is your date of birth? | date | yes | — | all |
-| Identity | ssn | What is your Social Security number? | ssn | yes | — | all |
-| Citizenship | citizenshipStatus | What is your citizenship status? | enum | yes | — | all |
-| Citizenship | immigrationDocumentType | What type of immigration document do you have? | enum | no | status != us_citizen | all |
-| Tax Filing | willFileTaxes | Will you file a federal tax return? | boolean | yes | — | Medicaid |
-| Tax Filing | filingJointly | Will you file jointly with your spouse? | boolean | no | willFileTaxes = yes | Medicaid |
-
-The "Show When" column uses plain English conditions. The conversion script maps these to JSON Logic. The "Programs" column populates `relevantToPrograms`. Translations are authored in a separate spreadsheet with columns for each locale.
-
 ### Recommended tooling
 
 | Artifact | Business user authors via | Developer artifact |
 |----------|--------------------------|-------------------|
 | Rules | Decision table (spreadsheet) | Rules YAML (JSON Logic) |
 | State machine (states, transitions) | State transition table (spreadsheet) | State machine YAML |
-| Form definition (sections, questions) | Section table + question table (spreadsheet) | Form definition YAML |
-| Form translations | Translation table (spreadsheet per locale) | Translation YAML files |
 | Metrics | Metric table (spreadsheet: name, description, target) | Metrics YAML |
 | Effects (orchestration details) | Plain English descriptions in transition table | Effect definitions in YAML (developer-authored) |
 | Guards (conditions) | Plain English in transition table | Guard definitions in YAML (developer-authored) |
 | Schemas (data model) | Review only | OpenAPI YAML |
 
-The split is intentional: business users define **what** should happen (which transitions exist, which rules apply, which questions to ask, who can do what) in spreadsheet format. Developers define **how** it's implemented (effect mechanics, guard logic, schema structure) in YAML. The conversion scripts bridge the two, and the validation script ensures they're consistent.
+The split is intentional: business users define **what** should happen (which transitions exist, which rules apply, who can do what) in spreadsheet format. Developers define **how** it's implemented (effect mechanics, guard logic, schema structure) in YAML. The conversion scripts bridge the two, and the validation script ensures they're consistent.
 
 If a visual tool becomes valuable, the state machine YAML can be translated to XState format for [Stately.ai's visual editor](https://stately.ai/), which provides a drag-and-drop state machine designer. This would be a read/export capability rather than the primary authoring path, since the YAML includes domain-specific fields (SLA behavior, effects, actor restrictions) that XState doesn't natively support.
