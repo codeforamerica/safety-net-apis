@@ -12,10 +12,9 @@
 6. **[Behavioral Contract Details](#behavioral-contract-details)** — State machine format, effects, rules, metrics, extensibility
 7. **[Vendor Handoff](#vendor-handoff)** — What we provide, what survives vendor selection
 8. **[Adding a Behavior-Shaped Domain](#adding-a-behavior-shaped-domain)** — Step-by-step tutorial with worked example
-9. **[Known Extensions Needed](#known-extensions-needed)** — Five bounded format additions for full workflow coverage
-10. **[Domains with Complex Calculation Logic](#domains-with-complex-calculation-logic)** — Eligibility, tax, risk scoring — where the contract wraps an external engine
-11. **[Authoring Experience](#authoring-experience)** — Decision tables and spreadsheets for business users
-12. **[Implementation Roadmap](#implementation-roadmap)** — Phase 1 (infrastructure) and Phase 2 (first domain)
+9. **[Domains with Complex Calculation Logic](#domains-with-complex-calculation-logic)** — Eligibility, tax, risk scoring — where the contract wraps an external engine
+10. **[Authoring Experience](#authoring-experience)** — Decision tables and spreadsheets for business users
+11. **[Implementation Roadmap](#implementation-roadmap)** — Phase 1 (infrastructure) and Phase 2 (first domain)
 
 ---
 
@@ -209,6 +208,37 @@ The behavioral contract is written as custom YAML with a JSON Schema defining th
 
 Custom YAML follows statechart semantics (states, transitions, guards, entry/exit actions) and adds domain-specific fields (SLA clock behavior, actor restrictions, event payloads with schema references) as first-class concepts. If visualization becomes valuable, a script can translate the YAML to XState format for Stately.ai's visual editor.
 
+**Top-level fields:**
+
+Beyond states and transitions, the state machine YAML supports two additional top-level blocks:
+
+**`onCreate`** — Effects to run when an object is first created and enters its initial state. Object creation isn't a state transition (there's no "from" state), but it often requires orchestration — calculating SLA deadlines, evaluating routing rules, creating related records. The mock server runs these effects after the Object API `POST` creates the record.
+
+```yaml
+initialState: pending
+onCreate:
+  effects:
+    - lookup:
+        entity: SLAType
+        where: { code: $object.slaTypeCode }
+        bind: slaConfig
+    - set:
+        dueDate: $now + $lookup.slaConfig.durationDays
+    - evaluate-rules: workflow-rules
+      description: Route task using workflow rules
+```
+
+**`bulkActions`** — Defines multi-object operations that apply a transition to multiple objects with a distribution strategy. Each bulk action references an existing transition and adds strategy options. The mock server handles these by iterating through the target objects and applying the transition to each, using the strategy to determine assignments.
+
+```yaml
+bulkActions:
+  - trigger: bulk-reassign
+    appliesTransition: reassign
+    actors: [supervisor]
+    strategies: [to_worker, to_queue, distribute]
+    endpoint: POST /workflow/tasks/bulk-reassign
+```
+
 ### How the contracts connect
 
 The state machine references OpenAPI data schemas for event payloads, effect targets, and guard context. Rules reference context variables from object schemas. A validation script ensures consistency across all artifacts.
@@ -259,8 +289,10 @@ Effects declare the side effects that must occur when a transition fires. They a
 | `create` | Create a record in any domain's collection | Yes |
 | `update` | Update a record in another domain's collection | Yes |
 | `increment` / `decrement` | Adjust a numeric field on another record | Yes |
-| `lookup` | Retrieve a value from another entity and bind it to a variable for use in subsequent effects | Yes |
+| `lookup` | Retrieve a value from another entity and bind it to a variable. Supports multi-field `where` clauses and `orderBy` for complex lookups. | Yes |
+| `query` | Query a collection with conditions and bind an aggregate result (count, exists, list) for use in conditional effects | Yes |
 | `call` | Call an external service and bind the response to a variable | Yes (returns canned mock responses) |
+| `evaluate-rules` | Invoke the rules engine inline during a transition (e.g., re-route a task after release) | Yes |
 
 Effects can also be **conditional** using a `when` clause. This allows effects to execute only when a condition is true — useful for optional side effects that depend on request body fields or object state.
 
@@ -382,6 +414,46 @@ effects:
 ```
 
 In the mock server, `call` effects return canned responses defined in example data (e.g., `examples/verification-sources/irs-income.json`). In production, the adapter translates `call` effects to actual external API calls.
+
+**Query effects (`query`):**
+
+```yaml
+# Check if all verifications for this application are complete
+effects:
+  - query:
+      entity: VerificationTask
+      where: { applicationId: $object.applicationId, status: { not: completed } }
+      count: true
+      bind: pendingVerifications
+  - evaluate-rules: workflow-rules
+    when: $query.pendingVerifications == 0
+    description: All verifications complete — trigger next workflow step
+```
+
+**Evaluate-rules effects (`evaluate-rules`):**
+
+```yaml
+# Re-route a task after it's released back to the queue
+effects:
+  - evaluate-rules: workflow-rules
+    description: Re-route task using workflow rules
+```
+
+**Complex lookups (multi-field `where` and `orderBy`):**
+
+```yaml
+# Find the appropriate supervisor for an escalation
+effects:
+  - lookup:
+      entity: CaseWorker
+      where:
+        teamId: $object.teamId
+        role: supervisor
+        escalationTypes: { contains: $request.escalationType }
+      orderBy: { field: activeCaseCount, direction: asc }
+      bind: targetSupervisor
+    description: Find least-loaded supervisor who handles this escalation type
+```
 
 ### Rules artifact
 
@@ -1029,93 +1101,6 @@ openapi/examples/
 ```
 
 No domain-specific handler code, no changes to the mock server. A domain that only needs a state machine (like approvals) omits the rules artifact. A domain that needs both (like workflow management) adds a rules file. The same pattern applies to workflow management (Task with 9 states + rules), notification campaigns (Campaign with states like `draft`, `scheduled`, `sending`, `delivered`), or any other domain with state transitions.
-
----
-
-## Known Extensions Needed
-
-The current contract format covers ~90% of the workflow domain requirements. The remaining gaps are bounded extensions to the format, not changes to the approach.
-
-### Object creation with orchestration
-
-Creating a Task isn't a state transition on an existing object — the `create` Process API involves creating the object AND running effects (calculate SLA deadline, evaluate rules for routing, maybe assign a worker). The state machine currently only handles transitions on existing objects.
-
-**Extension:** Add an `onCreate` block to the state machine that declares effects to run when an object is first created and enters its initial state. The mock server would run these effects after the Object API `POST` creates the record.
-
-```yaml
-initialState: pending
-onCreate:
-  effects:
-    - lookup:
-        entity: SLAType
-        where: { code: $object.slaTypeCode }
-        bind: slaConfig
-    - set:
-        dueDate: $now + $lookup.slaConfig.durationDays
-    - evaluate-rules: workflow-rules    # trigger rule evaluation inline
-```
-
-### Bulk operations
-
-`POST /processes/workflow/tasks/bulk-reassign` operates on multiple objects with distribution strategies (round_robin across N workers, least_loaded balancing). The state machine is per-object — it can't express "apply this transition to 50 tasks with load-balanced distribution."
-
-**Extension:** Define bulk operations as additional Action API endpoints in the OpenAPI spec with their own request/response shapes. Add a `bulkActions` section to the state machine that references which transition each bulk action applies and what distribution strategies are available. The mock server handles bulk actions by iterating through the objects and applying the transition to each, using the strategy to determine target assignments.
-
-```yaml
-bulkActions:
-  - trigger: bulk-reassign
-    appliesTransition: reassign
-    strategies: [to_worker, to_queue, distribute]
-    endpoint: POST /workflow/tasks/bulk-reassign
-```
-
-### Evaluate rules as an effect
-
-When a task is released, the architecture says "re-route using WorkflowRules." This means triggering rule evaluation as part of a transition's effects.
-
-**Extension:** Add an `evaluate-rules` effect type that invokes the rules engine inline during a transition.
-
-```yaml
-effects:
-  - evaluate-rules: workflow-rules
-    description: Re-route task using workflow rules
-```
-
-### Aggregation queries in effects
-
-"If all verifications for this application are complete, trigger next workflow step" requires querying across multiple objects and checking aggregate state.
-
-**Extension:** Add a `query` effect type that can count or check conditions across a collection, binding the result for use in conditional effects.
-
-```yaml
-effects:
-  - query:
-      entity: VerificationTask
-      where: { applicationId: $object.applicationId, status: { not: completed } }
-      count: true
-      bind: pendingVerifications
-  - evaluate-rules: workflow-rules
-    when: $query.pendingVerifications == 0
-    description: If all verifications complete, trigger next workflow step
-```
-
-### Complex lookups
-
-"Identify appropriate supervisor by team and escalation type" involves multi-field lookups with business logic. The current `lookup` format supports simple `where` clauses.
-
-**Extension:** Extend `lookup` to support multi-field matching and ordering.
-
-```yaml
-effects:
-  - lookup:
-      entity: CaseWorker
-      where:
-        teamId: $object.teamId
-        role: supervisor
-        escalationTypes: { contains: $request.escalationType }
-      orderBy: { field: activeCaseCount, direction: asc }
-      bind: targetSupervisor
-```
 
 ---
 
