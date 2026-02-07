@@ -126,12 +126,10 @@ The adapter wraps a vendor's data store with a standard interface defined by the
 [Frontend] → [Adapter] → [Vendor/DB]
                  ↑
               Object APIs (GET /tasks, POST /tasks)
-
 ```
 
 The adapter must satisfy one contract:
 - **OpenAPI spec** — defines the Object API surface (schemas, endpoints, parameters)
-
 
 ### For Action APIs
 
@@ -626,7 +624,7 @@ Because the contract is declarative (YAML + OpenAPI), all changes are diffable a
 | Change SLA behavior for a state | Runtime behavior changes; doesn't break structure but affects outcomes |
 | Remove or reorder rules | Changes behavior for newly evaluated objects |
 
-The state machine YAML and rules YAML each include a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes.
+All contract artifacts (state machine YAML, rules YAML, and metrics YAML) include a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes.
 
 ---
 
@@ -1108,7 +1106,7 @@ openapi/examples/
     approval-requests.json          # Example data for seeding
 ```
 
-No domain-specific handler code, no changes to the mock server. A domain that only needs a state machine (like approvals) omits the rules artifact. A domain that needs both (like workflow management) adds a rules file. The same pattern applies to workflow management (Task with 9 states + rules), notification campaigns (Campaign with states like `draft`, `scheduled`, `sending`, `delivered`), or any other domain with state transitions.
+No domain-specific handler code, no changes to the mock server. A domain that only needs a state machine (like approvals) omits the optional artifacts. A domain that needs condition-based decisions (like workflow management) adds a rules file. A domain that needs operational monitoring adds a metrics file. The same pattern applies to workflow management (Task with 9 states + rules + metrics), notification campaigns (Campaign with states like `draft`, `scheduled`, `sending`, `delivered`), or any other domain with state transitions.
 
 ---
 
