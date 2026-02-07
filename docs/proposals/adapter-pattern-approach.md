@@ -938,12 +938,155 @@ No domain-specific handler code, no changes to the mock server. A domain that on
 
 ---
 
+## Known Extensions Needed
+
+The current contract format covers ~90% of the workflow domain requirements. The remaining gaps are bounded extensions to the format, not changes to the approach.
+
+### Object creation with orchestration
+
+Creating a Task isn't a state transition on an existing object — the `create` Process API involves creating the object AND running effects (calculate SLA deadline, evaluate rules for routing, maybe assign a worker). The state machine currently only handles transitions on existing objects.
+
+**Extension:** Add an `onCreate` block to the state machine that declares effects to run when an object is first created and enters its initial state. The mock server would run these effects after the Object API `POST` creates the record.
+
+```yaml
+initialState: pending
+onCreate:
+  effects:
+    - lookup:
+        entity: SLAType
+        where: { code: $object.slaTypeCode }
+        bind: slaConfig
+    - set:
+        dueDate: $now + $lookup.slaConfig.durationDays
+    - evaluate-rules: workflow-rules    # trigger rule evaluation inline
+```
+
+### Bulk operations
+
+`POST /processes/workflow/tasks/bulk-reassign` operates on multiple objects with distribution strategies (round_robin across N workers, least_loaded balancing). The state machine is per-object — it can't express "apply this transition to 50 tasks with load-balanced distribution."
+
+**Extension:** Define bulk operations as additional Action API endpoints in the OpenAPI spec with their own request/response shapes. Add a `bulkActions` section to the state machine that references which transition each bulk action applies and what distribution strategies are available. The mock server handles bulk actions by iterating through the objects and applying the transition to each, using the strategy to determine target assignments.
+
+```yaml
+bulkActions:
+  - trigger: bulk-reassign
+    appliesTransition: reassign
+    strategies: [to_worker, to_queue, distribute]
+    endpoint: POST /workflow/tasks/bulk-reassign
+```
+
+### Evaluate rules as an effect
+
+When a task is released, the architecture says "re-route using WorkflowRules." This means triggering rule evaluation as part of a transition's effects.
+
+**Extension:** Add an `evaluate-rules` effect type that invokes the rules engine inline during a transition.
+
+```yaml
+effects:
+  - evaluate-rules: workflow-rules
+    description: Re-route task using workflow rules
+```
+
+### Aggregation queries in effects
+
+"If all verifications for this application are complete, trigger next workflow step" requires querying across multiple objects and checking aggregate state.
+
+**Extension:** Add a `query` effect type that can count or check conditions across a collection, binding the result for use in conditional effects.
+
+```yaml
+effects:
+  - query:
+      entity: VerificationTask
+      where: { applicationId: $object.applicationId, status: { not: completed } }
+      count: true
+      bind: pendingVerifications
+  - evaluate-rules: workflow-rules
+    when: $query.pendingVerifications == 0
+    description: If all verifications complete, trigger next workflow step
+```
+
+### Complex lookups
+
+"Identify appropriate supervisor by team and escalation type" involves multi-field lookups with business logic. The current `lookup` format supports simple `where` clauses.
+
+**Extension:** Extend `lookup` to support multi-field matching and ordering.
+
+```yaml
+effects:
+  - lookup:
+      entity: CaseWorker
+      where:
+        teamId: $object.teamId
+        role: supervisor
+        escalationTypes: { contains: $request.escalationType }
+      orderBy: { field: activeCaseCount, direction: asc }
+      bind: targetSupervisor
+```
+
+---
+
+## Authoring Experience
+
+The YAML and JSON Logic formats are developer artifacts. Business users — policy analysts, program managers, supervisors — need to be able to define and review state machines and rules without writing YAML or JSON Logic directly.
+
+### Decision tables for rules
+
+Rules map naturally to a **decision table** format — a spreadsheet where each row is a rule, columns are conditions, and the last columns are actions. Decision tables are a well-established pattern in business rules management (used in DMN, Drools, and similar systems).
+
+**Example: Workflow rules as a decision table**
+
+| Rule | Program | Office | Task Type | Youngest Child Age | Days Until Deadline | Action | Target |
+|------|---------|--------|-----------|-------------------|--------------------|---------|----- |
+| Expedite young children | any | any | any | < 6 | any | Set priority | expedited |
+| High priority near deadline | any | any | any | any | <= 5 | Set priority | high |
+| Route SNAP County A | SNAP | County A | any | any | any | Assign to queue | snap-county-a-queue |
+| Skill-based appeals | any | any | appeal_review, hearing_prep | any | any | Skill match | appeals-queue (fallback) |
+
+A conversion script reads the spreadsheet (CSV or Excel) and generates the rules YAML with JSON Logic conditions. The YAML is the machine-readable artifact that goes into the repository; the spreadsheet is the business-readable source that policy analysts maintain.
+
+**Workflow:**
+1. Business analyst edits the decision table (Google Sheets, Excel, or a simple web form)
+2. Conversion script generates rules YAML from the table
+3. Validation script checks the generated YAML (context variables exist, actions are valid)
+4. Generated YAML is committed to the repository via PR
+5. Developer reviews the diff; business analyst reviews the spreadsheet
+
+### State transition tables for state machines
+
+State machines can also be authored as a table — each row is a transition:
+
+| Current State | Action | Next State | Who Can Do It | Guard | Effects |
+|--------------|--------|-----------|---------------|-------|---------|
+| pending | claim | in_progress | caseworker | has required skills | assign to worker, create audit event, update caseload |
+| pending | cancel | cancelled | supervisor | — | create audit event |
+| in_progress | complete | completed | caseworker | must be assigned | record outcome, create audit event, update caseload |
+| in_progress | release | returned_to_queue | caseworker | must be assigned | clear assignment, create audit event, re-route |
+| in_progress | escalate | escalated | caseworker, supervisor | — | assign to supervisor, create audit event |
+
+The "Effects" column uses plain English descriptions. The conversion script maps these to the structured YAML format — a developer defines the effect implementations once, and the business analyst references them by description.
+
+### Recommended tooling
+
+| Artifact | Business user authors via | Developer artifact |
+|----------|--------------------------|-------------------|
+| Rules | Decision table (spreadsheet) | Rules YAML (JSON Logic) |
+| State machine (states, transitions) | State transition table (spreadsheet) | State machine YAML |
+| Effects (orchestration details) | Plain English descriptions in transition table | Effect definitions in YAML (developer-authored) |
+| Guards (conditions) | Plain English in transition table | Guard definitions in YAML (developer-authored) |
+| Schemas (data model) | Review only | OpenAPI YAML |
+
+The split is intentional: business users define **what** should happen (which transitions exist, which rules apply, who can do what) in spreadsheet format. Developers define **how** it's implemented (effect mechanics, guard logic, schema structure) in YAML. The conversion scripts bridge the two, and the validation script ensures they're consistent.
+
+If a visual tool becomes valuable, the state machine YAML can be translated to XState format for [Stately.ai's visual editor](https://stately.ai/), which provides a drag-and-drop state machine designer. This would be a read/export capability rather than the primary authoring path, since the YAML includes domain-specific fields (SLA behavior, effects, actor restrictions) that XState doesn't natively support.
+
+---
+
 ## Implementation Roadmap
 
 The generic infrastructure must be built before any specific domain can use it.
 
-**Phase 1: State machine format + tooling**
-- Define the JSON Schema for the state machine YAML format (states, transitions, guards, effects, events, SLA)
+**Phase 1: Contract format + tooling**
+- Define the JSON Schema for the state machine YAML format (states, transitions, guards, effects, events, SLA, onCreate, bulkActions)
 - Define the JSON Schema for the rules YAML format (JSON Logic conditions, rule types, actions)
 - Build the validation script (state machine ↔ OpenAPI schema consistency, effect target resolution, rules context variable validation)
 - Build the state machine engine for the mock server (auto-discovery, route generation, guard evaluation, effect execution against shared persistence layer)
@@ -951,13 +1094,15 @@ The generic infrastructure must be built before any specific domain can use it.
 - Build event infrastructure (stored events via Object APIs, real-time delivery via SSE)
 - Build SLA tracking (clock state per object, `_sla` field on responses)
 - Build timeout trigger endpoint (`POST /mock/trigger-timeouts`)
+- Build decision table → YAML conversion scripts (spreadsheet to rules YAML, spreadsheet to state machine YAML)
 - Add to `npm run validate` and `npm run mock:start` pipelines
 
 **Phase 2: First domain (workflow management)**
 - Define workflow state machines (task lifecycle, verification lifecycle)
-- Define workflow rules (priority, assignment, escalation rules with JSON Logic)
+- Define workflow rules (priority, assignment, escalation rules)
 - Define workflow OpenAPI schemas (Task, Queue, WorkflowRule, Assignment, Caseload, TaskAuditEvent, etc.)
+- Create decision tables for workflow rules and state transitions (business-readable source)
 - Add example data (including configuration data like TaskType, SLAType)
 - Validate and test end-to-end (transitions, effects, cross-domain writes, rule evaluation)
 
-Phase 1 is the investment. Phase 2 and every domain after it is just defining artifacts.
+Phase 1 is the investment. Phase 2 and every domain after it is defining artifacts — ideally starting from decision tables authored by domain experts.
