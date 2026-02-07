@@ -47,18 +47,22 @@ A generic CRUD adapter loses most of this value. The adapter pattern still appli
 **Object APIs** need one contract artifact:
 - **OpenAPI spec** — object schemas, endpoints, query parameters
 
-**Action APIs** need three contract artifacts:
+**Action APIs** need two or three contract artifacts:
 - **OpenAPI spec** — same object schemas used by the Object APIs
-- **Behavioral contract** (state machine YAML) — valid states, transitions, guards, timeouts, SLA behavior
-- **Event catalog** (inline in state machine) — domain events the system must emit on specific transitions
+- **State machine YAML** (required) — valid states, transitions, guards, effects, timeouts, SLA behavior, and event catalog
+- **Rules YAML** (optional) — declarative rules with JSON Logic conditions and actions. Rule types include assignment, priority, eligibility, escalation, and more. Only needed when the domain involves condition-based decisions beyond what guards express (e.g., routing objects to queues based on context, setting priority based on application data).
 
-**State machine terminology:**
+Every behavior-shaped domain needs a state machine — that's what makes it behavior-shaped. Rules are an additional artifact for domains that need condition-based decisions evaluated against broader context. For example, workflow management needs both (task lifecycle state machine + rules for routing and prioritization). A simple approval process only needs the state machine.
+
+**Contract terminology:**
 - **State** — a status an object can be in (e.g., `pending`, `in_progress`, `completed`)
 - **Transition** — a valid move from one state to another (e.g., `pending` → `in_progress`)
 - **Guard** — a condition that must be true for a transition to be allowed (e.g., "task must be unassigned" or "caller must be a supervisor")
+- **Effect** — a side effect that must occur when a transition fires (e.g., create an Assignment record, update a Caseload count, validate cross-domain data)
 - **Event** — a notification emitted when a transition occurs (e.g., `task.claimed`), with a defined payload shape
 - **Timeout** — a deadline-based trigger that fires if an object stays in a state too long (e.g., auto-escalate after 3 days)
 - **SLA behavior** — whether a service-level clock is running, paused, or stopped in a given state
+- **Rule** — a declarative condition (JSON Logic) paired with an action. The `ruleType` field determines what kind of decision the rule makes (assignment, priority, eligibility, escalation, etc.)
 
 ```
 Object APIs only:              Object + Action APIs:
@@ -70,13 +74,22 @@ Object APIs only:              Object + Action APIs:
   │ Parameters │                 │ Parameters │
   └────────────┘                 └────────────┘
                                        +
-                                 State Machine YAML
+                                 State Machine YAML (required)
                                  ┌────────────────┐
                                  │ States         │
                                  │ Transitions    │
                                  │ Guards         │
+                                 │ Effects        │
                                  │ Events         │
                                  │ SLA behavior   │
+                                 └────────────────┘
+                                       +
+                                 Rules YAML (optional)
+                                 ┌────────────────┐
+                                 │ JSON Logic     │
+                                 │ conditions     │
+                                 │ Actions        │
+                                 │ (by ruleType)  │
                                  └────────────────┘
 ```
 
@@ -110,11 +123,12 @@ The adapter wraps a vendor system (workflow engine, rules engine) and exposes bo
                     Action APIs (POST /tasks/:id/claim)
 ```
 
-The adapter must satisfy two contracts:
+The adapter must satisfy two or three contracts:
 - **OpenAPI spec** — defines the Object API surface (schemas, endpoints, parameters)
-- **Behavioral contract** (state machine + event catalog) — defines valid state transitions, guards, and events for Action APIs
+- **State machine YAML** — defines valid state transitions, guards, effects, and events for Action APIs
+- **Rules YAML** (if the domain uses rules) — defines condition-based decisions (routing, assignment, priority, etc.)
 
-A validation script verifies that the contract artifacts are internally consistent (state machine states match OpenAPI enums, event references resolve, etc.). Conformance testing (verifying the production backend actually satisfies the contracts) is done via integration test suites. When you switch vendors, the behavioral contract tells you exactly what the new backend must do, including state transitions, guard conditions, SLA behavior, and event triggers that an OpenAPI spec alone can't express.
+A validation script verifies that the contract artifacts are internally consistent (state machine states match OpenAPI enums, effect targets reference real schemas, event payloads resolve, rule context variables exist, etc.). Conformance testing (verifying the production backend actually satisfies the contracts) is done via integration test suites. When you switch vendors, the contracts tell you exactly what the new backend must do — state transitions, guard conditions, orchestration effects, SLA behavior, event triggers, and rule-based decisions — that an OpenAPI spec alone can't express.
 
 ---
 
@@ -124,11 +138,15 @@ Both API types are designed so that adding a new domain to the mock server is de
 
 **Object APIs:** Add an OpenAPI spec with schemas and example data. The mock server auto-discovers the spec and generates CRUD endpoints (list, get, create, update, delete) with an in-memory database seeded from examples. No handler code required.
 
-**Action APIs:** Add a state machine YAML, OpenAPI data schemas, and example data. The mock server auto-discovers the state machine and generates:
+**Action APIs:** Add a state machine YAML, OpenAPI data schemas, and example data. Optionally add a rules YAML if the domain needs condition-based decisions. The mock server auto-discovers these artifacts and generates:
 - Object API endpoints for the data schemas (same as above)
 - Action API endpoints derived from named transition triggers (e.g., a `claim` trigger on a `Task` object in the `workflow` domain becomes `POST /workflow/tasks/:id/claim`)
 - State machine enforcement — the engine validates transitions and guards automatically
+- Effect execution — creates, updates, and validates records across all domains using the shared in-memory persistence layer (e.g., claiming a task creates an Assignment record, updates a Caseload count, and writes a TaskAuditEvent — all in one operation)
+- Rule evaluation — if a rules artifact exists, the mock evaluates JSON Logic conditions and applies the matching rule's action (assign to queue, set priority, etc.)
 - Event emission on successful transitions
+
+The mock server's in-memory database is shared across all domains, so effects that reference entities from other domains (creating an Assignment when claiming a Task, updating a Caseload) work naturally — the mock has all the schemas loaded and can write to any collection.
 
 The state machine engine is domain-agnostic. Adding a second domain with Action APIs (e.g., notification campaigns with states like `draft`, `scheduled`, `sending`, `delivered`) follows the same pattern: define the state machine YAML and data schemas, and the mock server generates the endpoints with enforcement. No new handler code is needed.
 
@@ -141,9 +159,10 @@ This project provides contracts and development tooling. States build their own 
 | Artifact | Purpose | Used in production? |
 |----------|---------|---------------------|
 | OpenAPI specs | Define the Object API surface (schemas, endpoints, parameters) | Yes — as the contract the backend must satisfy |
-| State machine YAML | Define the Action API surface (states, transitions, guards, events) | Yes — as behavioral requirements |
+| State machine YAML | Define the Action API surface (states, transitions, guards, effects, events) | Yes — as behavioral requirements |
+| Rules YAML | Define condition-based decisions: routing, assignment, priority, etc. (JSON Logic) | Yes — as behavioral requirements (if applicable) |
 | Mock server | Frontend development and integration testing before a real backend exists | No — replaced by the state's production backend |
-| Validation script | Verify that the contract artifacts are internally consistent (state machine ↔ OpenAPI schemas) | Yes — run in CI to catch contract mismatches |
+| Validation script | Verify that the contract artifacts are internally consistent (state machine ↔ OpenAPI schemas, effects ↔ entity schemas, rules ↔ context variables) | Yes — run in CI to catch contract mismatches |
 | Example data | Seed the mock server; useful for testing production backends | Partially |
 
 **How a state uses this:**
@@ -175,7 +194,7 @@ Custom YAML follows statechart semantics (states, transitions, guards, entry/exi
 
 ### How the contracts connect
 
-The state machine references OpenAPI data schemas for event payloads and guard context. A validation script ensures consistency: state machine states match the enum on the object's `stateField`, referenced events have valid payload schemas, and guard conditions reference real schema fields.
+The state machine references OpenAPI data schemas for event payloads, effect targets, and guard context. Rules reference context variables from object schemas. A validation script ensures consistency across all artifacts.
 
 ```
 State Machine YAML                    OpenAPI Schemas
@@ -183,23 +202,237 @@ State Machine YAML                    OpenAPI Schemas
 │ object: Task         │             │ Task:                │
 │ stateField: status   │  references │   status: enum       │◄── states must match
 │                      │────────────►│   assignedToId: uuid │
-│ states:              │             │   ...                │
-│   pending:           │             │                      │
-│     sla: running     │             │ TaskClaimedEvent:    │
-│     transitions:     │  references │   taskId: uuid       │
-│       - to: in_progress────────────►│   claimedById: uuid │◄── payload schema
-│         trigger: claim│            │   claimedAt: datetime│
-│         event:       │             │                      │
-│           name: task.claimed       │ TaskSLAWarningEvent: │
-│           payload: TaskClaimedEvent│   taskId: uuid       │
-│         guard: ...   │             │   elapsedMs: integer │
-│     onTimeout:       │             └──────────────────────┘
-│       - after: warningThresholdDays
-│         event:
-│           name: task.sla_warning
-│           payload: TaskSLAWarningEvent
+│ states:              │             │   requiredSkills: [] │
+│   pending:           │             │   ...                │
+│     transitions:     │             │                      │
+│       - to: in_progress            │ Assignment:          │◄── effect target
+│         trigger: claim│            │   taskId: uuid       │
+│         effects:     │  references │   workerId: uuid     │
+│           - create: Assignment────►│   ...                │
+│           - create: TaskAuditEvent │                      │
+│         event:       │  references │ TaskClaimedEvent:    │
+│           payload: ──────────────► │   taskId: uuid       │◄── payload schema
+│              TaskClaimedEvent      │   claimedById: uuid  │
+│                      │             └──────────────────────┘
+└──────────────────────┘
+          ▲
+          │ states feed into
+          │
+Rules YAML (optional)
+┌──────────────────────┐
+│ rules:               │
+│   - conditions:      │  references task.*, application.*
+│       JSON Logic     │  from OpenAPI schemas
+│     action:          │
+│       strategy: ...  │
+│       targetQueueId  │
 └──────────────────────┘
 ```
+
+### Effects format
+
+Effects declare the side effects that must occur when a transition fires. They are listed on each transition and executed in order after the guard passes and the state change is applied.
+
+**Effect types:**
+
+| Type | Purpose | Mock executes? |
+|------|---------|----------------|
+| `validate` | Check a cross-domain condition before allowing the transition | Yes |
+| `set` | Update fields on the current object (beyond the state change) | Yes |
+| `create` | Create a record in any domain's collection | Yes |
+| `update` | Update a record in another domain's collection | Yes |
+| `increment` / `decrement` | Adjust a numeric field on another record | Yes |
+| `lookup` | Retrieve a value from another entity and bind it to a variable for use in subsequent effects | Yes |
+| `call` | Call an external service and bind the response to a variable | Yes (returns canned mock responses) |
+
+Effects can also be **conditional** using a `when` clause. This allows effects to execute only when a condition is true — useful for optional side effects that depend on request body fields or object state.
+
+The mock server executes all effect types using its shared in-memory persistence layer. Since the mock loads all domain schemas, it can create and update records across domains in a single operation. For `call` effects, the mock returns canned responses defined in example data rather than calling external services.
+
+**Variable references in effects:**
+- `$object` — the current object being transitioned
+- `$caller` — the authenticated user (from JWT claims in production, `X-User-Id` / `X-User-Role` headers in mock)
+- `$now` — current timestamp
+- `$request` — the request body (for accessing fields sent with the action)
+- `$lookup.*` — values bound by a preceding `lookup` effect
+- `$call.*` — values bound by a preceding `call` effect
+
+**Example (claiming a task):**
+
+```yaml
+transitions:
+  - to: in_progress
+    trigger: claim
+    actors: [caseworker]
+    guard: taskIsUnassigned
+    effects:
+      - validate: $caller.skills containsAll $object.requiredSkills
+        description: Worker must have all required skills
+      - set:
+          assignedToId: $caller.id
+        description: Assign task to claiming worker
+      - create: Assignment
+        fields:
+          taskId: $object.id
+          workerId: $caller.id
+          assignedAt: $now
+          status: active
+        description: Create assignment record
+      - create: TaskAuditEvent
+        fields:
+          taskId: $object.id
+          eventType: assigned
+          performedById: $caller.id
+          occurredAt: $now
+        description: Record assignment in audit trail
+      - increment:
+          entity: Caseload
+          lookup: { workerId: $caller.id }
+          field: activeTaskCount
+        description: Update worker's caseload count
+    event:
+      name: task.claimed
+      payload: TaskClaimedEvent
+```
+
+When `POST /workflow/tasks/:id/claim` is called, the mock engine:
+1. Checks the guard (`taskIsUnassigned`)
+2. Validates cross-domain condition (`$caller.skills containsAll $object.requiredSkills`)
+3. Transitions the state (`pending` → `in_progress`)
+4. Sets `assignedToId` on the Task
+5. Creates an Assignment record in the assignments collection
+6. Creates a TaskAuditEvent in the audit events collection
+7. Increments `activeTaskCount` on the worker's Caseload record
+8. Emits the `task.claimed` event
+
+If any `validate` effect fails, the transition is rejected with a 409 response explaining what failed.
+
+**Conditional effects (`when`):**
+
+```yaml
+# On the "complete" transition — only create a follow-up task if requested
+effects:
+  - create: Task
+    when: $request.createFollowUp == true
+    fields:
+      taskTypeCode: $object.followUpTaskType
+      applicationId: $object.applicationId
+      caseId: $object.caseId
+      status: pending
+    description: Create follow-up task if requested
+```
+
+**Lookup effects (`lookup`):**
+
+```yaml
+# On the "create" transition — look up SLA configuration to calculate deadline
+effects:
+  - lookup:
+      entity: SLAType
+      where: { code: $object.slaTypeCode }
+      bind: slaConfig
+    description: Load SLA configuration for this task type
+  - set:
+      dueDate: $now + $lookup.slaConfig.durationDays
+      slaInfo:
+        slaDeadline: $now + $lookup.slaConfig.durationDays
+        warningThresholdDays: $lookup.slaConfig.warningThresholdDays
+        clockStartDate: $now
+        slaStatus: on_track
+    description: Calculate SLA deadline from configuration
+```
+
+**Call effects (`call`):**
+
+```yaml
+# On the "start-verification" transition — call an external verification API
+effects:
+  - call:
+      service: $object.verificationSourceId
+      method: verify
+      payload:
+        dataPath: $object.dataPath
+        reportedValue: $object.reportedValue
+      bind: verificationResult
+    description: Call external verification source
+  - set:
+      sourceResult:
+        matchStatus: $call.verificationResult.matchStatus
+        sourceValue: $call.verificationResult.sourceValue
+        confidence: $call.verificationResult.confidence
+        retrievedAt: $now
+    description: Record verification result on task
+```
+
+In the mock server, `call` effects return canned responses defined in example data (e.g., `examples/verification-sources/irs-income.json`). In production, the adapter translates `call` effects to actual external API calls.
+
+### Rules artifact
+
+Rules are a separate YAML artifact for domains that need condition-based decisions — routing, assignment, prioritization, escalation, eligibility, or any other logic that evaluates context and produces an action. Rules use [JSON Logic](https://jsonlogic.com/) for conditions, which the mock server can evaluate directly (lightweight JS implementations exist).
+
+```yaml
+# rules/workflow-rules.yaml
+domain: workflow
+version: "1.0.0"
+
+# Context variables available in conditions
+context:
+  - task.*            # Task fields (taskTypeCode, programType, officeId, etc.)
+  - application.*     # Application data (household, income, etc.)
+  - case.*            # Case data (if case-level task)
+
+rules:
+  # Priority rules — evaluated first, set task priority
+  - name: Expedite households with young children
+    ruleType: priority
+    evaluationOrder: 1
+    conditions:
+      "<": [{ "var": "application.household.youngestChildAge" }, 6]
+    action:
+      targetPriority: expedited
+
+  - name: High priority when deadline within 5 days
+    ruleType: priority
+    evaluationOrder: 2
+    conditions:
+      "<=": [{ "var": "task.daysUntilDeadline" }, 5]
+    action:
+      targetPriority: high
+
+  # Assignment rules — evaluated after priority, route to queue/worker
+  - name: Route SNAP to County A queue
+    ruleType: assignment
+    evaluationOrder: 10
+    conditions:
+      and:
+        - { "==": [{ "var": "task.programType" }, "snap"] }
+        - { "==": [{ "var": "task.officeId" }, "county-a-id"] }
+    action:
+      strategy: specific_queue
+      targetQueueId: snap-county-a-queue
+      fallbackQueueId: general-intake-queue
+
+  - name: Skill-based assignment for appeals
+    ruleType: assignment
+    evaluationOrder: 20
+    conditions:
+      in: [{ "var": "task.taskTypeCode" }, ["appeal_review", "hearing_preparation"]]
+    action:
+      strategy: skill_match
+      fallbackQueueId: appeals-queue
+```
+
+**Assignment strategies:**
+
+| Strategy | Behavior |
+|----------|----------|
+| `specific_queue` | Route to `targetQueueId` |
+| `specific_worker` | Assign directly to `targetWorkerId` |
+| `round_robin` | Distribute evenly across queue/team members |
+| `least_loaded` | Assign to worker with lowest active caseload |
+| `skill_match` | Match `task.requiredSkills` against worker skills, then apply `least_loaded` among qualified workers |
+
+The mock server evaluates rules when `POST /workflow/tasks/:id/route` is called: it loads active rules in `evaluationOrder`, evaluates JSON Logic conditions against the task and its related context (application, case), and applies the first matching rule's action.
 
 ### Extensibility
 
@@ -214,6 +447,8 @@ Because the contract is declarative (YAML + OpenAPI), all changes are diffable a
 | Add a new event | Consumers that don't listen are unaffected |
 | Add an optional field to an event payload | Existing listeners ignore it |
 | Add a new guard (on a new transition) | New transitions don't affect existing paths |
+| Add a new effect to a transition | Side effects are backend concerns; frontend is unaffected |
+| Add a new rule | New rules only affect newly evaluated objects |
 
 **Breaking changes:**
 
@@ -224,8 +459,9 @@ Because the contract is declarative (YAML + OpenAPI), all changes are diffable a
 | Remove an event | Listeners depending on it break |
 | Remove or rename a field in an event payload | Listeners expecting the field break |
 | Change SLA behavior for a state | Runtime behavior changes; doesn't break structure but affects outcomes |
+| Remove or reorder rules | Changes behavior for newly evaluated objects |
 
-The state machine YAML includes a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes.
+The state machine YAML and rules YAML each include a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes.
 
 ---
 
@@ -233,14 +469,15 @@ The state machine YAML includes a `version` field. The validation script can dif
 
 ### What we provide to the vendor
 
-1. **Behavioral contract** — "your system must enforce these states, transitions, and guards"
-2. **Data schemas** — "objects look like this"
-3. **Event catalog** — "emit these events with these payloads on these transitions"
-4. **JSON Schema for the contract format** — so the vendor can validate their configuration
-5. **Validation script** — conformance verification
-6. **Example data** — for setup and testing
+1. **State machine YAML** — "your system must enforce these states, transitions, guards, and effects"
+2. **Rules YAML** (if applicable) — "your system must evaluate these conditions and apply these actions"
+3. **Data schemas** — "objects look like this"
+4. **Event catalog** — "emit these events with these payloads on these transitions"
+5. **JSON Schema for the contract formats** — so the vendor can validate their configuration
+6. **Validation script** — conformance verification
+7. **Example data** — for setup and testing
 
-The contract doubles as a **vendor evaluation checklist**: can this system support these transitions? These SLA behaviors? These event triggers? If a vendor can't satisfy the contract, you know before you buy.
+The contracts double as a **vendor evaluation checklist**: can this system support these transitions? These effects and cross-domain orchestration steps? These rule conditions and actions? These SLA behaviors? These event triggers? If a vendor can't satisfy the contracts, you know before you buy.
 
 ### How the transition works
 
@@ -274,11 +511,12 @@ The mock server is the development adapter. It exposes the same API surface the 
 
 | Artifact | Survives | Role after vendor selection |
 |----------|----------|----------------------------|
-| Behavioral contract (state machine) | Yes | Requirements doc, vendor evaluation, conformance verification |
-| JSON Schema for contract format | Yes | Format validation for future changes |
+| State machine YAML | Yes | Requirements doc, vendor evaluation, conformance verification |
+| Rules YAML | Yes | Decision logic the vendor must implement |
+| JSON Schema for contract formats | Yes | Format validation for future changes |
 | Data schemas (OpenAPI) | Yes | Data contract — the adapter maps vendor data to these schemas |
 | Event catalog | Yes | Integration contract — vendor must emit these events |
-| Validation script | Yes | Verifies vendor + adapter conform to the contract |
+| Validation script | Yes | Verifies vendor + adapter conform to the contracts |
 | Mock server | Retired | Replaced by vendor-specific adapter |
 | Example data | Partially | Useful for testing; may need vendor-specific seed format |
 
@@ -366,9 +604,30 @@ ApprovalOverdueEvent:
     pendingSince:
       type: string
       format: date-time
+
+# Audit record created by effects (cross-domain write target)
+ApprovalAuditEvent:
+  type: object
+  required: [id, requestId, action, performedById, occurredAt]
+  properties:
+    id:
+      type: string
+      format: uuid
+    requestId:
+      type: string
+      format: uuid
+    action:
+      type: string
+      enum: [approved, rejected, resubmitted]
+    performedById:
+      type: string
+      format: uuid
+    occurredAt:
+      type: string
+      format: date-time
 ```
 
-Event payload schemas are defined alongside the object schema but are independent — they carry the information relevant to the event, which may differ from the object's shape.
+Event payload schemas and effect target schemas are defined alongside the object schema. Event payloads carry information relevant to the event (which may differ from the object's shape). Effect targets like `ApprovalAuditEvent` are schemas for records that effects create — the mock server writes to these collections when effects fire.
 
 The mock server auto-discovers this spec and generates Object APIs: `GET /approvals/approval-requests`, `POST /approvals/approval-requests`, etc.
 
@@ -399,6 +658,17 @@ states:
         trigger: approve
         actors: [reviewer]
         guard: callerIsNotSubmitter
+        effects:
+          - set:
+              reviewedById: $caller.id
+            description: Record who approved
+          - create: ApprovalAuditEvent
+            fields:
+              requestId: $object.id
+              action: approved
+              performedById: $caller.id
+              occurredAt: $now
+            description: Record decision in audit trail
         event:
           name: approval.approved
           payload: ApprovalDecisionEvent
@@ -407,6 +677,17 @@ states:
         trigger: reject
         actors: [reviewer]
         guard: callerIsNotSubmitter
+        effects:
+          - set:
+              reviewedById: $caller.id
+            description: Record who rejected
+          - create: ApprovalAuditEvent
+            fields:
+              requestId: $object.id
+              action: rejected
+              performedById: $caller.id
+              occurredAt: $now
+            description: Record decision in audit trail
         event:
           name: approval.rejected
           payload: ApprovalDecisionEvent
@@ -427,6 +708,17 @@ states:
       - to: pending
         trigger: resubmit
         actors: [submitter]
+        effects:
+          - set:
+              reviewedById: null
+            description: Clear previous reviewer
+          - create: ApprovalAuditEvent
+            fields:
+              requestId: $object.id
+              action: resubmitted
+              performedById: $caller.id
+              occurredAt: $now
+            description: Record resubmission in audit trail
         event:
           name: approval.resubmitted
           payload: ApprovalResubmittedEvent
@@ -450,15 +742,17 @@ Each `trigger` becomes an Action API endpoint. The trigger name is appended to t
 | `reject` | `POST /approvals/approval-requests/:id/reject` |
 | `resubmit` | `POST /approvals/approval-requests/:id/resubmit` |
 
-**How guards are enforced:**
+**How guards and effects are enforced:**
 
 When `POST /approvals/approval-requests/:id/approve` is called, the engine:
 1. Looks up the `ApprovalRequest` by `:id`
 2. Checks the current state is `pending` (the state this transition is defined on)
 3. Checks the caller's role matches `actors: [reviewer]` (from auth context)
 4. Evaluates the `callerIsNotSubmitter` guard — compares `submittedById` on the object to `$caller.id` from auth context
-5. If all checks pass: updates status to `approved`, emits the `approval.approved` event
-6. If any check fails: returns 409 Conflict with an explanation (e.g., "cannot approve your own request" or "caller role 'submitter' is not in allowed actors [reviewer]")
+5. If all checks pass: transitions status to `approved`
+6. Executes effects: sets `reviewedById` on the object, creates an `ApprovalAuditEvent` record
+7. Emits the `approval.approved` event
+8. If any check fails: returns 409 Conflict with an explanation (e.g., "cannot approve your own request" or "caller role 'submitter' is not in allowed actors [reviewer]")
 
 **How actors are identified:**
 
@@ -477,7 +771,7 @@ curl -X POST /approvals/approval-requests/a1b2c3d4/approve \
 # → 409 Conflict: guard 'callerIsNotSubmitter' failed — submittedById (user-1) equals caller.id (user-1)
 ```
 
-### Step 3: Events, timeouts, and SLA tracking
+### Step 2b: Events, timeouts, and SLA tracking
 
 #### Event delivery
 
@@ -560,7 +854,9 @@ The mock server exposes SLA status on each object via an `_sla` field:
 
 In production, the vendor system typically provides its own SLA tracking. The adapter maps vendor SLA data to this same `_sla` shape so the frontend can display SLA status consistently.
 
-### Step 4: Add example data
+### Step 3: Add example data (and optional rules)
+
+If the domain needs condition-based decisions (routing, prioritization, etc.), add a rules YAML at this step. The approval example doesn't need rules, but a workflow domain would add `rules/workflow-rules.yaml` with priority and assignment rules (see [Rules artifact](#rules-artifact) for the format).
 
 ```json
 // openapi/examples/approvals/approval-requests.json
@@ -592,6 +888,8 @@ npm run validate
 # ✓ approval-lifecycle.yaml validates against JSON Schema
 # ✓ States [pending, approved, rejected] match ApprovalRequest.status enum
 # ✓ Event payload schemas resolve (ApprovalDecisionEvent, ApprovalResubmittedEvent, ApprovalOverdueEvent)
+# ✓ Effect target schemas resolve (ApprovalAuditEvent)
+# ✓ Effect field references are valid ($object.id, $caller.id exist in context)
 # ✓ Guard field references are valid (submittedById exists on ApprovalRequest)
 
 # Start mock server — all API types auto-generate
@@ -614,25 +912,29 @@ npm run mock:start
 
 ### File structure
 
-The resulting files follow a consistent pattern. Adding another behavior-shaped domain means creating the same three artifacts in the same locations:
+The resulting files follow a consistent pattern. Adding another behavior-shaped domain means creating the same artifacts in the same locations:
 
 ```
 state-machines/
-  approval-lifecycle.yaml           # Behavioral contract
-  approval-lifecycle.schema.json    # JSON Schema for the format (shared across all domains)
+  approval-lifecycle.yaml           # State machine (required for behavior-shaped domains)
+  state-machine.schema.json         # JSON Schema for state machine format (shared)
+
+rules/
+  workflow-rules.yaml               # Domain rules (optional, only if domain needs condition-based decisions)
+  rules.schema.json                 # JSON Schema for rules format (shared)
 
 openapi/
   domains/
     approvals/
       components/
-        schemas.yaml                # Data contract (ApprovalRequest)
+        schemas.yaml                # Data contract (ApprovalRequest + event/effect schemas)
 
 openapi/examples/
   approvals/
     approval-requests.json          # Example data for seeding
 ```
 
-No domain-specific handler code, no changes to the mock server. The same pattern applies to workflow management (Task, Queue, WorkflowRule with 9 states), notification campaigns (Campaign with states like `draft`, `scheduled`, `sending`, `delivered`), or any other domain with state transitions.
+No domain-specific handler code, no changes to the mock server. A domain that only needs a state machine (like approvals) omits the rules artifact. A domain that needs both (like workflow management) adds a rules file. The same pattern applies to workflow management (Task with 9 states + rules), notification campaigns (Campaign with states like `draft`, `scheduled`, `sending`, `delivered`), or any other domain with state transitions.
 
 ---
 
@@ -641,9 +943,11 @@ No domain-specific handler code, no changes to the mock server. The same pattern
 The generic infrastructure must be built before any specific domain can use it.
 
 **Phase 1: State machine format + tooling**
-- Define the JSON Schema for the state machine YAML format
-- Build the validation script (contract ↔ schema consistency checks)
-- Build the state machine engine for the mock server (auto-discovery, route generation, guard evaluation)
+- Define the JSON Schema for the state machine YAML format (states, transitions, guards, effects, events, SLA)
+- Define the JSON Schema for the rules YAML format (JSON Logic conditions, rule types, actions)
+- Build the validation script (state machine ↔ OpenAPI schema consistency, effect target resolution, rules context variable validation)
+- Build the state machine engine for the mock server (auto-discovery, route generation, guard evaluation, effect execution against shared persistence layer)
+- Build the rules engine for the mock server (JSON Logic evaluation, action execution)
 - Build event infrastructure (stored events via Object APIs, real-time delivery via SSE)
 - Build SLA tracking (clock state per object, `_sla` field on responses)
 - Build timeout trigger endpoint (`POST /mock/trigger-timeouts`)
@@ -651,8 +955,9 @@ The generic infrastructure must be built before any specific domain can use it.
 
 **Phase 2: First domain (workflow management)**
 - Define workflow state machines (task lifecycle, verification lifecycle)
-- Define workflow OpenAPI schemas (Task, Queue, WorkflowRule, etc.)
-- Add example data
-- Validate and test end-to-end
+- Define workflow rules (priority, assignment, escalation rules with JSON Logic)
+- Define workflow OpenAPI schemas (Task, Queue, WorkflowRule, Assignment, Caseload, TaskAuditEvent, etc.)
+- Add example data (including configuration data like TaskType, SLAType)
+- Validate and test end-to-end (transitions, effects, cross-domain writes, rule evaluation)
 
 Phase 1 is the investment. Phase 2 and every domain after it is just defining artifacts.
