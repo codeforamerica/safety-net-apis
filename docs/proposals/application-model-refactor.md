@@ -601,7 +601,7 @@ The build tooling produces these artifacts from the form definition YAML:
 |----------|--------|-----------------|
 | `form-definition.json` | Compiled from `forms/integrated-application.yaml` | The full form structure as importable JSON |
 | `form-types.ts` | Generated from `forms/form-definition.schema.json` | TypeScript types: `FormDefinition`, `Section`, `Question`, etc. |
-| `form-engine.ts` | Provided by `@safety-net-apis/tools` | Runtime functions: `getActiveSections()`, `evaluateCondition()`, `getFieldPath()` |
+| `form-engine.ts` | Provided by `@safety-net-apis/forms` | Runtime functions: `getActiveSections()`, `evaluateCondition()`, `getFieldPath()` |
 | Zodios clients | Generated from OpenAPI specs | Typed API calls: `api.createApplication()`, `api.updateMember()`, etc. |
 
 The form engine is a thin wrapper around [json-logic-js](https://github.com/jwadhams/json-logic-js) (3KB, zero dependencies) that adds form-specific helpers. It evaluates `showWhen` conditions, computes which sections are active for a member's programs, and resolves `conditionallyRequiredFor` logic. All evaluation happens client-side for responsive UI — no server round-trip needed to show/hide questions as the user types.
