@@ -14,6 +14,7 @@
 8. **[Adding a Behavior-Shaped Domain](#adding-a-behavior-shaped-domain)** — Step-by-step tutorial with worked example
 9. **[Domains with Complex Calculation Logic](#domains-with-complex-calculation-logic)** — Eligibility, tax, risk scoring — where the contract wraps an external engine
 10. **[Authoring Experience](#authoring-experience)** — Decision tables and spreadsheets for business users
+
 ---
 
 ## Context
@@ -104,6 +105,13 @@ Object APIs only:              Object + Action APIs:
                                  │ Actions        │
                                  │ (by ruleType)  │
                                  └────────────────┘
+                                       +
+                                 Metrics YAML (optional)
+                                 ┌────────────────┐
+                                 │ Metric names   │
+                                 │ Labels         │
+                                 │ Targets        │
+                                 └────────────────┘
 ```
 
 ---
@@ -136,10 +144,11 @@ The adapter wraps a vendor system (workflow engine, rules engine) and exposes bo
                     Action APIs (POST /tasks/:id/claim)
 ```
 
-The adapter must satisfy two or three contracts:
+The adapter must satisfy two or more contracts:
 - **OpenAPI spec** — defines the Object API surface (schemas, endpoints, parameters)
 - **State machine YAML** — defines valid state transitions, guards, effects, and events for Action APIs
 - **Rules YAML** (if the domain uses rules) — defines condition-based decisions (routing, assignment, priority, etc.)
+- **Metrics YAML** (if the domain needs monitoring) — defines what to measure (metric names, labels, targets)
 
 A validation script verifies that the contract artifacts are internally consistent (state machine states match OpenAPI enums, effect targets reference real schemas, event payloads resolve, rule context variables exist, etc.). Conformance testing (verifying the production backend actually satisfies the contracts) is done via integration test suites. When you switch vendors, the contracts tell you exactly what the new backend must do — state transitions, guard conditions, orchestration effects, SLA behavior, event triggers, and rule-based decisions — that an OpenAPI spec alone can't express.
 
@@ -302,6 +311,7 @@ The mock server executes all effect types using its shared in-memory persistence
 - `$now` — current timestamp
 - `$request` — the request body (for accessing fields sent with the action)
 - `$lookup.*` — values bound by a preceding `lookup` effect
+- `$query.*` — values bound by a preceding `query` effect
 - `$call.*` — values bound by a preceding `call` effect
 
 **Example (claiming a task):**
@@ -928,7 +938,7 @@ curl -X POST /approvals/approval-requests/a1b2c3d4/approve \
 # → 409 Conflict: guard 'callerIsNotSubmitter' failed — submittedById (user-1) equals caller.id (user-1)
 ```
 
-### Step 2b: Events, timeouts, and SLA tracking
+### Step 3: Events, timeouts, and SLA tracking
 
 #### Event delivery
 
@@ -1011,7 +1021,7 @@ The mock server exposes SLA status on each object via an `_sla` field:
 
 In production, the vendor system typically provides its own SLA tracking. The adapter maps vendor SLA data to this same `_sla` shape so the frontend can display SLA status consistently.
 
-### Step 3: Add example data (and optional rules)
+### Step 4: Add example data (and optional rules)
 
 If the domain needs condition-based decisions (routing, prioritization, etc.), add a rules YAML at this step. The approval example doesn't need rules, but a workflow domain would add `rules/workflow-rules.yaml` with priority and assignment rules (see [Rules artifact](#rules-artifact) for the format).
 
@@ -1037,7 +1047,7 @@ If the domain needs condition-based decisions (routing, prioritization, etc.), a
 ]
 ```
 
-### Step 4: Validate and run
+### Step 5: Validate and run
 
 ```bash
 # Validate contract consistency
@@ -1268,4 +1278,3 @@ The "Effects" column uses plain English descriptions. The conversion script maps
 The split is intentional: business users define **what** should happen (which transitions exist, which rules apply, who can do what) in spreadsheet format. Developers define **how** it's implemented (effect mechanics, guard logic, schema structure) in YAML. The conversion scripts bridge the two, and the validation script ensures they're consistent.
 
 If a visual tool becomes valuable, the state machine YAML can be translated to XState format for [Stately.ai's visual editor](https://stately.ai/), which provides a drag-and-drop state machine designer. This would be a read/export capability rather than the primary authoring path, since the YAML includes domain-specific fields (SLA behavior, effects, actor restrictions) that XState doesn't natively support.
-
