@@ -14,8 +14,6 @@
 8. **[Adding a Behavior-Shaped Domain](#adding-a-behavior-shaped-domain)** — Step-by-step tutorial with worked example
 9. **[Domains with Complex Calculation Logic](#domains-with-complex-calculation-logic)** — Eligibility, tax, risk scoring — where the contract wraps an external engine
 10. **[Authoring Experience](#authoring-experience)** — Decision tables and spreadsheets for business users
-11. **[Implementation Roadmap](#implementation-roadmap)** — Phase 1 (infrastructure) and Phase 2 (first domain)
-
 ---
 
 ## Context
@@ -1271,32 +1269,3 @@ The split is intentional: business users define **what** should happen (which tr
 
 If a visual tool becomes valuable, the state machine YAML can be translated to XState format for [Stately.ai's visual editor](https://stately.ai/), which provides a drag-and-drop state machine designer. This would be a read/export capability rather than the primary authoring path, since the YAML includes domain-specific fields (SLA behavior, effects, actor restrictions) that XState doesn't natively support.
 
----
-
-## Implementation Roadmap
-
-The generic infrastructure must be built before any specific domain can use it.
-
-**Phase 1: Contract format + tooling**
-- Define the JSON Schema for the state machine YAML format (states, transitions, guards, effects, events, SLA, onCreate, bulkActions)
-- Define the JSON Schema for the rules YAML format (JSON Logic conditions, rule types including alerts, actions)
-- Define the JSON Schema for the metrics YAML format (metric names, labels, targets)
-- Build the validation script (state machine ↔ OpenAPI schema consistency, effect target resolution, rules context variable validation, metric label validation)
-- Build the state machine engine for the mock server (auto-discovery, route generation, guard evaluation, effect execution against shared persistence layer)
-- Build the rules engine for the mock server (JSON Logic evaluation, action execution)
-- Build event infrastructure (stored events via Object APIs, real-time delivery via SSE)
-- Build SLA tracking (clock state per object, `_sla` field on responses)
-- Build timeout trigger endpoint (`POST /mock/trigger-timeouts`)
-- Build decision table → YAML conversion scripts (spreadsheet to rules YAML, spreadsheet to state machine YAML)
-- Add to `npm run validate` and `npm run mock:start` pipelines
-
-**Phase 2: First domain (workflow management)**
-- Define workflow state machines (task lifecycle, verification lifecycle)
-- Define workflow rules (priority, assignment, escalation, alert rules)
-- Define workflow metrics (task completion time, queue depth, SLA breach rate, etc.)
-- Define workflow OpenAPI schemas (Task, Queue, WorkflowRule, Assignment, Caseload, TaskAuditEvent, etc.)
-- Create decision tables for workflow rules, state transitions, and metrics (business-readable source)
-- Add example data (including configuration data like TaskType, SLAType)
-- Validate and test end-to-end (transitions, effects, cross-domain writes, rule evaluation)
-
-Phase 1 is the investment. Phase 2 and every domain after it is defining artifacts — ideally starting from decision tables authored by domain experts.
