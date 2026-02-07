@@ -97,7 +97,7 @@ States may add sections via overlay (e.g., a state-specific program with data re
 | Resource | Scope | Why it's a resource | Example path |
 |----------|-------|---------------------|-------------|
 | **Application** | top-level | Container for the entire application | `GET/POST /applications` |
-| **ApplicationMember** | per application | Links a person to an application; tracks which programs they're applying for | `GET/POST /applications/:appId/members` |
+| **ApplicationMember** | per application | Links a person to an application; each member has their own `programsApplyingFor` list (e.g., Jane applies for SNAP + Medicaid, her child applies for Medicaid only). This drives which sections are required, which questions appear, and which program relevance annotations are shown for that member. | `GET/POST /applications/:appId/members` |
 | **Income** | per member | 0-N records per person (multiple jobs, self-employment, unearned sources). Caseworker adds/removes individual records. | `GET/POST /applications/:appId/members/:memberId/income` |
 | **Asset** | per member | 0-N records per person (bank accounts, vehicles, properties, insurance policies). Each is an independent item. | `GET/POST /applications/:appId/members/:memberId/assets` |
 | **Expense** | per member or per household | 0-N records. Member-level (dependent care, medical, child support) and household-level (shelter, utilities). | `GET/POST /applications/:appId/expenses` |
@@ -300,7 +300,9 @@ The form definition sits alongside the other contract artifacts:
 
 The form definition is the **data collection contract**. Any frontend — web app, mobile app, in-person intake tool — interprets the form definition to present the right questions in the right order with the right conditions. States customize the form via overlays (add questions, change conditions, add sections).
 
-The mock server could serve the form definition via a `GET /forms/integrated-application` endpoint and evaluate conditions for a given application state via `POST /forms/integrated-application/evaluate` (returns which sections and questions are active given the current answers and selected programs).
+Section-level `requiredForPrograms` is evaluated against each member's `programsApplyingFor`. If Jane is applying for SNAP + Medicaid, she sees sections required by either program. If her child is applying for Medicaid only, the child sees only Medicaid-required sections. Program relevance annotations are also scoped per member — when reviewing the child's income, only Medicaid relevance is shown since that's the only program the child is applying for.
+
+The mock server could serve the form definition via a `GET /forms/integrated-application` endpoint and evaluate conditions for a given application state via `POST /forms/integrated-application/evaluate` (returns which sections and questions are active given the current answers and each member's selected programs).
 
 ### What the form definition does NOT do
 
@@ -358,10 +360,10 @@ SectionReview:
 
 ### Review workflow
 
-1. Application is submitted — system creates a `SectionReview` record (status: `pending`) for each required section per member based on the form definition's program requirements
-2. Caseworker opens the application — sees all sections with review status
-3. Caseworker reviews "Income for Jane" — marks it `approved` or `needs_correction`
-4. When all required sections are approved, the application can proceed to eligibility determination
+1. Application is submitted — system creates `SectionReview` records based on each member's `programsApplyingFor`. Jane (SNAP + Medicaid) gets reviews for all SNAP-required and Medicaid-required sections. Her child (Medicaid only) gets reviews only for Medicaid-required sections. Household-level sections (housing, household composition) get one review record each.
+2. Caseworker opens the application — sees all members with their required sections and review status
+3. Caseworker reviews "Income for Jane" — sees program relevance annotations for SNAP and Medicaid (Jane's programs). Reviews "Income for Child" — sees only Medicaid relevance (child's program). Marks each `approved` or `needs_correction`.
+4. When all required sections for all members are approved, the application can proceed to eligibility determination
 
 Because review tracking is section-based and sections are shared across programs, a caseworker reviews "Income for Jane" once — that review covers Jane's income for SNAP, Medicaid, and any other program that requires income data.
 
@@ -369,7 +371,7 @@ Because review tracking is section-based and sections are shared across programs
 
 While the caseworker reviews a section once, the review UI uses the form definition's program relevance annotations to show which data points matter for which programs. This helps the caseworker understand the impact of what they're reviewing without duplicating the review itself.
 
-The caseworker can optionally filter or highlight by program ("show me what matters for SNAP") while still working from the single canonical dataset. The `SectionReview` approval covers all programs — there's no need for per-program review records.
+The caseworker can optionally filter or highlight by program ("show me what matters for SNAP") while still working from the single canonical dataset. The `SectionReview` approval covers all of that member's programs — there's no need for per-program review records. Since each member may be applying for different programs, the relevance annotations shown during review are scoped to that member's `programsApplyingFor`.
 
 ---
 
