@@ -65,8 +65,9 @@ A generic CRUD adapter loses most of this value. The adapter pattern still appli
 - **State machine YAML** (required) — valid states, transitions, guards, effects, timeouts, SLA behavior, and event catalog
 - **Rules YAML** (optional) — declarative rules with JSON Logic conditions and actions. Rule types include assignment, priority, eligibility, escalation, alert, and more. Only needed when the domain involves condition-based decisions beyond what guards express (e.g., routing objects to queues based on context, setting priority based on application data, alert thresholds for operational monitoring).
 - **Metrics YAML** (optional) — defines what to measure for operational monitoring. Metric names, labels, and targets — not implementation details (Prometheus vs. Datadog is a deployment concern).
+- **Form definition YAML** (optional) — defines structured data collection: sections, questions, conditional logic (JSON Logic), program requirements, and program relevance annotations. Only needed for domains with a structured intake process (e.g., eligibility applications, enrollment forms) where the questionnaire itself has behavior — conditional branching, program-dependent sections, validation rules. See the [eligibility data model proposal](eligibility-data-model.md) for the detailed specification.
 
-Every behavior-shaped domain needs a state machine — that's what makes it behavior-shaped. Rules are an additional artifact for domains that need condition-based decisions evaluated against broader context. Metrics are an additional artifact for domains that need operational monitoring. For example, workflow management needs all three (state machine + rules + metrics). A simple approval process may only need the state machine.
+Every behavior-shaped domain needs a state machine — that's what makes it behavior-shaped. Rules are an additional artifact for domains that need condition-based decisions evaluated against broader context. Metrics are an additional artifact for domains that need operational monitoring. Form definitions are an additional artifact for domains with structured data collection. For example, workflow management needs state machine + rules + metrics. An eligibility intake domain needs state machine + form definition. A simple approval process may only need the state machine.
 
 **Contract terminology:**
 - **State** — a status an object can be in (e.g., `pending`, `in_progress`, `completed`)
@@ -112,6 +113,14 @@ Object APIs only:              Object + Action APIs:
                                  │ Labels         │
                                  │ Targets        │
                                  └────────────────┘
+                                       +
+                                 Form Definition YAML (optional)
+                                 ┌────────────────┐
+                                 │ Sections       │
+                                 │ Questions      │
+                                 │ Conditions     │
+                                 │ Program req's  │
+                                 └────────────────┘
 ```
 
 ---
@@ -149,6 +158,7 @@ The adapter must satisfy two or more contracts:
 - **State machine YAML** — defines valid state transitions, guards, effects, and events for Action APIs
 - **Rules YAML** (if the domain uses rules) — defines condition-based decisions (routing, assignment, priority, etc.)
 - **Metrics YAML** (if the domain needs monitoring) — defines what to measure (metric names, labels, targets)
+- **Form definition YAML** (if the domain has structured intake) — defines data collection: sections, questions, conditional logic, program requirements
 
 A validation script verifies that the contract artifacts are internally consistent (state machine states match OpenAPI enums, effect targets reference real schemas, event payloads resolve, rule context variables exist, etc.). Conformance testing (verifying the production backend actually satisfies the contracts) is done via integration test suites. When you switch vendors, the contracts tell you exactly what the new backend must do — state transitions, guard conditions, orchestration effects, SLA behavior, event triggers, and rule-based decisions — that an OpenAPI spec alone can't express.
 
@@ -170,6 +180,8 @@ Both API types are designed so that adding a new domain to the mock server is de
 
 The mock server's in-memory database is shared across all domains, so effects that reference entities from other domains (creating an Assignment when claiming a Task, updating a Caseload) work naturally — the mock has all the schemas loaded and can write to any collection.
 
+**Form definitions:** If a domain includes a form definition YAML, the mock server serves the form structure via `GET /forms/:formId` and evaluates conditions for a given application state via `POST /forms/:formId/evaluate` (returns which sections and questions are active given current answers and selected programs). This enables frontend development against the form contract without a real form engine.
+
 The state machine engine is domain-agnostic. Adding a second domain with Action APIs (e.g., notification campaigns with states like `draft`, `scheduled`, `sending`, `delivered`) follows the same pattern: define the state machine YAML and data schemas, and the mock server generates the endpoints with enforcement. No new handler code is needed.
 
 ## What States Get From This Project
@@ -184,6 +196,7 @@ This project provides contracts and development tooling. States build their own 
 | State machine YAML | Define the Action API surface (states, transitions, guards, effects, events) | Yes — as behavioral requirements |
 | Rules YAML | Define condition-based decisions: routing, assignment, priority, alerts (JSON Logic) | Yes — as behavioral requirements (if applicable) |
 | Metrics YAML | Define what to measure: metric names, labels, targets | Yes — as monitoring requirements (if applicable) |
+| Form definition YAML | Define structured data collection: sections, questions, conditional logic, program requirements | Yes — as data collection requirements (if applicable) |
 | Mock server | Frontend development and integration testing before a real backend exists | No — replaced by the state's production backend |
 | Validation script | Verify that the contract artifacts are internally consistent (state machine ↔ OpenAPI schemas, effects ↔ entity schemas, rules ↔ context variables) | Yes — run in CI to catch contract mismatches |
 | Example data | Seed the mock server; useful for testing production backends | Partially |
@@ -614,6 +627,7 @@ Because the contract is declarative (YAML + OpenAPI), all changes are diffable a
 | Add a new rule | New rules only affect newly evaluated objects |
 | Add a new metric | Informational; doesn't affect behavior |
 | Add an alert rule | Alerts are advisory; don't affect transitions |
+| Add a new form section or question | New questions are optional until required; existing flows unaffected |
 
 **Breaking changes:**
 
@@ -625,8 +639,9 @@ Because the contract is declarative (YAML + OpenAPI), all changes are diffable a
 | Remove or rename a field in an event payload | Listeners expecting the field break |
 | Change SLA behavior for a state | Runtime behavior changes; doesn't break structure but affects outcomes |
 | Remove or reorder rules | Changes behavior for newly evaluated objects |
+| Remove a form question or change conditions | Frontends expecting the question break; condition changes alter intake flow |
 
-The state machine YAML and rules YAML each include a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes.
+The state machine YAML, rules YAML, and form definition YAML each include a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes.
 
 ---
 
@@ -637,11 +652,12 @@ The state machine YAML and rules YAML each include a `version` field. The valida
 1. **State machine YAML** — "your system must enforce these states, transitions, guards, and effects"
 2. **Rules YAML** (if applicable) — "your system must evaluate these conditions and apply these actions"
 3. **Metrics YAML** (if applicable) — "your system must expose these metrics"
-4. **Data schemas** — "objects look like this"
-5. **Event catalog** — "emit these events with these payloads on these transitions"
-6. **JSON Schema for the contract formats** — so the vendor can validate their configuration
-7. **Validation script** — conformance verification
-8. **Example data** — for setup and testing
+4. **Form definition YAML** (if applicable) — "your intake process must collect this data with these conditions"
+5. **Data schemas** — "objects look like this"
+6. **Event catalog** — "emit these events with these payloads on these transitions"
+7. **JSON Schema for the contract formats** — so the vendor can validate their configuration
+8. **Validation script** — conformance verification
+9. **Example data** — for setup and testing
 
 The contracts double as a **vendor evaluation checklist**: can this system support these transitions? These effects and cross-domain orchestration steps? These rule conditions and actions? These SLA behaviors? These event triggers? These operational metrics? If a vendor can't satisfy the contracts, you know before you buy.
 
@@ -680,6 +696,7 @@ The mock server is the development adapter. It exposes the same API surface the 
 | State machine YAML | Yes | Requirements doc, vendor evaluation, conformance verification |
 | Rules YAML | Yes | Decision logic the vendor must implement |
 | Metrics YAML | Yes | Monitoring requirements — vendor must expose these metrics |
+| Form definition YAML | Yes | Data collection requirements — intake process must follow this structure |
 | JSON Schema for contract formats | Yes | Format validation for future changes |
 | Data schemas (OpenAPI) | Yes | Data contract — the adapter maps vendor data to these schemas |
 | Event catalog | Yes | Integration contract — vendor must emit these events |
@@ -1097,6 +1114,10 @@ metrics/
   workflow-metrics.yaml             # Metric definitions (optional, only if domain needs monitoring)
   metrics.schema.json               # JSON Schema for metrics format (shared)
 
+forms/
+  integrated-application.yaml      # Form definition (optional, only if domain has structured intake)
+  form-definition.schema.json      # JSON Schema for form definition format (shared)
+
 openapi/
   domains/
     approvals/
@@ -1108,7 +1129,7 @@ openapi/examples/
     approval-requests.json          # Example data for seeding
 ```
 
-No domain-specific handler code, no changes to the mock server. A domain that only needs a state machine (like approvals) omits the rules artifact. A domain that needs both (like workflow management) adds a rules file. The same pattern applies to workflow management (Task with 9 states + rules), notification campaigns (Campaign with states like `draft`, `scheduled`, `sending`, `delivered`), or any other domain with state transitions.
+No domain-specific handler code, no changes to the mock server. A domain that only needs a state machine (like approvals) omits the rules artifact. A domain that needs both (like workflow management) adds a rules file. A domain with structured data collection (like eligibility intake) adds a form definition file. The same pattern applies to workflow management (Task with 9 states + rules), notification campaigns (Campaign with states like `draft`, `scheduled`, `sending`, `delivered`), eligibility intake (Application with state machine + form definition), or any other domain with state transitions.
 
 ---
 
