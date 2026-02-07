@@ -1104,6 +1104,118 @@ effects:
 
 ---
 
+## Domains with Complex Calculation Logic
+
+Some behavior-shaped domains involve **calculation logic** that goes beyond what the rules artifact is designed to express. Eligibility determination is the clearest example: determining SNAP, Medicaid, or TANF eligibility involves multi-step calculations (gross income tests, net income tests, deductions, benefit amount formulas), parameterized lookup tables (federal poverty levels by household size, maximum benefits by state), cross-program dependencies (categorical eligibility), rule explanation/reasoning traces for audits and appeals, and temporally versioned rules (January applications use January thresholds).
+
+The rules artifact handles condition → action decisions well (route this task to that queue, set this priority). But eligibility calculation is closer to a formula engine than a condition evaluator. Trying to express SNAP benefit calculations in JSON Logic would be unreadable and would duplicate what purpose-built tools already do.
+
+### What the architecture covers
+
+The contract still defines the **determination lifecycle** and **input/output shape**:
+
+- **State machine** — determination lifecycle (pending → in_review → approved / denied → appealed → redetermined), with guards (reviewer can't determine own application), SLA tracking (30-day SNAP, 45-day Medicaid, 7-day expedited), and audit trail effects
+- **OpenAPI schemas** — EligibilityRequest (inputs: application data, household, income, requested programs) and EligibilityResult (outputs: determination per program, benefit amounts, reasoning trace)
+- **Rules** — simple eligibility conditions can still use the rules artifact (age requirements, residency checks, categorical eligibility triggers)
+- **Metrics** — determination processing time, approval rates, backlog counts
+
+### What lives outside the contract
+
+The **calculation logic** — how to compute net income, apply deductions, look up thresholds, calculate benefit amounts, and produce a reasoning trace — lives in a dedicated calculation engine. The contract references it via a `call` effect:
+
+```yaml
+# state-machines/eligibility-determination.yaml
+states:
+  in_review:
+    transitions:
+      - to: determined
+        trigger: evaluate
+        actors: [caseworker, system]
+        effects:
+          - call:
+              service: eligibility-engine
+              method: evaluate
+              payload:
+                applicationId: $object.applicationId
+                householdId: $object.householdId
+                programs: $object.requestedPrograms
+                asOfDate: $object.applicationDate
+              bind: determination
+            description: Evaluate eligibility using program rules engine
+          - set:
+              results: $call.determination.results
+              overallStatus: $call.determination.overallStatus
+            description: Record determination results
+          - create: EligibilityAuditEvent
+            fields:
+              requestId: $object.id
+              action: evaluated
+              performedById: $caller.id
+              reasoningTrace: $call.determination.reasoning
+              occurredAt: $now
+            description: Record determination with full reasoning trace
+        event:
+          name: eligibility.determined
+          payload: EligibilityDeterminedEvent
+```
+
+The contract defines:
+- **What goes in** — the EligibilityRequest schema (application data, household, programs)
+- **What comes out** — the EligibilityResult schema (per-program determination, benefit amounts, reasoning trace)
+- **When it happens** — the state machine lifecycle and SLA requirements
+- **How it's audited** — effects creating audit records with reasoning traces
+
+The contract does NOT define:
+- **How calculations work** — deduction formulas, income tests, benefit tables
+- **What thresholds apply** — federal poverty levels, state-specific limits
+- **How rules are versioned** — temporal rule management is the engine's concern
+
+### Calculation engine options
+
+| Engine | Strengths | Considerations |
+|--------|-----------|----------------|
+| [OpenFisca](https://openfisca.org/) | Purpose-built for benefit calculation, open source, used by governments internationally | Python-based, learning curve for rule authoring |
+| State-maintained rules repository | Rules authored by policy staff, version-controlled | Must be built or procured |
+| Spreadsheet model | Familiar to policy analysts, easy to audit | Harder to integrate programmatically |
+| Commercial rules engine (Drools, etc.) | Enterprise features, explanation capabilities | Vendor dependency (the kind this project tries to avoid) |
+
+The mock server handles `call` effects by returning canned responses from example data. For eligibility, this means pre-defined determination results for test scenarios:
+
+```json
+// examples/eligibility/determination-responses.json
+{
+  "scenario": "snap-eligible-household-of-4",
+  "results": [
+    {
+      "program": "snap",
+      "status": "approved",
+      "monthlyBenefit": 493,
+      "reasoning": [
+        "Gross income test: $2,100/mo vs $2,430 threshold (185% FPL for HH of 4) — PASS",
+        "Net income test: $1,600/mo vs $1,868 threshold (100% FPL for HH of 4) — PASS",
+        "Benefit: $973 max - ($1,600 × 0.30) = $493/mo"
+      ]
+    }
+  ]
+}
+```
+
+This gives frontends realistic determination data during development without requiring the actual calculation engine.
+
+### Where the boundary is
+
+This pattern — contract defines lifecycle + inputs/outputs, external engine handles calculation — applies to any domain where the core logic is **computational** rather than **transitional**:
+
+| Domain | State machine handles | External engine handles |
+|--------|----------------------|------------------------|
+| Eligibility determination | Determination lifecycle, SLA, audit trail | Benefit calculations, income tests, program rules |
+| Tax calculation | Filing lifecycle, submission workflow | Tax computation, deduction logic, bracket lookups |
+| Risk scoring | Assessment lifecycle, review workflow | Scoring models, factor weighting, threshold evaluation |
+
+The contract architecture doesn't try to replace these engines. It wraps them — defining the lifecycle around the calculation and the shape of inputs/outputs so the frontend and adapter are portable even if the calculation engine changes.
+
+---
+
 ## Authoring Experience
 
 The YAML and JSON Logic formats are developer artifacts. Business users — policy analysts, program managers, supervisors — need to be able to define and review state machines and rules without writing YAML or JSON Logic directly.
