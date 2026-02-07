@@ -154,6 +154,7 @@ A **form definition** is a new contract artifact type alongside state machines, 
 domain: intake
 version: "1.0.0"
 title: Integrated Benefits Application
+defaultLocale: en
 
 sections:
   - id: identity
@@ -313,6 +314,70 @@ The mock server could serve the form definition via a `GET /forms/integrated-app
 - **Rendering** — it defines structure and logic, not layout, styling, or UX. A section with 3 questions could be rendered as a single page, a multi-step wizard, or a paper form.
 - **Storage** — answers are stored via the data model APIs (POST income records, PATCH member fields), not through the form engine.
 - **Determination** — the form collects data; the eligibility system evaluates it.
+
+### Translations
+
+The form definition uses a default locale for labels and descriptions. Translation files provide overrides per locale, keyed by section and question ID:
+
+```yaml
+# forms/translations/integrated-application.es.yaml
+locale: es
+sections:
+  identity:
+    title: Información Personal
+    questions:
+      name:
+        label: "¿Cuál es su nombre legal completo?"
+      dateOfBirth:
+        label: "¿Cuál es su fecha de nacimiento?"
+      ssn:
+        label: "¿Cuál es su número de Seguro Social?"
+  citizenship:
+    title: Ciudadanía e Inmigración
+    questions:
+      citizenshipStatus:
+        label: "¿Cuál es su estado de ciudadanía?"
+        options:
+          us_citizen: Ciudadano estadounidense
+          us_national: Nacional estadounidense
+          permanent_resident: Residente permanente
+          qualified_noncitizen: No ciudadano calificado
+          other_noncitizen: Otro no ciudadano
+      immigrationDocumentType:
+        label: "¿Qué tipo de documento de inmigración tiene?"
+```
+
+Translation files follow a consistent pattern: `forms/translations/{form-id}.{locale}.yaml`. The mock server merges translations at request time based on an `Accept-Language` header or `?locale=es` parameter. Enum option labels, section titles, question labels, and descriptions are all translatable. Validation messages and error text follow the same pattern.
+
+States can add translations via overlay — both for new languages and for overriding default translations (e.g., adjusting terminology to match a state's preferred phrasing).
+
+### Authoring experience
+
+Form definitions can be authored as a pair of tables — one for sections and one for questions:
+
+**Section table:**
+
+| Section | Scope | Required For | Description |
+|---------|-------|-------------|-------------|
+| Identity | per member | SNAP, Medicaid, TANF | Name, DOB, SSN, demographics |
+| Citizenship | per member | SNAP, Medicaid, TANF | Citizenship status, immigration documents |
+| Income | per member | SNAP, Medicaid, TANF | Employment, self-employment, unearned income |
+| Tax Filing | per member | Medicaid | Filing status, dependents, MAGI deductions |
+| Housing | per household | SNAP | Address, rent/mortgage, utilities |
+
+**Question table (per section):**
+
+| Section | Question ID | Label | Type | Required | Show When | Programs |
+|---------|------------|-------|------|----------|-----------|----------|
+| Identity | name | What is your full legal name? | name | yes | — | all |
+| Identity | dateOfBirth | What is your date of birth? | date | yes | — | all |
+| Identity | ssn | What is your Social Security number? | ssn | yes | — | all |
+| Citizenship | citizenshipStatus | What is your citizenship status? | enum | yes | — | all |
+| Citizenship | immigrationDocumentType | What type of immigration document do you have? | enum | no | status != us_citizen | all |
+| Tax Filing | willFileTaxes | Will you file a federal tax return? | boolean | yes | — | Medicaid |
+| Tax Filing | filingJointly | Will you file jointly with your spouse? | boolean | no | willFileTaxes = yes | Medicaid |
+
+The "Show When" column uses plain English conditions. A conversion script maps these to JSON Logic. The "Programs" column populates `relevantToPrograms`. Translations are authored in a separate spreadsheet with columns for each locale.
 
 ---
 
