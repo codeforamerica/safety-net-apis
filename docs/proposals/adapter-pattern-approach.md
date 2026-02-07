@@ -2,6 +2,21 @@
 
 **Status:** Draft
 
+**Sections:**
+
+1. **[Context](#context)** — Data-shaped vs. behavior-shaped systems and why the contract approach differs
+2. **[API Types](#api-types)** — Object APIs (CRUD) and Action APIs (state transitions), contract artifacts for each
+3. **[How the Adapter Works](#how-the-adapter-works)** — Adapter pattern for both API types
+4. **[Mock Server Extensibility](#mock-server-extensibility)** — Declarative domain addition, no handler code
+5. **[What States Get From This Project](#what-states-get-from-this-project)** — Contracts and tooling, not a runtime framework
+6. **[Behavioral Contract Details](#behavioral-contract-details)** — State machine format, effects, rules, metrics, extensibility
+7. **[Vendor Handoff](#vendor-handoff)** — What we provide, what survives vendor selection
+8. **[Adding a Behavior-Shaped Domain](#adding-a-behavior-shaped-domain)** — Step-by-step tutorial with worked example
+9. **[Known Extensions Needed](#known-extensions-needed)** — Five bounded format additions for full workflow coverage
+10. **[Domains with Complex Calculation Logic](#domains-with-complex-calculation-logic)** — Eligibility, tax, risk scoring — where the contract wraps an external engine
+11. **[Authoring Experience](#authoring-experience)** — Decision tables and spreadsheets for business users
+12. **[Implementation Roadmap](#implementation-roadmap)** — Phase 1 (infrastructure) and Phase 2 (first domain)
+
 ---
 
 ## Context
