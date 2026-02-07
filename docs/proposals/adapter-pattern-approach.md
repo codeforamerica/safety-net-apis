@@ -9,7 +9,7 @@
 3. **[How the Adapter Works](#how-the-adapter-works)** — Adapter pattern for both API types
 4. **[Mock Server Extensibility](#mock-server-extensibility)** — Declarative domain addition, no handler code
 5. **[What States Get From This Project](#what-states-get-from-this-project)** — Contracts and tooling, not a runtime framework
-6. **[Behavioral Contract Details](#behavioral-contract-details)** — State machine format, effects, rules, metrics, extensibility
+6. **[Behavioral Contract Details](#behavioral-contract-details)** — State machine format, effects, rules, metrics, form definition, extensibility
 7. **[Vendor Handoff](#vendor-handoff)** — What we provide, what survives vendor selection
 8. **[Adding a Behavior-Shaped Domain](#adding-a-behavior-shaped-domain)** — Step-by-step tutorial with worked example
 9. **[Domains with Complex Calculation Logic](#domains-with-complex-calculation-logic)** — Eligibility, tax, risk scoring — where the contract wraps an external engine
@@ -135,12 +135,10 @@ The adapter wraps a vendor's data store with a standard interface defined by the
 [Frontend] → [Adapter] → [Vendor/DB]
                  ↑
               Object APIs (GET /tasks, POST /tasks)
-
 ```
 
 The adapter must satisfy one contract:
 - **OpenAPI spec** — defines the Object API surface (schemas, endpoints, parameters)
-
 
 ### For Action APIs
 
@@ -807,7 +805,7 @@ Because the contract is declarative (YAML + OpenAPI), all changes are diffable a
 | Remove or reorder rules | Changes behavior for newly evaluated objects |
 | Remove a form question or change conditions | Frontends expecting the question break; condition changes alter intake flow |
 
-The state machine YAML, rules YAML, and form definition YAML each include a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes.
+All contract artifacts (state machine YAML, rules YAML, metrics YAML, and form definition YAML) include a `version` field. The validation script can diff two versions and report breaking vs. non-breaking changes.
 
 ---
 
@@ -1298,7 +1296,7 @@ openapi/examples/
     approval-requests.json          # Example data for seeding
 ```
 
-No domain-specific handler code, no changes to the mock server. A domain that only needs a state machine (like approvals) omits the rules artifact. A domain that needs both (like workflow management) adds a rules file. A domain with structured data collection (like eligibility intake) adds a form definition file. The same pattern applies to workflow management (Task with 9 states + rules), notification campaigns (Campaign with states like `draft`, `scheduled`, `sending`, `delivered`), eligibility intake (Application with state machine + form definition), or any other domain with state transitions.
+No domain-specific handler code, no changes to the mock server. A domain that only needs a state machine (like approvals) omits the optional artifacts. A domain that needs condition-based decisions (like workflow management) adds a rules file. A domain that needs operational monitoring adds a metrics file. A domain with structured data collection (like eligibility intake) adds a form definition file. The same pattern applies to workflow management (Task with 9 states + rules + metrics), notification campaigns (Campaign with states like `draft`, `scheduled`, `sending`, `delivered`), eligibility intake (Application with state machine + form definition), or any other domain with state transitions.
 
 ---
 
