@@ -100,6 +100,43 @@
     .proposal-item .header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
     .proposal-item .meta { font-size: 10px; color: #888; }
 
+    .required-badge {
+      font-size: 9px;
+      font-weight: 600;
+      color: #E53935;
+      margin-left: 2px;
+    }
+
+    .proposals-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .proposals-table th {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 2px solid #ddd;
+      font-weight: 600;
+      color: #555;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .proposals-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #eee;
+      vertical-align: top;
+    }
+    .proposals-table tr:hover { background: #f8f9fa; }
+    .proposals-table .action-tag {
+      font-size: 9px;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: white;
+      white-space: nowrap;
+    }
+
     .export-box {
       background: #f8f9fa;
       border: 1px solid #ddd;
@@ -179,6 +216,7 @@
     <div id="field-context" class="hidden" style="background: #EBF5FF; border: 1px solid #4A90D9; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px;">
       <span style="font-size: 11px; color: #666;">Field:</span>
       <strong id="field-context-name" style="font-size: 12px;"></strong>
+      <span id="field-context-required" class="required-badge hidden">required</span>
       <span id="field-context-type" style="font-size: 11px; color: #6A1B9A; font-family: 'Source Code Pro', monospace; margin-left: 6px;"></span>
     </div>
 
@@ -265,6 +303,42 @@
     </div>
   </div>
 
+  <!-- MODE: View Proposals -->
+  <div id="proposals-panel" class="hidden">
+    <h2>Proposals</h2>
+
+    <div class="section">
+      <label>Filter by Schema</label>
+      <select id="proposals-schema-filter">
+        <option value="">All schemas</option>
+      </select>
+    </div>
+
+    <div id="proposals-count" style="font-size: 11px; color: #888; margin-bottom: 8px;"></div>
+
+    <div style="max-height: 350px; overflow-y: auto;">
+      <table class="proposals-table" id="proposals-table">
+        <thead>
+          <tr>
+            <th>Action</th>
+            <th>Field</th>
+            <th>Description</th>
+            <th>Author</th>
+          </tr>
+        </thead>
+        <tbody id="proposals-tbody"></tbody>
+      </table>
+    </div>
+
+    <div id="proposals-empty" class="hidden" style="text-align: center; padding: 24px; color: #888;">
+      No proposals yet. Click a field on the widget to add one.
+    </div>
+
+    <div class="button-row">
+      <button class="secondary" onclick="closeUI()">Close</button>
+    </div>
+  </div>
+
   <!-- MODE: Export -->
   <div id="export-panel" class="hidden">
     <h2>Export Proposals</h2>
@@ -319,9 +393,12 @@
     function showPanel(mode) {
       document.getElementById('load-panel').classList.toggle('hidden', mode !== 'load');
       document.getElementById('propose-panel').classList.toggle('hidden', mode !== 'propose');
+      document.getElementById('proposals-panel').classList.toggle('hidden', mode !== 'proposals');
       document.getElementById('export-panel').classList.toggle('hidden', mode !== 'export');
 
+      if (mode === 'load') initLoadPanel();
       if (mode === 'propose') initProposePanel();
+      if (mode === 'proposals') initProposalsPanel();
       if (mode === 'export') initExportPanel();
     }
 
@@ -330,6 +407,23 @@
     }
 
     // --- Load panel ---
+
+    function initLoadPanel() {
+      // If schema data was embedded at build time, auto-load it
+      if (typeof __EMBEDDED_DATA__ !== 'undefined' && __EMBEDDED_DATA__.schemas) {
+        state.loadedBundle = __EMBEDDED_DATA__;
+        var picker = document.getElementById('schema-picker');
+        var chips = document.getElementById('schema-chips');
+        document.getElementById('file-drop-zone').classList.add('hidden');
+        document.querySelector('#load-panel .help-text').classList.add('hidden');
+        picker.classList.remove('hidden');
+
+        var names = Object.keys(__EMBEDDED_DATA__.schemas).sort();
+        chips.innerHTML = names.map(function(name) {
+          return '<span class="schema-chip" data-name="' + name + '" onclick="pickSchema(\'' + name + '\')">' + name + ' (' + __EMBEDDED_DATA__.schemas[name].fields.length + ')</span>';
+        }).join('');
+      }
+    }
 
     const dropZone = document.getElementById('file-drop-zone');
     const fileInput = document.getElementById('file-input');
@@ -406,6 +500,7 @@
         // Show context banner
         contextEl.classList.remove('hidden');
         document.getElementById('field-context-name').textContent = fieldInfo.name;
+        document.getElementById('field-context-required').classList.toggle('hidden', !fieldInfo.required);
         document.getElementById('field-context-type').textContent = fieldInfo.type + (fieldInfo.format ? ':' + fieldInfo.format : '');
 
         // Update action labels to reflect selected field
@@ -497,7 +592,8 @@
         if (schema) {
           var fieldSelect = document.getElementById('propose-field-name');
           fieldSelect.innerHTML = schema.fields.map(function(f) {
-            return '<option value="' + f.name + '">' + f.name + ' (' + f.type + ')</option>';
+            var req = f.required ? ' *' : '';
+            return '<option value="' + f.name + '">' + f.name + ' (' + f.type + ')' + req + '</option>';
           }).join('');
         }
       }
@@ -539,6 +635,78 @@
       state.selectedAction = '';
       document.querySelectorAll('.action-option').forEach(function(o) { o.classList.remove('selected'); });
       document.getElementById('propose-fields').classList.add('hidden');
+    }
+
+    // --- Proposals panel ---
+
+    var ACTION_COLORS = {
+      addField: '#2E7D32',
+      removeField: '#C62828',
+      changeType: '#E65100',
+      rename: '#6A1B9A',
+      addEnumValue: '#00695C',
+      question: '#F9A825',
+      note: '#546E7A',
+    };
+
+    var ACTION_LABELS = {
+      addField: '+ Add',
+      removeField: '- Remove',
+      changeType: '~ Type',
+      rename: '~ Rename',
+      addEnumValue: '+ Enum',
+      question: '?',
+      note: '#',
+    };
+
+    function initProposalsPanel() {
+      var filter = document.getElementById('proposals-schema-filter');
+      if (state.schemas) {
+        var names = Object.keys(state.schemas.schemas).sort();
+        filter.innerHTML = '<option value="">All schemas</option>' +
+          names.map(function(n) { return '<option value="' + n + '">' + n + '</option>'; }).join('');
+      }
+      filter.onchange = renderProposals;
+      renderProposals();
+    }
+
+    function renderProposals() {
+      var filterSchema = document.getElementById('proposals-schema-filter').value;
+      var proposals = filterSchema
+        ? state.proposals.filter(function(p) { return p.schemaName === filterSchema; })
+        : state.proposals;
+
+      var countEl = document.getElementById('proposals-count');
+      var tbody = document.getElementById('proposals-tbody');
+      var emptyEl = document.getElementById('proposals-empty');
+      var tableEl = document.getElementById('proposals-table');
+
+      countEl.textContent = proposals.length + ' proposal' + (proposals.length !== 1 ? 's' : '');
+
+      if (proposals.length === 0) {
+        tableEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+
+      tableEl.classList.remove('hidden');
+      emptyEl.classList.add('hidden');
+
+      tbody.innerHTML = proposals.map(function(p) {
+        var color = ACTION_COLORS[p.action] || '#546E7A';
+        var label = ACTION_LABELS[p.action] || p.action;
+        var field = p.fieldName || '-';
+        var desc = p.description || '';
+        if (desc.length > 80) desc = desc.slice(0, 77) + '...';
+        var author = p.author || '';
+
+        return '<tr>' +
+          '<td><span class="action-tag" style="background:' + color + ';">' + label + '</span></td>' +
+          '<td style="font-family: \'Source Code Pro\', monospace; font-size: 11px;">' + field + '</td>' +
+          '<td>' + desc + '</td>' +
+          '<td style="font-size: 10px; color: #888;">' + author + '</td>' +
+          '</tr>';
+      }).join('');
     }
 
     // --- Export panel ---

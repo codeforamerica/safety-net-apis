@@ -26,8 +26,16 @@ async function build() {
     await esbuild.build(buildOptions);
   }
 
-  // Copy UI HTML (kept small — FigJam serializes it into __html__ in the sandbox)
-  fs.copyFileSync('src/ui.html', 'dist/ui.html');
+  // Copy UI HTML, embedding schema data if available
+  let html = fs.readFileSync('src/ui.html', 'utf8');
+  const dataPath = '../design-export/figjam-widget/schema-bundle.json';
+  if (fs.existsSync(dataPath)) {
+    const schemaData = fs.readFileSync(dataPath, 'utf8');
+    const autoLoadScript = `\n    var __EMBEDDED_DATA__ = ${schemaData};\n`;
+    html = html.replace('<script>', '<script>' + autoLoadScript);
+    console.log('Embedded schema data in ui.html (' + Math.round(schemaData.length / 1024) + 'KB)');
+  }
+  fs.writeFileSync('dist/ui.html', html);
 
   // Copy manifest into dist/ so everything is in one folder
   const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
@@ -36,7 +44,6 @@ async function build() {
   fs.writeFileSync('dist/manifest.json', JSON.stringify(manifest, null, 2));
 
   // Copy schema bundle to dist/ so it's next to the manifest for easy loading
-  const dataPath = '../design-export/figjam-widget/schema-bundle.json';
   if (fs.existsSync(dataPath)) {
     fs.copyFileSync(dataPath, 'dist/schema-bundle.json');
     console.log('Copied schema-bundle.json to dist/');

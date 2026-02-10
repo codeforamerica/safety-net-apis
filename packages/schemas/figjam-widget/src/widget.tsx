@@ -269,24 +269,17 @@ function SchemaExplorerWidget() {
   // --- Property menu (right-click options) ---
 
   const menuItems: WidgetPropertyMenuItem[] = [
-    { itemType: 'action', propertyName: 'loadData', tooltip: 'Load schema data' },
     { itemType: 'action', propertyName: 'addProposal', tooltip: 'Add proposal' },
+    { itemType: 'action', propertyName: 'viewProposals', tooltip: 'View proposals' },
     { itemType: 'separator' },
     { itemType: 'action', propertyName: 'exportProposals', tooltip: 'Export proposals' },
   ];
 
-  if (schemaData) {
-    menuItems.push(
-      { itemType: 'separator' },
-      { itemType: 'action', propertyName: 'changeSchema', tooltip: 'Switch schema' },
-    );
-  }
-
   usePropertyMenu(menuItems, ({ propertyName }) => {
-    if (propertyName === 'loadData' || propertyName === 'changeSchema') {
-      return openUI('load');
-    } else if (propertyName === 'addProposal') {
+    if (propertyName === 'addProposal') {
       return openUI('propose');
+    } else if (propertyName === 'viewProposals') {
+      return openUI('proposals');
     } else if (propertyName === 'exportProposals') {
       return openUI('export');
     }
@@ -294,7 +287,7 @@ function SchemaExplorerWidget() {
 
   // --- UI communication ---
 
-  function openUI(mode: 'load' | 'propose' | 'export', fieldName?: string) {
+  function openUI(mode: 'load' | 'propose' | 'proposals' | 'export', fieldName?: string) {
     return new Promise<void>(() => {
       figma.showUI(__html__, { width: 420, height: 500 });
 
