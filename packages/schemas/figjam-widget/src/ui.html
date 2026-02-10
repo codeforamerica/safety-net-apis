@@ -153,15 +153,15 @@
       <span>Drop schema JSON here or click to select</span>
     </label>
     <p class="help-text" style="margin-top: 8px; text-align: center;">
-      Generate with: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;">npm run figjam:export</code>
+      Look for <strong>schema-bundle.json</strong> in the same folder as the widget manifest.<br>
+      Regenerate with: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;">npm run figjam:export && npm run figjam:build</code>
     </p>
 
     <div id="schema-picker" class="hidden" style="margin-top: 16px;">
-      <h3>Select a schema to display</h3>
+      <h3>Click a schema to display it</h3>
       <div id="schema-chips" class="schema-selector"></div>
       <div class="button-row">
         <button class="secondary" onclick="closeUI()">Cancel</button>
-        <button class="primary" id="confirm-schema-btn" disabled onclick="confirmSchema()">Show Schema</button>
       </div>
     </div>
   </div>
@@ -175,36 +175,43 @@
       <select id="propose-schema"></select>
     </div>
 
+    <!-- Context banner when a field was clicked -->
+    <div id="field-context" class="hidden" style="background: #EBF5FF; border: 1px solid #4A90D9; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px;">
+      <span style="font-size: 11px; color: #666;">Field:</span>
+      <strong id="field-context-name" style="font-size: 12px;"></strong>
+      <span id="field-context-type" style="font-size: 11px; color: #6A1B9A; font-family: 'Source Code Pro', monospace; margin-left: 6px;"></span>
+    </div>
+
     <div class="section">
       <label>Action</label>
       <div id="action-options">
         <div class="action-option" data-action="addField" onclick="selectAction('addField')">
           <span class="tag" style="background: #2E7D32;">+ Add</span>
-          <span>Add a new field</span>
+          <span id="action-label-addField">Add a new field</span>
         </div>
         <div class="action-option" data-action="removeField" onclick="selectAction('removeField')">
           <span class="tag" style="background: #C62828;">- Remove</span>
-          <span>Remove an existing field</span>
+          <span id="action-label-removeField">Remove an existing field</span>
         </div>
         <div class="action-option" data-action="changeType" onclick="selectAction('changeType')">
           <span class="tag" style="background: #E65100;">~ Type</span>
-          <span>Change a field's type</span>
+          <span id="action-label-changeType">Change a field's type</span>
         </div>
         <div class="action-option" data-action="rename" onclick="selectAction('rename')">
           <span class="tag" style="background: #6A1B9A;">~ Rename</span>
-          <span>Rename a field</span>
+          <span id="action-label-rename">Rename a field</span>
         </div>
         <div class="action-option" data-action="addEnumValue" onclick="selectAction('addEnumValue')">
           <span class="tag" style="background: #00695C;">+ Enum</span>
-          <span>Add an enum value</span>
+          <span id="action-label-addEnumValue">Add an enum value</span>
         </div>
         <div class="action-option" data-action="question" onclick="selectAction('question')">
           <span class="tag" style="background: #F9A825;">?</span>
-          <span>Ask a question</span>
+          <span id="action-label-question">Ask a question</span>
         </div>
         <div class="action-option" data-action="note" onclick="selectAction('note')">
           <span class="tag" style="background: #546E7A;">#</span>
-          <span>Add a note</span>
+          <span id="action-label-note">Add a note</span>
         </div>
       </div>
     </div>
@@ -216,13 +223,21 @@
         <select id="propose-field-name"></select>
       </div>
 
+      <div id="position-section" class="section hidden">
+        <label>Position</label>
+        <select id="propose-position">
+          <option value="after">After</option>
+          <option value="before">Before</option>
+        </select>
+      </div>
+
       <div id="proposed-name-section" class="section hidden">
         <label id="proposed-name-label">New Field Name</label>
         <input type="text" id="propose-proposed-name" placeholder="e.g., primaryLanguage">
       </div>
 
       <div id="proposed-type-section" class="section hidden">
-        <label>Type</label>
+        <label id="proposed-type-label">Type</label>
         <select id="propose-proposed-type">
           <option value="string">string</option>
           <option value="integer">integer</option>
@@ -281,6 +296,7 @@
       proposals: [],
       selectedSchema: '',
       selectedAction: '',
+      preselectedField: '',
       loadedBundle: null,
     };
 
@@ -295,6 +311,7 @@
         state.schemas = msg.schemas;
         state.proposals = msg.proposals || [];
         state.selectedSchema = msg.schemaName || '';
+        state.preselectedField = msg.fieldName || '';
         showPanel(msg.mode);
       }
     };
@@ -357,101 +374,170 @@
     }
 
     function pickSchema(name) {
-      state.selectedSchema = name;
-      document.querySelectorAll('.schema-chip').forEach(c => c.classList.remove('active'));
-      document.querySelector(`.schema-chip[data-name="${name}"]`).classList.add('active');
-      document.getElementById('confirm-schema-btn').disabled = false;
-    }
-
-    function confirmSchema() {
-      // First send the data bundle, then the schema selection
+      // Send the data bundle, then the schema selection
       parent.postMessage({ pluginMessage: { type: 'load-data', data: state.loadedBundle } }, '*');
 
-      setTimeout(() => {
-        parent.postMessage({ pluginMessage: { type: 'set-schema', schemaName: state.selectedSchema } }, '*');
+      setTimeout(function() {
+        parent.postMessage({ pluginMessage: { type: 'set-schema', schemaName: name } }, '*');
       }, 100);
     }
 
     // --- Propose panel ---
 
+    function getPreselectedFieldInfo() {
+      if (!state.preselectedField || !state.schemas) return null;
+      var schema = state.schemas.schemas[state.selectedSchema];
+      if (!schema) return null;
+      return schema.fields.find(function(f) { return f.name === state.preselectedField; }) || null;
+    }
+
     function initProposePanel() {
-      const schemaSelect = document.getElementById('propose-schema');
+      var schemaSelect = document.getElementById('propose-schema');
       if (state.schemas) {
-        const names = Object.keys(state.schemas.schemas).sort();
-        schemaSelect.innerHTML = names.map(n =>
-          `<option value="${n}" ${n === state.selectedSchema ? 'selected' : ''}>${n}</option>`
-        ).join('');
+        var names = Object.keys(state.schemas.schemas).sort();
+        schemaSelect.innerHTML = names.map(function(n) {
+          return '<option value="' + n + '" ' + (n === state.selectedSchema ? 'selected' : '') + '>' + n + '</option>';
+        }).join('');
+      }
+
+      var fieldInfo = getPreselectedFieldInfo();
+      var contextEl = document.getElementById('field-context');
+      if (fieldInfo) {
+        // Show context banner
+        contextEl.classList.remove('hidden');
+        document.getElementById('field-context-name').textContent = fieldInfo.name;
+        document.getElementById('field-context-type').textContent = fieldInfo.type + (fieldInfo.format ? ':' + fieldInfo.format : '');
+
+        // Update action labels to reflect selected field
+        document.getElementById('action-label-addField').textContent = 'Add a new field near ' + fieldInfo.name;
+        document.getElementById('action-label-removeField').textContent = 'Remove ' + fieldInfo.name;
+        document.getElementById('action-label-changeType').textContent = 'Change ' + fieldInfo.name + ' type (' + fieldInfo.type + ')';
+        document.getElementById('action-label-rename').textContent = 'Rename ' + fieldInfo.name;
+        document.getElementById('action-label-addEnumValue').textContent = fieldInfo.enum ? 'Add enum value to ' + fieldInfo.name : 'Add an enum value';
+        document.getElementById('action-label-question').textContent = 'Question about ' + fieldInfo.name;
+        document.getElementById('action-label-note').textContent = 'Note about ' + fieldInfo.name;
+      } else {
+        contextEl.classList.add('hidden');
+        // Reset labels
+        document.getElementById('action-label-addField').textContent = 'Add a new field';
+        document.getElementById('action-label-removeField').textContent = 'Remove an existing field';
+        document.getElementById('action-label-changeType').textContent = "Change a field's type";
+        document.getElementById('action-label-rename').textContent = 'Rename a field';
+        document.getElementById('action-label-addEnumValue').textContent = 'Add an enum value';
+        document.getElementById('action-label-question').textContent = 'Ask a question';
+        document.getElementById('action-label-note').textContent = 'Add a note';
       }
     }
 
     function selectAction(action) {
       state.selectedAction = action;
-      document.querySelectorAll('.action-option').forEach(o => o.classList.remove('selected'));
-      document.querySelector(`[data-action="${action}"]`).classList.add('selected');
+      document.querySelectorAll('.action-option').forEach(function(o) { o.classList.remove('selected'); });
+      document.querySelector('[data-action="' + action + '"]').classList.add('selected');
 
-      const fields = document.getElementById('propose-fields');
+      var fields = document.getElementById('propose-fields');
       fields.classList.remove('hidden');
 
-      // Show/hide fields based on action
-      const needsExistingField = ['removeField', 'changeType', 'rename', 'addEnumValue'].includes(action);
-      const needsProposedName = ['addField', 'rename'].includes(action);
-      const needsProposedType = ['addField', 'changeType'].includes(action);
-      const needsProposedValue = ['addEnumValue'].includes(action);
+      var fieldInfo = getPreselectedFieldInfo();
+      var hasContext = !!fieldInfo;
 
-      document.getElementById('field-name-section').classList.toggle('hidden', !needsExistingField);
+      // Determine which form sections to show
+      var needsExistingField = ['removeField', 'changeType', 'rename', 'addEnumValue'].indexOf(action) >= 0;
+      var needsProposedName = ['addField', 'rename'].indexOf(action) >= 0;
+      var needsProposedType = ['addField', 'changeType'].indexOf(action) >= 0;
+      var needsProposedValue = action === 'addEnumValue';
+      var needsPosition = action === 'addField' && hasContext;
+
+      // If field is preselected, hide the dropdown (we already know the field)
+      var showFieldDropdown = needsExistingField && !hasContext;
+      document.getElementById('field-name-section').classList.toggle('hidden', !showFieldDropdown);
+      document.getElementById('position-section').classList.toggle('hidden', !needsPosition);
       document.getElementById('proposed-name-section').classList.toggle('hidden', !needsProposedName);
       document.getElementById('proposed-type-section').classList.toggle('hidden', !needsProposedType);
       document.getElementById('proposed-value-section').classList.toggle('hidden', !needsProposedValue);
 
-      // Update label
+      // Update labels based on context
       if (action === 'rename') {
-        document.getElementById('proposed-name-label').textContent = 'New Name';
-      } else {
+        document.getElementById('proposed-name-label').textContent = hasContext ? 'Rename to' : 'New Name';
+      } else if (action === 'addField') {
         document.getElementById('proposed-name-label').textContent = 'New Field Name';
       }
 
-      // Populate field dropdown
-      if (needsExistingField && state.schemas) {
-        const schemaName = document.getElementById('propose-schema').value;
-        const schema = state.schemas.schemas[schemaName];
+      if (action === 'changeType' && hasContext) {
+        document.getElementById('proposed-type-label').textContent = 'Change from ' + fieldInfo.type + ' to';
+      } else {
+        document.getElementById('proposed-type-label').textContent = 'Type';
+      }
+
+      // Pre-fill description placeholder based on context
+      var descEl = document.getElementById('propose-description');
+      if (hasContext) {
+        if (action === 'removeField') {
+          descEl.placeholder = 'Why should ' + fieldInfo.name + ' be removed?';
+        } else if (action === 'changeType') {
+          descEl.placeholder = 'Why change ' + fieldInfo.name + ' from ' + fieldInfo.type + '?';
+        } else if (action === 'rename') {
+          descEl.placeholder = 'Why rename ' + fieldInfo.name + '?';
+        } else if (action === 'addField') {
+          descEl.placeholder = 'Why is this new field needed?';
+        } else if (action === 'question') {
+          descEl.placeholder = 'What is your question about ' + fieldInfo.name + '?';
+        } else if (action === 'note') {
+          descEl.placeholder = 'Your note about ' + fieldInfo.name;
+        } else {
+          descEl.placeholder = 'Why is this change needed?';
+        }
+      } else {
+        descEl.placeholder = 'Why is this change needed?';
+      }
+
+      // Populate field dropdown only when no context (fallback)
+      if (showFieldDropdown && state.schemas) {
+        var schemaName = document.getElementById('propose-schema').value;
+        var schema = state.schemas.schemas[schemaName];
         if (schema) {
-          const fieldSelect = document.getElementById('propose-field-name');
-          fieldSelect.innerHTML = schema.fields.map(f =>
-            `<option value="${f.name}">${f.name} (${f.type})</option>`
-          ).join('');
+          var fieldSelect = document.getElementById('propose-field-name');
+          fieldSelect.innerHTML = schema.fields.map(function(f) {
+            return '<option value="' + f.name + '">' + f.name + ' (' + f.type + ')</option>';
+          }).join('');
         }
       }
     }
 
     function submitProposal() {
-      const schemaName = document.getElementById('propose-schema').value;
-      const action = state.selectedAction;
-      const description = document.getElementById('propose-description').value;
+      var schemaName = document.getElementById('propose-schema').value;
+      var action = state.selectedAction;
+      var description = document.getElementById('propose-description').value;
 
       if (!action || !description) {
         alert('Please select an action and provide a description.');
         return;
       }
 
-      const proposal = {
+      // Use preselected field if available, otherwise use dropdown
+      var fieldName = state.preselectedField || (document.getElementById('propose-field-name') ? document.getElementById('propose-field-name').value : undefined);
+      var proposedName = document.getElementById('propose-proposed-name') ? document.getElementById('propose-proposed-name').value : undefined;
+      var position = document.getElementById('propose-position') ? document.getElementById('propose-position').value : undefined;
+
+      var proposal = {
         action: action,
         schemaName: schemaName,
-        fieldName: document.getElementById('propose-field-name')?.value || undefined,
-        proposedName: document.getElementById('propose-proposed-name')?.value || undefined,
-        proposedType: document.getElementById('propose-proposed-type')?.value || undefined,
-        proposedValue: document.getElementById('propose-proposed-value')?.value || undefined,
+        fieldName: fieldName || undefined,
+        proposedName: proposedName || undefined,
+        proposedType: document.getElementById('propose-proposed-type') ? document.getElementById('propose-proposed-type').value : undefined,
+        proposedValue: document.getElementById('propose-proposed-value') ? document.getElementById('propose-proposed-value').value : undefined,
+        position: (action === 'addField' && fieldName) ? position : undefined,
         description: description,
-        author: figma?.currentUser?.name || 'Anonymous',
+        author: (typeof figma !== 'undefined' && figma.currentUser) ? figma.currentUser.name : 'Anonymous',
       };
 
-      parent.postMessage({ pluginMessage: { type: 'add-proposal', proposal } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'add-proposal', proposal: proposal } }, '*');
 
       // Reset form
       document.getElementById('propose-description').value = '';
       document.getElementById('propose-proposed-name').value = '';
       document.getElementById('propose-proposed-value').value = '';
       state.selectedAction = '';
-      document.querySelectorAll('.action-option').forEach(o => o.classList.remove('selected'));
+      document.querySelectorAll('.action-option').forEach(function(o) { o.classList.remove('selected'); });
       document.getElementById('propose-fields').classList.add('hidden');
     }
 

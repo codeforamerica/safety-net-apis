@@ -130,7 +130,7 @@ function FieldRow({
       {/* Required indicator */}
       <Text
         fontSize={10}
-        fill={field.required ? COLORS.badge : 'transparent'}
+        fill={field.required ? COLORS.badge : { r: 0, g: 0, b: 0, a: 0 }}
         width={6}
       >
         *
@@ -284,17 +284,17 @@ function SchemaExplorerWidget() {
 
   usePropertyMenu(menuItems, ({ propertyName }) => {
     if (propertyName === 'loadData' || propertyName === 'changeSchema') {
-      openUI('load');
+      return openUI('load');
     } else if (propertyName === 'addProposal') {
-      openUI('propose');
+      return openUI('propose');
     } else if (propertyName === 'exportProposals') {
-      openUI('export');
+      return openUI('export');
     }
   });
 
   // --- UI communication ---
 
-  function openUI(mode: 'load' | 'propose' | 'export') {
+  function openUI(mode: 'load' | 'propose' | 'export', fieldName?: string) {
     return new Promise<void>(() => {
       figma.showUI(__html__, { width: 420, height: 500 });
 
@@ -306,6 +306,7 @@ function SchemaExplorerWidget() {
         schemaName,
         schemas: schemaData,
         proposals,
+        fieldName,
       });
 
       figma.ui.onmessage = (msg: any) => {
@@ -444,7 +445,7 @@ function SchemaExplorerWidget() {
   }
 
   function handlePropose(action: ProposalAction, fieldName: string) {
-    openUI('propose');
+    return openUI('propose', fieldName);
   }
 
   return (
@@ -478,14 +479,14 @@ function SchemaExplorerWidget() {
         <Text fontSize={14} fontWeight={700} fill={COLORS.textWhite}>
           {schema.name}
         </Text>
-        <Text fontSize={11} fill="#FFFFFFAA">
+        <Text fontSize={11} fill={{ r: 1, g: 1, b: 1, a: 0.67 }}>
           {schema.fields.length} fields
         </Text>
         {schemaProposals.length > 0 && (
           <AutoLayout
             padding={{ left: 6, right: 6, top: 2, bottom: 2 }}
             cornerRadius={8}
-            fill="#FFFFFF33"
+            fill={{ r: 1, g: 1, b: 1, a: 0.2 }}
           >
             <Text fontSize={10} fill={COLORS.textWhite} fontWeight={600}>
               {schemaProposals.length} proposals
@@ -497,13 +498,13 @@ function SchemaExplorerWidget() {
       {expanded && (
         <AutoLayout direction="vertical" spacing={0} width="fill-parent">
           {/* Description */}
-          {schema.description && (
+          {schema.description ? (
             <AutoLayout padding={{ left: 12, right: 12, top: 8, bottom: 8 }} width="fill-parent">
               <Text fontSize={11} fill={COLORS.textMuted} width="fill-parent">
                 {truncate(schema.description, 120)}
               </Text>
             </AutoLayout>
-          )}
+          ) : null}
 
           {/* Source file */}
           <AutoLayout padding={{ left: 12, right: 12, top: 4, bottom: 8 }} width="fill-parent">

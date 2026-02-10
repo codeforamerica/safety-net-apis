@@ -26,8 +26,29 @@ async function build() {
     await esbuild.build(buildOptions);
   }
 
-  // Copy the UI HTML file
-  fs.copyFileSync('src/ui.html', 'dist/ui.html');
+  // Copy the UI HTML file, embedding schema data if available
+  let html = fs.readFileSync('src/ui.html', 'utf8');
+  const dataPath = '../design-export/figma-plugin/all-data.json';
+  if (fs.existsSync(dataPath)) {
+    const schemaData = fs.readFileSync(dataPath, 'utf8');
+    // Inject auto-load script before closing </script> tag
+    const autoLoadScript = `
+    // Auto-load embedded schema data
+    try {
+      const embeddedData = ${schemaData};
+      updateBrowseTab(embeddedData);
+    } catch (e) {
+      console.warn('Failed to auto-load embedded data:', e);
+    }`;
+    html = html.replace('  </script>', autoLoadScript + '\n  </script>');
+  }
+  fs.writeFileSync('dist/ui.html', html);
+
+  // Copy manifest into dist/ so everything is in one folder
+  const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+  manifest.main = 'code.js';
+  manifest.ui = 'ui.html';
+  fs.writeFileSync('dist/manifest.json', JSON.stringify(manifest, null, 2));
 
   console.log('Build complete');
 }
