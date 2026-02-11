@@ -52,9 +52,9 @@ paths:
       operationId: listUsers
       tags: [Users]
       parameters:
-        - $ref: "./components/common-parameters.yaml#/SearchQueryParam"
-        - $ref: "./components/common-parameters.yaml#/LimitParam"
-        - $ref: "./components/common-parameters.yaml#/OffsetParam"
+        - $ref: "./components/parameters.yaml#/SearchQueryParam"
+        - $ref: "./components/parameters.yaml#/LimitParam"
+        - $ref: "./components/parameters.yaml#/OffsetParam"
       responses:
         "200":
           description: Paginated list of users.
@@ -63,11 +63,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserList"
         "400":
-          $ref: "./components/common-responses.yaml#/BadRequest"
+          $ref: "./components/responses.yaml#/BadRequest"
         "401":
-          $ref: "./components/common-responses.yaml#/Unauthorized"
+          $ref: "./components/responses.yaml#/Unauthorized"
         "403":
-          $ref: "./components/common-responses.yaml#/Forbidden"
+          $ref: "./components/responses.yaml#/Forbidden"
 
     post:
       summary: Create a user
@@ -97,15 +97,15 @@ paths:
               schema:
                 $ref: "#/components/schemas/User"
         "400":
-          $ref: "./components/common-responses.yaml#/BadRequest"
+          $ref: "./components/responses.yaml#/BadRequest"
         "401":
-          $ref: "./components/common-responses.yaml#/Unauthorized"
+          $ref: "./components/responses.yaml#/Unauthorized"
         "403":
-          $ref: "./components/common-responses.yaml#/Forbidden"
+          $ref: "./components/responses.yaml#/Forbidden"
         "409":
-          $ref: "./components/common-responses.yaml#/Conflict"
+          $ref: "./components/responses.yaml#/Conflict"
         "422":
-          $ref: "./components/common-responses.yaml#/UnprocessableEntity"
+          $ref: "./components/responses.yaml#/UnprocessableEntity"
 
   /users/{userId}:
     parameters:
@@ -126,11 +126,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/User"
         "401":
-          $ref: "./components/common-responses.yaml#/Unauthorized"
+          $ref: "./components/responses.yaml#/Unauthorized"
         "403":
-          $ref: "./components/common-responses.yaml#/Forbidden"
+          $ref: "./components/responses.yaml#/Forbidden"
         "404":
-          $ref: "./components/common-responses.yaml#/NotFound"
+          $ref: "./components/responses.yaml#/NotFound"
 
     patch:
       summary: Update a user
@@ -154,15 +154,15 @@ paths:
               schema:
                 $ref: "#/components/schemas/User"
         "400":
-          $ref: "./components/common-responses.yaml#/BadRequest"
+          $ref: "./components/responses.yaml#/BadRequest"
         "401":
-          $ref: "./components/common-responses.yaml#/Unauthorized"
+          $ref: "./components/responses.yaml#/Unauthorized"
         "403":
-          $ref: "./components/common-responses.yaml#/Forbidden"
+          $ref: "./components/responses.yaml#/Forbidden"
         "404":
-          $ref: "./components/common-responses.yaml#/NotFound"
+          $ref: "./components/responses.yaml#/NotFound"
         "422":
-          $ref: "./components/common-responses.yaml#/UnprocessableEntity"
+          $ref: "./components/responses.yaml#/UnprocessableEntity"
 
     delete:
       summary: Deactivate a user
@@ -176,11 +176,11 @@ paths:
         "204":
           description: User deactivated successfully.
         "401":
-          $ref: "./components/common-responses.yaml#/Unauthorized"
+          $ref: "./components/responses.yaml#/Unauthorized"
         "403":
-          $ref: "./components/common-responses.yaml#/Forbidden"
+          $ref: "./components/responses.yaml#/Forbidden"
         "404":
-          $ref: "./components/common-responses.yaml#/NotFound"
+          $ref: "./components/responses.yaml#/NotFound"
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Token Enrichment (IdP Integration)
@@ -218,9 +218,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/TokenClaims"
         "401":
-          $ref: "./components/common-responses.yaml#/Unauthorized"
+          $ref: "./components/responses.yaml#/Unauthorized"
         "404":
-          $ref: "./components/common-responses.yaml#/NotFound"
+          $ref: "./components/responses.yaml#/NotFound"
 
 components:
   securitySchemes:
@@ -252,19 +252,120 @@ components:
       example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
   schemas:
-    # References to component files
+    # Primary schema
     User:
-      $ref: "./components/user.yaml#/User"
-    RoleType:
-      $ref: "./components/common.yaml#/RoleType"
-    TokenClaims:
-      $ref: "./components/common.yaml#/BackendAuthContext"
-    UserStatus:
-      $ref: "./components/user.yaml#/UserStatus"
-    UserPreferences:
-      $ref: "./components/user.yaml#/UserPreferences"
+      description: |
+        User account for authentication and authorization. Links an IdP identity
+        to roles, permissions, and county assignments.
 
-    # Request/Response schemas specific to this API
+        Note: Job function details (skills, team, workload) are not stored here.
+        Staff users link to a CaseWorker record in the Case Management domain.
+      allOf:
+        - $ref: "#/components/schemas/FrontendAuthContext"
+        - type: object
+          required:
+            - id
+            - idpSubject
+            - email
+            - status
+            - createdAt
+            - updatedAt
+          properties:
+            id:
+              type: string
+              format: uuid
+              readOnly: true
+              description: Unique identifier for the user (same as userId in JWT claims).
+            idpSubject:
+              type: string
+              description: |
+                Subject identifier from the Identity Provider. Immutable after creation.
+                Format varies by IdP (e.g., "auth0|507f1f77bcf86cd799439011").
+              example: "auth0|507f1f77bcf86cd799439011"
+            email:
+              type: string
+              format: email
+              description: User's email address (from IdP or manually set).
+              example: "jane.smith@alameda.gov"
+            status:
+              $ref: "#/components/schemas/UserStatus"
+            createdAt:
+              type: string
+              format: date-time
+              readOnly: true
+              description: Timestamp when the user was created.
+            updatedAt:
+              type: string
+              format: date-time
+              readOnly: true
+              description: Timestamp when the user was last updated.
+
+    # Ancillary schemas (alphabetical)
+    FrontendAuthContext:
+      type: object
+      description: |
+        Authorization context for frontend applications. Extends BackendAuthContext
+        with UI permissions and user preferences.
+
+        Used in enriched JWTs for frontends (via BFF/gateway) or returned by
+        GET /users/me. States can customize this independently from BackendAuthContext.
+      allOf:
+        - $ref: "./components/auth.yaml#/BackendAuthContext"
+        - type: object
+          properties:
+            ui:
+              $ref: "#/components/schemas/UiPermissions"
+            preferences:
+              $ref: "#/components/schemas/UserPreferences"
+
+    RoleType:
+      $ref: "./components/auth.yaml#/RoleType"
+
+    TokenClaims:
+      $ref: "./components/auth.yaml#/BackendAuthContext"
+
+    UiPermissions:
+      type: object
+      readOnly: true
+      additionalProperties: true
+      description: |
+        Computed UI permissions and display data for frontend feature toggling.
+        Backend computes these from role and permissions to provide
+        a UI-friendly interface for showing/hiding features.
+
+        Structure is flexible - states define their own fields via overlays.
+        Example fields: name, availableModules, canApproveApplications, etc.
+      example:
+        name: "Jane Smith"
+        availableModules: ["cases", "tasks", "documents"]
+        canApproveApplications: false
+        canViewSensitivePII: false
+        canExportData: true
+        canManageUsers: false
+
+    UserPreferences:
+      type: object
+      additionalProperties: true
+      description: |
+        User preferences for the application.
+
+        Structure is flexible - states define their own fields via overlays.
+        Example fields: timezone, dateFormat, itemsPerPage, language, theme, etc.
+      example:
+        timezone: "America/Los_Angeles"
+        dateFormat: "us"
+        itemsPerPage: 25
+
+    UserStatus:
+      type: string
+      description: User account status.
+      enum:
+        - active
+        - inactive
+        - pending
+        - suspended
+
+    # API-specific schemas
     UserCreate:
       type: object
       description: Payload to create a new user.
@@ -285,7 +386,7 @@ components:
           type: string
           example: "Jane Smith"
         role:
-          $ref: "./components/common.yaml#/RoleType"
+          $ref: "./components/auth.yaml#/RoleType"
         counties:
           type: array
           items:
@@ -303,9 +404,9 @@ components:
         name:
           type: string
         role:
-          $ref: "./components/common.yaml#/RoleType"
+          $ref: "./components/auth.yaml#/RoleType"
         status:
-          $ref: "./components/user.yaml#/UserStatus"
+          $ref: "#/components/schemas/UserStatus"
         counties:
           type: array
           items:
@@ -319,7 +420,7 @@ components:
           format: uuid
           description: Link to CaseWorker record (for staff).
         preferences:
-          $ref: "./components/user.yaml#/UserPreferences"
+          $ref: "#/components/schemas/UserPreferences"
 
     UserList:
       type: object
@@ -350,4 +451,3 @@ components:
         hasNext:
           type: boolean
           description: Whether more users exist beyond this page.
-

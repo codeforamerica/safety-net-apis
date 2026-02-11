@@ -9,9 +9,8 @@
  *   npm run api:new -- --name "case-workers" --resource "CaseWorker"
  *
  * Generates:
- *   - openapi/{name}.yaml - Main API spec
- *   - openapi/components/{name}.yaml - Resource schema
- *   - openapi/examples/{name}.yaml - Example data
+ *   - openapi/{name}.yaml - Main API spec (with schemas inline)
+ *   - openapi/{name}-examples.yaml - Example data
  */
 
 import { writeFile, mkdir } from 'fs/promises';
@@ -75,9 +74,8 @@ Examples:
   npm run api:new -- --name case-workers --resource CaseWorker
 
 Generated files:
-  - openapi/{name}.yaml              Main API specification
-  - openapi/components/{name}.yaml   Resource schema definitions
-  - openapi/examples/{name}.yaml     Example data for testing
+  - openapi/{name}.yaml              Main API specification (schemas inline)
+  - openapi/{name}-examples.yaml     Example data for testing
 `);
 }
 
@@ -152,9 +150,9 @@ paths:
       tags:
       - ${resourcePlural}
       parameters:
-      - "$ref": "./components/common-parameters.yaml#/SearchQueryParam"
-      - "$ref": "./components/common-parameters.yaml#/LimitParam"
-      - "$ref": "./components/common-parameters.yaml#/OffsetParam"
+      - "$ref": "./components/parameters.yaml#/SearchQueryParam"
+      - "$ref": "./components/parameters.yaml#/LimitParam"
+      - "$ref": "./components/parameters.yaml#/OffsetParam"
       responses:
         '200':
           description: A paginated collection of ${resourcePluralLower}.
@@ -163,9 +161,9 @@ paths:
               schema:
                 "$ref": "#/components/schemas/${resource}List"
         '400':
-          "$ref": "./components/common-responses.yaml#/BadRequest"
+          "$ref": "./components/responses.yaml#/BadRequest"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
     post:
       summary: Create a ${resource.toLowerCase()}
       description: Create a new ${resource.toLowerCase()} record.
@@ -192,11 +190,11 @@ paths:
               schema:
                 "$ref": "#/components/schemas/${resource}"
         '400':
-          "$ref": "./components/common-responses.yaml#/BadRequest"
+          "$ref": "./components/responses.yaml#/BadRequest"
         '422':
-          "$ref": "./components/common-responses.yaml#/UnprocessableEntity"
+          "$ref": "./components/responses.yaml#/UnprocessableEntity"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
   "/${resourcePluralLower}/{${resourceIdParam}}":
     parameters:
     - "$ref": "#/components/parameters/${resource}IdParam"
@@ -215,11 +213,11 @@ paths:
                 "$ref": "#/components/schemas/${resource}"
               examples:
                 ${resource}Example1:
-                  "$ref": "./examples/${kebabName}.yaml#/${resource}Example1"
+                  "$ref": "./${kebabName}-examples.yaml#/${resource}Example1"
         '404':
-          "$ref": "./components/common-responses.yaml#/NotFound"
+          "$ref": "./components/responses.yaml#/NotFound"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
     patch:
       summary: Update a ${resource.toLowerCase()}
       description: Apply partial updates to an existing ${resource.toLowerCase()}.
@@ -240,13 +238,13 @@ paths:
               schema:
                 "$ref": "#/components/schemas/${resource}"
         '400':
-          "$ref": "./components/common-responses.yaml#/BadRequest"
+          "$ref": "./components/responses.yaml#/BadRequest"
         '404':
-          "$ref": "./components/common-responses.yaml#/NotFound"
+          "$ref": "./components/responses.yaml#/NotFound"
         '422':
-          "$ref": "./components/common-responses.yaml#/UnprocessableEntity"
+          "$ref": "./components/responses.yaml#/UnprocessableEntity"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
     delete:
       summary: Delete a ${resource.toLowerCase()}
       description: Permanently remove a ${resource.toLowerCase()} record.
@@ -257,9 +255,9 @@ paths:
         '204':
           description: ${resource} deleted successfully.
         '404':
-          "$ref": "./components/common-responses.yaml#/NotFound"
+          "$ref": "./components/responses.yaml#/NotFound"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
 components:
   parameters:
     ${resource}IdParam:
@@ -273,10 +271,48 @@ components:
       example: 4d1f13f0-3e26-4c50-b2fb-8d140f7ec1c2
   schemas:
     ${resource}:
-      "$ref": "./components/${kebabName}.yaml#/${resource}"
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Unique identifier (server-generated).
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Name of the ${resource.toLowerCase()}.
+        description:
+          type: string
+          maxLength: 1000
+          description: Optional description.
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+            - pending
+          description: Current status.
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when the ${resource.toLowerCase()} was created.
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when the ${resource.toLowerCase()} was last updated.
     ${resource}Create:
       allOf:
-      - "$ref": "./components/${kebabName}.yaml#/${resource}"
+      - "$ref": "#/components/schemas/${resource}"
       - type: object
         description: |
           Payload to create a new ${resource.toLowerCase()} record.
@@ -284,7 +320,7 @@ components:
           Note: id, createdAt, and updatedAt are server-generated (readOnly) and will be returned in the response.
     ${resource}Update:
       allOf:
-      - "$ref": "./components/${kebabName}.yaml#/${resource}"
+      - "$ref": "#/components/schemas/${resource}"
       - type: object
         description: |
           Payload to update one or more mutable fields of an existing ${resource.toLowerCase()}. Partial updates are supported.
@@ -320,109 +356,6 @@ components:
         hasNext:
           type: boolean
           description: Indicates whether more ${resourcePluralLower} are available beyond the current page.
-`;
-}
-
-function generateComponentSchema(name, resource) {
-  return `# ${resource} Schema
-# Define the ${resource} resource schema and its properties.
-# See api-patterns.yaml for field conventions and common patterns.
-
-${resource}:
-  type: object
-  additionalProperties: false
-  required:
-    - id
-    - name
-    - createdAt
-    - updatedAt
-  properties:
-    # ==========================================================================
-    # Standard fields (required for all resources)
-    # ==========================================================================
-    id:
-      type: string
-      format: uuid
-      readOnly: true
-      description: Unique identifier (server-generated).
-    createdAt:
-      type: string
-      format: date-time
-      readOnly: true
-      description: Timestamp when the ${resource.toLowerCase()} was created.
-    updatedAt:
-      type: string
-      format: date-time
-      readOnly: true
-      description: Timestamp when the ${resource.toLowerCase()} was last updated.
-
-    # ==========================================================================
-    # Resource-specific fields (customize these)
-    # ==========================================================================
-    name:
-      type: string
-      minLength: 1
-      maxLength: 200
-      description: Name of the ${resource.toLowerCase()}.
-      example: "Example ${resource}"
-
-    description:
-      type: string
-      maxLength: 1000
-      description: Optional description.
-      example: "A detailed description of this ${resource.toLowerCase()}."
-
-    status:
-      type: string
-      enum:
-        - active
-        - inactive
-        - pending
-      description: Current status.
-      example: "active"
-
-    # ==========================================================================
-    # Add more fields below following these patterns:
-    # ==========================================================================
-    #
-    # String field:
-    #   fieldName:
-    #     type: string
-    #     minLength: 1
-    #     maxLength: 100
-    #     description: Description here.
-    #     example: "example value"
-    #
-    # Number field:
-    #   amount:
-    #     type: number
-    #     minimum: 0
-    #     description: Monetary amount.
-    #     example: 150.00
-    #
-    # Date field:
-    #   dateOfBirth:
-    #     type: string
-    #     format: date
-    #     description: Date of birth.
-    #     example: "1990-05-15"
-    #
-    # Enum field:
-    #   category:
-    #     type: string
-    #     enum: [option1, option2, option3]
-    #     description: Category selection.
-    #
-    # Nested object (using shared component):
-    #   address:
-    #     "$ref": "./common.yaml#/Address"
-    #
-    # Array field:
-    #   tags:
-    #     type: array
-    #     items:
-    #       type: string
-    #     description: List of tags.
 `;
 }
 
@@ -480,8 +413,7 @@ async function main() {
 
   // Check if files already exist
   const specPath = join(workspaceRoot, 'openapi', `${name}.yaml`);
-  const componentPath = join(workspaceRoot, 'openapi', 'components', `${name}.yaml`);
-  const examplesPath = join(workspaceRoot, 'openapi', 'examples', `${name}.yaml`);
+  const examplesPath = join(workspaceRoot, 'openapi', `${name}-examples.yaml`);
 
   if (existsSync(specPath)) {
     console.error(`Error: ${specPath} already exists.`);
@@ -489,17 +421,13 @@ async function main() {
   }
 
   // Ensure directories exist
-  await mkdir(join(workspaceRoot, 'openapi', 'components'), { recursive: true });
-  await mkdir(join(workspaceRoot, 'openapi', 'examples'), { recursive: true });
+  await mkdir(join(workspaceRoot, 'openapi'), { recursive: true });
 
   // Generate files
   console.log('📝 Generating files...\n');
 
   await writeFile(specPath, generateApiSpec(name, resource));
   console.log(`   ✅ ${specPath}`);
-
-  await writeFile(componentPath, generateComponentSchema(name, resource));
-  console.log(`   ✅ ${componentPath}`);
 
   await writeFile(examplesPath, generateExamples(name, resource));
   console.log(`   ✅ ${examplesPath}`);
@@ -508,8 +436,8 @@ async function main() {
 ✨ API generated successfully!
 
 Next steps:
-  1. Edit openapi/components/${name}.yaml to define your resource schema
-  2. Update openapi/examples/${name}.yaml with realistic example data
+  1. Edit openapi/${name}.yaml to customize your resource schema
+  2. Update openapi/${name}-examples.yaml with realistic example data
   3. Run validation: npm run validate
   4. Generate clients: npm run clients:generate
   5. Start mock server: npm run mock:start

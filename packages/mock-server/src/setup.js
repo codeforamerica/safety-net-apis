@@ -48,7 +48,7 @@ export async function performSetup({ verbose = true, skipValidation = false } = 
     const discoveredSpecs = discoverApiSpecs();
     const specsWithExamples = discoveredSpecs.map(spec => ({
       ...spec,
-      examplesPath: join(__dirname, '../../openapi/examples', `${spec.name}.yaml`)
+      examplesPath: join(__dirname, '../../openapi', `${spec.name}-examples.yaml`)
     }));
     
     const validationResults = await validateAll(specsWithExamples);

@@ -44,7 +44,7 @@ export function discoverApiSpecs({ useResolved = false } = {}) {
     .filter(file => {
       const fullPath = join(openapiDir, file);
       const stat = statSync(fullPath);
-      return stat.isFile() && file.endsWith('.yaml');
+      return stat.isFile() && file.endsWith('.yaml') && !file.endsWith('-examples.yaml');
     })
     .map(file => {
       const resourceName = basename(file, '.yaml');
@@ -190,18 +190,9 @@ export function extractMetadata(spec, resourceName) {
  */
 export function getExamplesPath(apiName) {
   const baseDir = join(__dirname, '../../openapi');
-  const state = process.env.STATE;
 
-  // Check for state-specific examples first
-  if (state) {
-    const statePath = join(baseDir, 'overlays', state, 'examples', `${apiName}.yaml`);
-    if (existsSync(statePath)) {
-      return statePath;
-    }
-  }
-
-  // Fall back to base examples
-  return join(baseDir, 'examples', `${apiName}.yaml`);
+  // Examples are colocated with specs as {name}-examples.yaml
+  return join(baseDir, `${apiName}-examples.yaml`);
 }
 
 /**

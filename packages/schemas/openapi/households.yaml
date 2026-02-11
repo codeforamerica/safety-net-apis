@@ -29,9 +29,9 @@ paths:
       tags:
       - Households
       parameters:
-      - "$ref": "./components/common-parameters.yaml#/SearchQueryParam"
-      - "$ref": "./components/common-parameters.yaml#/LimitParam"
-      - "$ref": "./components/common-parameters.yaml#/OffsetParam"
+      - "$ref": "./components/parameters.yaml#/SearchQueryParam"
+      - "$ref": "./components/parameters.yaml#/LimitParam"
+      - "$ref": "./components/parameters.yaml#/OffsetParam"
       responses:
         '200':
           description: A paginated collection of households.
@@ -40,9 +40,9 @@ paths:
               schema:
                 "$ref": "#/components/schemas/HouseholdList"
         '400':
-          "$ref": "./components/common-responses.yaml#/BadRequest"
+          "$ref": "./components/responses.yaml#/BadRequest"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
     post:
       summary: Create a household
       description: Create a new household record.
@@ -69,11 +69,11 @@ paths:
               schema:
                 "$ref": "#/components/schemas/Household"
         '400':
-          "$ref": "./components/common-responses.yaml#/BadRequest"
+          "$ref": "./components/responses.yaml#/BadRequest"
         '422':
-          "$ref": "./components/common-responses.yaml#/UnprocessableEntity"
+          "$ref": "./components/responses.yaml#/UnprocessableEntity"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
   "/households/{householdId}":
     parameters:
     - "$ref": "#/components/parameters/HouseholdIdParam"
@@ -92,11 +92,11 @@ paths:
                 "$ref": "#/components/schemas/Household"
               examples:
                 HouseholdExample1:
-                  "$ref": "./examples/households.yaml#/HouseholdExample1"
+                  "$ref": "./households-examples.yaml#/HouseholdExample1"
         '404':
-          "$ref": "./components/common-responses.yaml#/NotFound"
+          "$ref": "./components/responses.yaml#/NotFound"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
     patch:
       summary: Update a household
       description: Apply partial updates to an existing household.
@@ -117,13 +117,13 @@ paths:
               schema:
                 "$ref": "#/components/schemas/Household"
         '400':
-          "$ref": "./components/common-responses.yaml#/BadRequest"
+          "$ref": "./components/responses.yaml#/BadRequest"
         '404':
-          "$ref": "./components/common-responses.yaml#/NotFound"
+          "$ref": "./components/responses.yaml#/NotFound"
         '422':
-          "$ref": "./components/common-responses.yaml#/UnprocessableEntity"
+          "$ref": "./components/responses.yaml#/UnprocessableEntity"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
     delete:
       summary: Delete a household
       description: Permanently remove a household record.
@@ -134,9 +134,9 @@ paths:
         '204':
           description: Household deleted successfully.
         '404':
-          "$ref": "./components/common-responses.yaml#/NotFound"
+          "$ref": "./components/responses.yaml#/NotFound"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
 components:
   parameters:
     HouseholdIdParam:
@@ -150,22 +150,86 @@ components:
       example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
   schemas:
     Household:
-      "$ref": "./components/household.yaml#/Household"
+      type: object
+      description: Represents a household unit with multiple members.
+      additionalProperties: false
+      required:
+      - id
+      - members
+      - homeAddress
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the household.
+          readOnly: true
+        homeAddress:
+          "$ref": "./components/contact.yaml#/Address"
+          description: Home address of the household.
+        mailingAddress:
+          "$ref": "./components/contact.yaml#/Address"
+          description: Mailing address if different from home address.
+        phoneNumber:
+          "$ref": "./components/contact.yaml#/PhoneNumber"
+          description: Primary phone number for the household.
+        members:
+          type: array
+          description: List of household members with their relationship to the head of household.
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - personId
+            - relationship
+            properties:
+              personId:
+                type: string
+                format: uuid
+                description: Reference to the person's unique identifier.
+              relationship:
+                type: string
+                description: Relationship to the head of household.
+                enum:
+                - head_of_household
+                - spouse
+                - husband
+                - wife
+                - partner
+                - child
+                - parent
+                - sibling
+                - grandparent
+                - grandchild
+                - other_relative
+                - non_relative
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the household record was created.
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the household record was last updated.
+          readOnly: true
     HouseholdCreate:
       allOf:
-      - "$ref": "./components/household.yaml#/Household"
+      - "$ref": "#/components/schemas/Household"
       - type: object
         description: |
           Payload to create a new household record.
-          
+
           Note: id, createdAt, and updatedAt are server-generated (readOnly) and will be returned in the response.
     HouseholdUpdate:
       allOf:
-      - "$ref": "./components/household.yaml#/Household"
+      - "$ref": "#/components/schemas/Household"
       - type: object
         description: |
           Payload to update household members. Partial updates are supported.
-          
+
           Note: id, createdAt, and updatedAt are server-generated (readOnly) and cannot be updated.
         minProperties: 1
     HouseholdList:

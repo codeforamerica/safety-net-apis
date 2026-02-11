@@ -29,9 +29,9 @@ paths:
       tags:
       - Income
       parameters:
-      - "$ref": "./components/common-parameters.yaml#/SearchQueryParam"
-      - "$ref": "./components/common-parameters.yaml#/LimitParam"
-      - "$ref": "./components/common-parameters.yaml#/OffsetParam"
+      - "$ref": "./components/parameters.yaml#/SearchQueryParam"
+      - "$ref": "./components/parameters.yaml#/LimitParam"
+      - "$ref": "./components/parameters.yaml#/OffsetParam"
       responses:
         '200':
           description: A paginated collection of income.
@@ -40,9 +40,9 @@ paths:
               schema:
                 "$ref": "#/components/schemas/IncomeList"
         '400':
-          "$ref": "./components/common-responses.yaml#/BadRequest"
+          "$ref": "./components/responses.yaml#/BadRequest"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
     post:
       summary: Create income
       description: Create a new income record.
@@ -69,13 +69,13 @@ paths:
               schema:
                 "$ref": "#/components/schemas/Income"
         '400':
-          "$ref": "./components/common-responses.yaml#/BadRequest"
+          "$ref": "./components/responses.yaml#/BadRequest"
         '409':
-          "$ref": "./components/common-responses.yaml#/Conflict"
+          "$ref": "./components/responses.yaml#/Conflict"
         '422':
-          "$ref": "./components/common-responses.yaml#/UnprocessableEntity"
+          "$ref": "./components/responses.yaml#/UnprocessableEntity"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
   "/incomes/{incomeId}":
     parameters:
     - name: incomeId
@@ -99,9 +99,9 @@ paths:
               schema:
                 "$ref": "#/components/schemas/Income"
         '404':
-          "$ref": "./components/common-responses.yaml#/NotFound"
+          "$ref": "./components/responses.yaml#/NotFound"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
     patch:
       summary: Update income
       description: |
@@ -124,15 +124,15 @@ paths:
               schema:
                 "$ref": "#/components/schemas/Income"
         '400':
-          "$ref": "./components/common-responses.yaml#/BadRequest"
+          "$ref": "./components/responses.yaml#/BadRequest"
         '404':
-          "$ref": "./components/common-responses.yaml#/NotFound"
+          "$ref": "./components/responses.yaml#/NotFound"
         '409':
-          "$ref": "./components/common-responses.yaml#/Conflict"
+          "$ref": "./components/responses.yaml#/Conflict"
         '422':
-          "$ref": "./components/common-responses.yaml#/UnprocessableEntity"
+          "$ref": "./components/responses.yaml#/UnprocessableEntity"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
     delete:
       summary: Delete income
       description: Permanently remove an income record.
@@ -143,16 +143,132 @@ paths:
         '204':
           description: Income deleted successfully.
         '404':
-          "$ref": "./components/common-responses.yaml#/NotFound"
+          "$ref": "./components/responses.yaml#/NotFound"
         '500':
-          "$ref": "./components/common-responses.yaml#/InternalError"
+          "$ref": "./components/responses.yaml#/InternalError"
 components:
   schemas:
     Income:
-      "$ref": "./components/income.yaml#/Income"
+      type: object
+      description: A single item of income, which may be earned or unearned.
+      required:
+        - personId
+        - type
+        - amount
+        - frequency
+        - reportedOn
+        - source
+        - startDate
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Unique identifier for the income.
+        personId:
+          type: string
+          format: uuid
+          description: Foreign key reference to the person who has this income.
+        employerId:
+          type: string
+          format: uuid
+          description: Optional foreign key reference to the employer, third-party or self related to this income.
+        type:
+          type: string
+          enum:
+            - employed
+            - self_employed
+            - unearned
+          description: The type of income this item represents.
+        unearnedType:
+          type: string
+          enum:
+            - unemployment
+            - kinship_payment
+            - veterans_programs
+            - adoption_and_refugee_services
+            - ssi_or_ssdi
+            - private_disability
+            - workers_compensation
+            - disability_from_veterans_programs
+            - legal_form_or_settlement
+            - scholarship
+            - educational_grant
+            - work_study
+            - spousal_support
+            - child_support
+            - retirement_or_pension_plan
+            - investment_interest_and_dividends
+            - social_security_retirement
+            - renting_home
+            - renting_room
+            - renting_equipment
+            - gambling_lottery_or_other_winnings
+            - donations_or_gifts
+            - income_from_loan_or_mortgage
+            - payment_for_participating_in_research
+            - other_money_not_reported
+          description: Types of unearned income.
+        incomeBasis:
+          type: string
+          enum:
+            - net
+            - gross
+          description: Whether the income is net or gross.
+        amount:
+          type: number
+          format: float
+          description: The amount of income this item represents.
+        frequency:
+          type: string
+          enum:
+            - hourly
+            - daily
+            - weekly
+            - every_2_weeks
+            - twice_a_month
+            - monthly
+            - yearly
+          description: The frequency with which the income is received.
+        reportedOn:
+          type: string
+          format: date
+          description: The date the income was reported on.
+        source:
+          type: string
+          enum:
+            - client
+            - authorized_assister
+            - county_worker
+          description: The source of the income.
+        startDate:
+          type: string
+          format: date
+          description: When did the applicant first receive this income?
+        endDate:
+          type: string
+          format: date
+          description: Does applicant expect this income to end soon or has it already ended?
+        isVerified:
+          type: boolean
+          description: Whether the income has been verified.
+        verifiedDate:
+          type: string
+          format: date
+          description: The date the income was verified.
+        verifiedBy:
+          type: string
+          format: uuid
+          description: The county worker who verified the income.
+        verificationSourceIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Array of verification sources related to this income.
     IncomeCreate:
       allOf:
-      - "$ref": "./components/income.yaml#/Income"
+      - "$ref": "#/components/schemas/Income"
       - type: object
         description: |
           Payload to create a new income record.
@@ -160,7 +276,7 @@ components:
           Note: id is server-generated (readOnly) and will be returned in the response.
     IncomeUpdate:
       allOf:
-      - "$ref": "./components/income.yaml#/Income"
+      - "$ref": "#/components/schemas/Income"
       - type: object
         description: |
           Payload to update one or more mutable fields of an existing income.
@@ -195,4 +311,14 @@ components:
           type: integer
           minimum: 0
           description: Number of items skipped before the current page.
-
+    Employer:
+      type: object
+      description: An employer of one or more people.
+    VerificationSource:
+      description: A source of verification, which may be an external API or document.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Unique identifier for the verification source.
