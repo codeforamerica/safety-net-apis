@@ -43,15 +43,21 @@ async function findOpenAPISpecs(directory) {
 }
 
 async function main() {
-  // Check for --dir argument to override default directory
   const args = process.argv.slice(2);
+
+  // Parse --specs flag (also accept legacy --dir)
+  const specsArg = args.find(a => a.startsWith('--specs='));
   const dirArgIndex = args.indexOf('--dir');
   let openAPIDir;
 
-  if (dirArgIndex !== -1 && args[dirArgIndex + 1]) {
+  if (specsArg) {
+    openAPIDir = specsArg.split('=')[1];
+  } else if (dirArgIndex !== -1 && args[dirArgIndex + 1]) {
     openAPIDir = args[dirArgIndex + 1];
   } else {
-    openAPIDir = join(workspaceRoot, 'openapi');
+    console.error('Error: --specs=<dir> is required.\n');
+    console.error('Usage: node scripts/validate-patterns.js --specs=<dir>');
+    process.exit(1);
   }
 
   console.log('🔍 Validating API design patterns...\n');

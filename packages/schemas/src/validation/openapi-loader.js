@@ -21,23 +21,16 @@ function loadYaml(filePath) {
 }
 
 /**
- * Discover all API specification files in the openapi directory
- * Uses resolved specs if STATE env var is set or useResolved option is true
- * Excludes the components subdirectory
+ * Discover all API specification files in the given specs directory.
+ * @param {Object} options
+ * @param {string} options.specsDir - Path to the specs directory (required)
  */
-export function discoverApiSpecs({ useResolved = false } = {}) {
-  const baseDir = join(__dirname, '../../openapi');
-  const resolvedDir = join(baseDir, 'resolved');
+export function discoverApiSpecs({ specsDir } = {}) {
+  if (!specsDir) {
+    throw new Error('specsDir is required — pass --specs <dir> to specify the specs directory');
+  }
 
-  // STATE env var forces use of resolved specs
-  const state = process.env.STATE;
-  const shouldUseResolved = state || useResolved;
-
-  // Use resolved directory if it exists and we should use resolved
-  const openapiDir = shouldUseResolved && statSync(resolvedDir, { throwIfNoEntry: false })?.isDirectory()
-    ? resolvedDir
-    : baseDir;
-
+  const openapiDir = specsDir;
   const files = readdirSync(openapiDir);
 
   return files
@@ -184,23 +177,27 @@ export function extractMetadata(spec, resourceName) {
 }
 
 /**
- * Get the path to examples file for an API, checking state-specific first
+ * Get the path to examples file for an API
  * @param {string} apiName - Name of the API (e.g., 'persons')
+ * @param {string} specsDir - Path to the specs directory
  * @returns {string} Path to the examples file
  */
-export function getExamplesPath(apiName) {
-  const baseDir = join(__dirname, '../../openapi');
-
+export function getExamplesPath(apiName, specsDir) {
+  if (!specsDir) {
+    throw new Error('specsDir is required');
+  }
   // Examples are colocated with specs as {name}-examples.yaml
-  return join(baseDir, `${apiName}-examples.yaml`);
+  return join(specsDir, `${apiName}-examples.yaml`);
 }
 
 /**
  * Load all API specifications
+ * @param {Object} options
+ * @param {string} options.specsDir - Path to the specs directory (required)
  * @returns {Promise<Array>} Array of API metadata objects
  */
-export async function loadAllSpecs() {
-  const apiSpecs = discoverApiSpecs();
+export async function loadAllSpecs({ specsDir } = {}) {
+  const apiSpecs = discoverApiSpecs({ specsDir });
   const loadedSpecs = [];
   
   for (const apiSpec of apiSpecs) {

@@ -7,6 +7,7 @@
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
+import { resolve } from 'path';
 import { performSetup } from '../src/setup.js';
 import { registerAllRoutes } from '../src/route-generator.js';
 import { closeAll } from '../src/database-manager.js';
@@ -14,6 +15,17 @@ import { validateJSON } from '../src/validator.js';
 
 const HOST = process.env.MOCK_SERVER_HOST || 'localhost';
 const PORT = parseInt(process.env.MOCK_SERVER_PORT || '1080', 10);
+
+function parseSpecsDir() {
+  const args = process.argv.slice(2);
+  const specsArg = args.find(a => a.startsWith('--specs='));
+  if (!specsArg) {
+    console.error('Error: --specs=<dir> is required.\n');
+    console.error('Usage: node scripts/server.js --specs=<dir>');
+    process.exit(1);
+  }
+  return resolve(specsArg.split('=')[1]);
+}
 
 let expressServer = null;
 
@@ -27,7 +39,8 @@ async function startMockServer() {
   
   try {
     // Perform setup (load specs and seed databases)
-    const { apiSpecs } = await performSetup({ verbose: true });
+    const specsDir = parseSpecsDir();
+    const { apiSpecs } = await performSetup({ specsDir, verbose: true });
     
     // Create Express app
     const app = express();
