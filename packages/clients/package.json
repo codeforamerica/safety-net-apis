@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Generated API clients and collections for Safety Net APIs",
   "type": "module",
+  "bin": {
+    "safety-net-generate-clients": "./scripts/generate-clients.js"
+  },
   "scripts": {
     "postman": "node scripts/generate-postman.js",
     "build-package": "node scripts/build-state-package.js"
