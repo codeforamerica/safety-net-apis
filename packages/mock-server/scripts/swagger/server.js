@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Swagger UI Server
  * Auto-discovers and serves OpenAPI specifications with Swagger UI

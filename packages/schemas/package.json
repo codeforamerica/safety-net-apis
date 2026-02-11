@@ -9,6 +9,10 @@
     "scripts/",
     "docs/"
   ],
+  "bin": {
+    "safety-net-resolve": "./scripts/resolve-overlay.js",
+    "safety-net-design-reference": "./scripts/export-design-reference.js"
+  },
   "exports": {
     "./overlay": "./src/overlay/overlay-resolver.js",
     "./validation": "./src/validation/openapi-validator.js",

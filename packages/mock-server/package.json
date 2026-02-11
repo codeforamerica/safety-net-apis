@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Mock API server for Safety Net API development and testing",
   "type": "module",
+  "bin": {
+    "safety-net-mock": "./scripts/server.js",
+    "safety-net-swagger": "./scripts/swagger/server.js"
+  },
   "scripts": {
     "start": "node scripts/server.js",
     "start:all": "node scripts/start-all.js",

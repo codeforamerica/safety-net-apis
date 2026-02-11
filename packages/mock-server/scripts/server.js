@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Mock API Server
  * Dynamic Express server that automatically discovers and serves OpenAPI specifications
