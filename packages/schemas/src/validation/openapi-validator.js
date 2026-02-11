@@ -315,8 +315,10 @@ export async function validateAll(apiSpecs) {
   
   for (const api of apiSpecs) {
     const specResult = await validateSpec(api.specPath);
-    const examplesResult = await validateExamples(api.specPath, api.examplesPath);
-    
+    const examplesResult = api.examplesPath
+      ? await validateExamples(api.specPath, api.examplesPath)
+      : { valid: true, errors: [], warnings: [] };
+
     results[api.name] = {
       spec: specResult,
       examples: examplesResult,

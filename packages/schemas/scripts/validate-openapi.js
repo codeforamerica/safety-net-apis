@@ -20,12 +20,14 @@ async function main() {
   const args = process.argv.slice(2);
   const detailed = args.includes('--detailed') || args.includes('-d');
   const brief = args.includes('--brief') || args.includes('-b');
+  const skipExamples = args.includes('--skip-examples');
 
   if (args.includes('--help') || args.includes('-h')) {
     console.log('OpenAPI Specification & Examples Validator\n');
     console.log('Usage: node scripts/validate-openapi.js --specs=<dir> [options]\n');
     console.log('Flags:');
     console.log('  --specs=<dir>     Path to specs directory (required)');
+    console.log('  --skip-examples   Skip example validation (schema-only)');
     console.log('  -d, --detailed    Show all validation errors (default)');
     console.log('  -b, --brief       Show only first 3 errors per example');
     console.log('  -h, --help        Show this help message');
@@ -58,14 +60,14 @@ async function main() {
 
     console.log(`✓ Found ${apiSpecs.length} specification(s)\n`);
 
-    // Add examples paths
+    // Add examples paths (unless skipping)
     const specsWithExamples = apiSpecs.map(spec => ({
       ...spec,
-      examplesPath: getExamplesPath(spec.name, specsDir)
+      examplesPath: skipExamples ? null : getExamplesPath(spec.name, specsDir)
     }));
 
-    // Validate all specs and examples
-    console.log('Validating specifications and examples...\n');
+    // Validate specs (and examples unless --skip-examples)
+    console.log(`Validating specifications${skipExamples ? '' : ' and examples'}...\n`);
     const results = await validateAll(specsWithExamples);
 
     // Display results (detailed by default)
