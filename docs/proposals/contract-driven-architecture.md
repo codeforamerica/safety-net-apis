@@ -20,41 +20,41 @@ At the **backend**, contracts provide vendor independence. The adapter pattern t
 
 At the **frontend**, form definition contracts provide independence from domain-specific rendering logic. The frontend renders sections, fields, and annotations from declarative definitions without hardcoding decisions about what to show based on programs, roles, or eligibility groups. Adding a program, changing which sections a role sees, or introducing eligibility-driven fields is a contract change, not a code change.
 
-This proposal describes how to define contracts for both layers, organized around two API types: **Object APIs** and **Action APIs**.
+This proposal describes how to define contracts for both layers, organized around two API types. **REST** (Representational State Transfer) APIs model resources with standard CRUD operations — create, read, update, delete. These serve data-shaped domains where the value is in the data model itself. **RPC** (Remote Procedure Call) APIs expose named operations that trigger behavior — state transitions, rule evaluation, and side effects. These serve behavior-shaped domains where the value is in orchestration and enforcement. The contract complexity differs: REST APIs need only an interface definition, while RPC APIs need richer behavioral contracts.
 
 ## Contract Artifacts
 
-Every domain needs contracts. What contracts you need depends on whether the domain is data-shaped or behavior-shaped — which maps to the two API types.
+Every domain needs contracts. What contracts you need depends on whether the domain is data-shaped or behavior-shaped — which maps to REST and RPC.
 
-### Object APIs
+### REST APIs
 
-Object APIs are CRUD operations on objects — create, read, update, delete, list, search. Every domain has these. The contract is an OpenAPI spec that defines the object schemas, endpoints, and query parameters.
+REST APIs are CRUD operations on resources — create, read, update, delete, list, search. Every domain has these. The contract is an OpenAPI spec that defines the resource schemas, endpoints, and query parameters.
 
 **Examples:**
 - `GET /persons`, `POST /persons`, `GET /persons/:id`
 - `GET /applications`, `POST /applications`
 - `GET /workflow/tasks`, `GET /workflow/queues`
 
-Object APIs are straightforward to make portable. A `Person` looks the same regardless of whether it's stored in PostgreSQL, Salesforce, or a legacy system. The adapter maps between the OpenAPI contract and the vendor's data model.
+REST APIs are straightforward to make portable. A `Person` looks the same regardless of whether it's stored in PostgreSQL, Salesforce, or a legacy system. The adapter maps between the OpenAPI contract and the vendor's data model.
 
-Some domains only need Object APIs — persons, applications, households, income, documents. The data model is the value, and CRUD is the full interface. These domains need one contract artifact:
+Some domains only need REST APIs — persons, applications, households, income, documents. The data model is the value, and CRUD is the full interface. These domains need one contract artifact:
 
-- **OpenAPI spec** — object schemas, endpoints, query parameters
+- **OpenAPI spec** — resource schemas, endpoints, query parameters
 
-### Action APIs
+### RPC APIs
 
-Action APIs are behavioral operations on objects — they trigger state transitions, enforce business rules, and produce side effects. Some domains need these in addition to Object APIs.
+RPC APIs are behavioral operations — they trigger state transitions, enforce business rules, and produce side effects. Some domains need these in addition to REST APIs.
 
 **Examples:**
 - `POST /workflow/tasks/:id/claim` — transitions a task from `pending` to `in_progress`, enforces assignment rules
 - `POST /workflow/tasks/:id/escalate` — transitions to `escalated`, creates audit event, may trigger notifications
 - `POST /workflow/tasks/:id/complete` — validates the caller is the assignee, transitions to `completed`
 
-Action APIs are harder to make portable because the value is in orchestration and enforcement, not just data. A workflow engine provides state machine enforcement, task routing, SLA tracking, auto-escalation, audit trails, and event-driven triggers. A rules engine provides evaluation, conflict resolution, and explanation capabilities. A notification system provides multi-channel orchestration, retry logic, and delivery tracking.
+RPC APIs are harder to make portable because the value is in orchestration and enforcement, not just data. A workflow engine provides state machine enforcement, task routing, SLA tracking, auto-escalation, audit trails, and event-driven triggers. A rules engine provides evaluation, conflict resolution, and explanation capabilities. A notification system provides multi-channel orchestration, retry logic, and delivery tracking.
 
-A generic CRUD adapter loses most of this value. The adapter pattern still applies, but the contract needs to be richer than just an OpenAPI spec. Action API domains need two or more contract artifacts:
+A generic CRUD adapter loses most of this value. The adapter pattern still applies, but the contract needs to be richer than just an OpenAPI spec. RPC API domains need two or more contract artifacts:
 
-- **OpenAPI spec** — same object schemas used by the Object APIs
+- **OpenAPI spec** — same resource schemas used by the REST APIs
 - **State machine YAML** (required) — valid states, transitions, guards, effects, timeouts, SLA behavior, audit requirements, notification triggers, and event catalog
 - **Rules YAML** (optional) — declarative rules with logic conditions and actions. Rule types include assignment, priority, eligibility, escalation, alert, and more. Only needed when the domain involves condition-based decisions beyond what guards express (e.g., routing objects to queues based on context, setting priority based on application data, alert thresholds for operational monitoring).
 - **Metrics YAML** (optional) — defines what to measure for operational monitoring. Metric names, labels, source linkage (which states/transitions produce the data), and targets — not implementation details (Prometheus vs. Datadog is a deployment concern).
@@ -99,7 +99,7 @@ onCreate:
       description: Route task to queue and set priority
 ```
 
-Each `trigger` becomes an Action API endpoint — `claim` on `Task` in the `workflow` domain becomes `POST /workflow/tasks/:id/claim`. Effects are declarative side effects (create records, update fields, send notifications, evaluate rules) that must occur when a transition fires.
+Each `trigger` becomes an RPC API endpoint — `claim` on `Task` in the `workflow` domain becomes `POST /workflow/tasks/:id/claim`. Effects are declarative side effects (create records, update fields, send notifications, evaluate rules) that must occur when a transition fires.
 
 ### Complex calculation logic
 
@@ -251,24 +251,24 @@ The same pattern applies to decision tables (conditions and actions with field r
 
 The adapter translates between contracts and vendor-specific systems. Swap vendors by reimplementing the adapter, not the frontend.
 
-For **Object APIs**, the adapter wraps a vendor's data store with a standard interface defined by the OpenAPI spec. The frontend sees the same API regardless of what's behind the adapter.
+For **REST APIs**, the adapter wraps a vendor's data store with a standard interface defined by the OpenAPI spec. The frontend sees the same API regardless of what's behind the adapter.
 
 ```
 [Frontend] → [Adapter] → [Vendor/DB]
                  ↑
-              Object APIs (GET /tasks, POST /tasks)
+              REST APIs (GET /tasks, POST /tasks)
 ```
 
-For **Action APIs**, the adapter wraps a vendor system (workflow engine, rules engine) and exposes both Object APIs and Action APIs. The frontend calls Object APIs for data reads (`GET /workflow/tasks`) and Action APIs for behavioral operations (`POST /workflow/tasks/:id/claim`). The adapter translates both to the vendor's system.
+For **RPC APIs**, the adapter wraps a vendor system (workflow engine, rules engine) and exposes both REST and RPC APIs. The frontend calls REST APIs for data reads (`GET /workflow/tasks`) and RPC APIs for behavioral operations (`POST /workflow/tasks/:id/claim`). The adapter translates both to the vendor's system.
 
 ```
 [Frontend] ──────► [Adapter] ──────► [Vendor System]
                       ↑
-                    Object APIs (GET /tasks, POST /tasks)
-                    Action APIs (POST /tasks/:id/claim)
+                    REST APIs (GET /tasks, POST /tasks)
+                    RPC APIs (POST /tasks/:id/claim)
 ```
 
-The adapter must satisfy the contract artifacts for the domain — for Action APIs, that means more than just an OpenAPI spec. When you switch vendors, the contracts tell you exactly what the new backend must do.
+The adapter must satisfy the contract artifacts for the domain — for RPC APIs, that means more than just an OpenAPI spec. When you switch vendors, the contracts tell you exactly what the new backend must do.
 
 ### Contracts as requirements
 
@@ -316,8 +316,8 @@ This project provides contracts and development tooling. States build their own 
 
 | Artifact | Audience | Purpose |
 |----------|----------|---------|
-| OpenAPI specs | Developers | Define the Object API surface (schemas, endpoints, parameters) |
-| State machine YAML | Developers | Define the Action API surface (states, transitions, guards, effects, events, notifications, audit requirements) |
+| OpenAPI specs | Developers | Define the REST API surface (schemas, endpoints, parameters) |
+| State machine YAML | Developers | Define the RPC API surface (states, transitions, guards, effects, events, notifications, audit requirements) |
 | Rules YAML | Developers | Define condition-based decisions: routing, assignment, priority, alerts |
 | Metrics YAML | Developers | Define what to measure: metric names, labels, source linkage, targets |
 | Form definition YAML | Developers | Define context-dependent form structure, field visibility, validation, and dependencies |
@@ -330,7 +330,7 @@ This project provides contracts and development tooling. States build their own 
 | State machine visualizations | Business analysts | Auto-generated diagrams from the state machine YAML showing states, transitions, and actors |
 | ORCA data explorer | All | Interactive tool for exploring API contracts — schemas, endpoints, relationships, and domain structure |
 
-Adding a new domain to the mock server is declarative — define artifacts, not code. Add an OpenAPI spec and the mock auto-generates CRUD endpoints; add a state machine YAML and it auto-generates Action API endpoints with transition enforcement, effects, and rule evaluation.
+Adding a new domain to the mock server is declarative — define artifacts, not code. Add an OpenAPI spec and the mock auto-generates CRUD endpoints; add a state machine YAML and it auto-generates RPC API endpoints with transition enforcement, effects, and rule evaluation.
 
 States don't have to use the base contracts as-is. An overlay system lets states customize any contract artifact — OpenAPI specs, state machine YAML, rules, metrics, form definitions — without forking the base files. Overlays use JSONPath targeting to add, modify, or remove specific elements (e.g., add a state-specific rule, adjust a metric target, modify a transition's guard, add fields to a form section). The base contracts plus overlays produce a merged result that the validation script and integration tests run against, so customizations are still verified for consistency.
 

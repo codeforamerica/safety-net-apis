@@ -20,7 +20,7 @@ A caseworker opens a task queue. Tasks arrive from different programs — SNAP, 
 
 The risk: behavioral requirements — valid transitions, guards, effects, routing rules, SLA tracking, audit — get embedded in vendor-specific implementations with no portable specification. Switching workflow engines means reverse-engineering what the current system does, and there's no way to validate that a new vendor satisfies the same requirements before you commit to it. A behavioral contract addresses this by making requirements explicit, testable, and vendor-independent. It also doubles as a vendor evaluation checklist — can this system support these transitions, these effects, these SLA behaviors? — and enables frontend development against a mock server before any vendor is selected.
 
-This prototype takes a different approach: the system reads **behavioral contracts** — a state machine that declares valid transitions, guards, and effects, plus rules that declare routing and priority decisions. The mock server auto-generates Action API endpoints from the state machine. Adding a transition is a row in a table, not a new endpoint.
+This prototype takes a different approach: the system reads **behavioral contracts** — a state machine that declares valid transitions, guards, and effects, plus rules that declare routing and priority decisions. The mock server auto-generates RPC API endpoints from the state machine. Adding a transition is a row in a table, not a new endpoint.
 
 ### What the system does
 
@@ -36,10 +36,10 @@ This prototype takes a different approach: the system reads **behavioral contrac
 ### What the caseworker sees
 
 A minimal task queue UI with:
-- **Task list** — filtered by status and queue (Object API: `GET /workflow/tasks`)
-- **Queue list** — shows available queues (Object API: `GET /workflow/queues`)
+- **Task list** — filtered by status and queue (REST API: `GET /workflow/tasks`)
+- **Queue list** — shows available queues (REST API: `GET /workflow/queues`)
 - **Task detail** — shows a single task with SLA info, assignment, audit history
-- **Action buttons** — Claim, Complete, Release (Action APIs: `POST /workflow/tasks/:id/{action}`)
+- **Action buttons** — Claim, Complete, Release (RPC APIs: `POST /workflow/tasks/:id/{action}`)
 - **Event stream** — real-time updates when tasks change (SSE: `GET /events/stream?domain=workflow`)
 
 This is not a production UI — it's the minimum needed to exercise every API type through a browser.
@@ -123,8 +123,8 @@ Steps 1-3 prove the authoring pipeline. Steps 4+ prove the runtime behavior.
 |------|-----|
 | Tables → YAML conversion works | Setup: conversion scripts generate valid YAML from spreadsheet tables |
 | Validation catches inconsistencies | Setup: validation script confirms generated YAML is internally consistent |
-| Object APIs work | Task list, queue list, audit event list, SLAType lookup |
-| Action APIs are auto-generated from triggers | claim, complete, release endpoints exist without handler code |
+| REST APIs work | Task list, queue list, audit event list, SLAType lookup |
+| RPC APIs are auto-generated from triggers | claim, complete, release endpoints exist without handler code |
 | State machine enforces valid transitions | Step 3: claim on `in_progress` → 409 |
 | Guards enforce preconditions | Step 4: wrong caller → 409 |
 | Effects execute on transitions | Audit events created, fields updated, events emitted, rules evaluated |
@@ -149,8 +149,8 @@ Each row is a concept from the [contract-driven architecture](contract-driven-ar
 
 | Concept | Exercised by |
 |---------|-------------|
-| Object APIs (OpenAPI schemas → CRUD) | Task, Queue, SLAType, TaskAuditEvent |
-| Action APIs (triggers → endpoints) | `claim`, `complete`, `release` |
+| REST APIs (OpenAPI schemas → CRUD) | Task, Queue, SLAType, TaskAuditEvent |
+| RPC APIs (triggers → endpoints) | `claim`, `complete`, `release` |
 | State machine (states, transitions, initial state) | 3 states, 3 transitions + `onCreate` |
 | SLA clock behavior | `running` (pending, in_progress), `stopped` (completed) |
 | Guard: null check | "task is unassigned" on claim |
@@ -194,7 +194,7 @@ Capabilities deferred beyond this prototype:
 
 ## OpenAPI Schemas
 
-These are the Object API schemas for the prototype. The adapter exposes standard CRUD endpoints for each (`GET /workflow/tasks`, `POST /workflow/tasks`, `GET /workflow/tasks/:id`, etc.).
+These are the REST API schemas for the prototype. The adapter exposes standard CRUD endpoints for each (`GET /workflow/tasks`, `POST /workflow/tasks`, `GET /workflow/tasks/:id`, etc.).
 
 ### Task
 
@@ -266,7 +266,7 @@ Event payload emitted when a task is claimed. Included to exercise the event con
 
 ## State Transition Table
 
-This table defines the task lifecycle as a state machine. Each row is a valid transition — the trigger becomes an Action API endpoint (e.g., `claim` → `POST /workflow/tasks/:id/claim`). The adapter rejects transitions from invalid states with a 409 response. The conversion script generates the state machine YAML from this table.
+This table defines the task lifecycle as a state machine. Each row is a valid transition — the trigger becomes an RPC API endpoint (e.g., `claim` → `POST /workflow/tasks/:id/claim`). The adapter rejects transitions from invalid states with a 409 response. The conversion script generates the state machine YAML from this table.
 
 | From State | To State | Trigger | Who | Guard | Effects |
 |------------|----------|---------|-----|-------|---------|
@@ -326,7 +326,7 @@ Any effect can include a **`when` clause** to make it conditional on a runtime v
 
 ### Request bodies
 
-Each Action API endpoint accepts a JSON request body.
+Each RPC API endpoint accepts a JSON request body.
 
 | Trigger | Endpoint | Request body fields |
 |---------|----------|-------------------|

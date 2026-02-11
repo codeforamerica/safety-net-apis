@@ -84,8 +84,8 @@ This document follows the **steel thread** approach — the thinnest end-to-end 
 | Form definition drives record creation | Application submission creates SectionReview records from the program requirements table |
 | Expression evaluation | `visibleWhen` conditions use the same format as rule conditions (e.g., JSON Logic) |
 | Annotation extensibility | Three annotation types (program relevance, verification, regulatory citations) — the frontend renders all of them without type-specific logic |
-| Object APIs | Application, ApplicationMember, Income, SectionReview — standard CRUD from OpenAPI spec |
-| Action API | `submit` → `POST /intake/applications/:id/submit` |
+| REST APIs | Application, ApplicationMember, Income, SectionReview — standard CRUD from OpenAPI spec |
+| RPC API | `submit` → `POST /intake/applications/:id/submit` |
 
 ### What's not in the prototype
 
