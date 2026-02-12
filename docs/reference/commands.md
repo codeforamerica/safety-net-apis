@@ -10,6 +10,8 @@ All available npm scripts in the Safety Net OpenAPI toolkit.
 | `npm run validate` | Validate base specs |
 | `npm run validate:state` | Validate specs for current STATE |
 | `npm run validate:all-states` | Validate all states |
+| `npm run clients:typescript` | Generate TypeScript SDK from resolved specs |
+| `npm run clients:json-schema` | Convert OpenAPI specs to JSON Schema files |
 | `npm run mock:start` | Start mock server only |
 | `npm run mock:reset` | Reset database to example data |
 | `npm test` | Run unit tests |
@@ -111,25 +113,68 @@ Creates:
 - `openapi/components/benefit.yaml`
 - `openapi/examples/benefits.yaml`
 
-### Building State Packages
+### `npm run clients:typescript`
 
-Build a state-specific npm package with TypeScript SDK and Zod schemas:
+Generates TypeScript SDK with Zod schemas from resolved OpenAPI specs.
 
 ```bash
-node packages/clients/scripts/build-state-package.js --state=<your-state> --version=1.0.0
+# From state application repository
+npm run clients:typescript -- --specs=./resolved --out=./src/api
 ```
 
-This generates a complete npm package in `packages/clients/dist-packages/{state}/` containing:
-- Typed SDK functions (`getPerson`, `createPerson`, etc.)
-- TypeScript interfaces
+This generates TypeScript clients directly to your output directory containing:
+- SDK functions per domain (`getPerson`, `createPerson`, etc.)
+- TypeScript type definitions
 - Zod schemas for runtime validation
 - Axios-based HTTP client
+- Search helper utilities
 
-The package is built using `@hey-api/openapi-ts` with the following plugins:
-- `@hey-api/typescript` - TypeScript types
-- `@hey-api/sdk` - SDK functions with validation
-- `@hey-api/zod` - Zod schemas
-- `@hey-api/client-axios` - Axios HTTP client
+Output structure:
+```
+{out}/
+  index.ts                  # Re-exports all domains
+  search-helpers.ts         # Query string builder utilities
+  persons/
+    index.ts                # SDK functions + types
+    sdk.gen.ts              # getPerson, createPerson, etc.
+    types.gen.ts            # TypeScript interfaces
+    zod.gen.ts              # Zod schemas for validation
+    client/                 # HTTP client utilities
+```
+
+### `npm run clients:json-schema`
+
+Converts resolved OpenAPI 3.1 specs to JSON Schema Draft 2020-12 format.
+
+```bash
+# From state application repository
+npm run clients:json-schema -- --specs=./resolved --out=./json-schemas
+```
+
+This extracts `components.schemas` from each OpenAPI spec and outputs individual JSON Schema files:
+- Removes OpenAPI-specific keywords (`discriminator`, `xml`, `externalDocs`, `example`)
+- Adds JSON Schema metadata (`$schema`, `$id`)
+- Organizes by domain (persons/, applications/, etc.)
+
+Output structure:
+```
+{out}/
+  persons/
+    Person.json
+    DemographicInfo.json
+    CitizenshipInfo.json
+  applications/
+    Application.json
+    HouseholdMember.json
+  users/
+    User.json
+```
+
+**Use cases:**
+- Form validation libraries (e.g., react-jsonschema-form, Ajv)
+- API documentation tools
+- Code generation for other languages
+- Schema validation in backend services
 
 ## Server Commands
 

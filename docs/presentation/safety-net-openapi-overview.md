@@ -520,4 +520,4 @@ npm start
 **Key commands:**
 - `npm start` - Start simulated API + docs
 - `npm run validate` - Validate definitions
-- `npm run clients:generate` - Generate code libraries
+- `npm run clients:typescript` - Generate code libraries
