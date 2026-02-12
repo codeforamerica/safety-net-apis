@@ -6,7 +6,7 @@ import { convertToJsonSchema, loadSpec } from '../scripts/openapi-to-json-schema
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const resolvedSpecsDir = join(__dirname, '../../schemas/package/openapi/resolved');
+const specsDir = join(__dirname, '../../schemas/openapi');
 
 describe('OpenAPI to JSON Schema Conversion', () => {
   describe('convertToJsonSchema', () => {
@@ -304,7 +304,7 @@ describe('OpenAPI to JSON Schema Conversion', () => {
 
   describe('loadSpec', () => {
     it('should dereference internal $ref entries', async () => {
-      const specPath = join(resolvedSpecsDir, 'persons.yaml');
+      const specPath = join(specsDir, 'persons.yaml');
       const spec = await loadSpec(specPath);
 
       // After dereferencing, components.schemas should contain resolved objects
@@ -321,7 +321,7 @@ describe('OpenAPI to JSON Schema Conversion', () => {
     });
 
     it('should dereference external $ref entries', async () => {
-      const specPath = join(resolvedSpecsDir, 'persons.yaml');
+      const specPath = join(specsDir, 'persons.yaml');
       const spec = await loadSpec(specPath);
 
       // External refs like ./components/parameters.yaml#/LimitParam should be resolved
