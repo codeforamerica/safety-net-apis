@@ -43,10 +43,10 @@ const templatesDir = join(clientsRoot, 'templates');
 /**
  * Parse command line arguments
  */
-function parseArgs() {
+function parseArgs(argv = process.argv.slice(2)) {
   const args = { specs: null, out: null, help: false };
 
-  for (const arg of process.argv.slice(2)) {
+  for (const arg of argv) {
     if (arg === '--help' || arg === '-h') {
       args.help = true;
     } else if (arg.startsWith('--specs=')) {
@@ -271,8 +271,13 @@ export { q, search } from './search-helpers.js';
   console.log(`  import { getPerson } from '@/api/${domains[0]}';`);
 }
 
-// Run main function
-main().catch(err => {
-  console.error('\nError:', err.message);
-  process.exit(1);
-});
+// Export for testing
+export { parseArgs, createOpenApiTsConfig, exec };
+
+// Run main function only if this is the entry point
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(err => {
+    console.error('\nError:', err.message);
+    process.exit(1);
+  });
+}
