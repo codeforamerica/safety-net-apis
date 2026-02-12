@@ -3,7 +3,7 @@
  * Resolve OpenAPI overlays for state-specific configurations.
  *
  * This script applies OpenAPI Overlay Specification (1.0.0) transformations
- * to base schemas, producing state-specific resolved specifications.
+ * to base schemas, producing resolved specifications.
  *
  * Two-pass processing:
  *   1. Scan all files to determine where each target path exists
@@ -13,52 +13,92 @@
  *      - Target in 2+ files → require file/files property
  *
  * Usage:
- *   STATE=california node scripts/resolve-overlay.js
- *   node scripts/resolve-overlay.js --state=colorado
+ *   node scripts/resolve-overlay.js --base=./openapi --out=./resolved
+ *   node scripts/resolve-overlay.js --base=./openapi --overlays=./overlays/california --out=./resolved
  *
- * The resolved specs are written to openapi/resolved/ and used by
- * the mock server, client generators, and other tooling.
+ * Flags:
+ *   --base       Path to base specs directory (required)
+ *   --overlays   Path to overlay directory (optional; omit to copy base specs unchanged)
+ *   --out        Output directory for resolved specs (required)
+ *   --env        Target environment for x-environments filtering (optional)
+ *   --env-file   Path to env file with key=value pairs for placeholder substitution (optional)
  */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, cpSync, rmSync } from 'fs';
-import { join, dirname, relative } from 'path';
+import { join, dirname, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import yaml from 'js-yaml';
 import { applyOverlay, checkPathExists } from '../src/overlay/overlay-resolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const rootDir = join(__dirname, '..');
-const openapiDir = join(rootDir, 'openapi');
-const overlaysDir = join(openapiDir, 'overlays');
-const resolvedDir = join(openapiDir, 'resolved');
 
-/**
- * Get the state from environment or CLI args
- */
-function getState() {
-  // Check CLI args first
-  const stateArg = process.argv.find(arg => arg.startsWith('--state='));
-  if (stateArg) {
-    return stateArg.split('=')[1];
+// =============================================================================
+// Argument Parsing
+// =============================================================================
+
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const options = {
+    base: null,
+    overlays: null,
+    out: null,
+    env: null,
+    envFile: null,
+    help: false
+  };
+
+  for (const arg of args) {
+    if (arg === '--help' || arg === '-h') {
+      options.help = true;
+    } else if (arg.startsWith('--base=')) {
+      options.base = arg.split('=')[1];
+    } else if (arg.startsWith('--overlays=')) {
+      options.overlays = arg.split('=')[1];
+    } else if (arg.startsWith('--out=')) {
+      options.out = arg.split('=')[1];
+    } else if (arg.startsWith('--env=')) {
+      options.env = arg.split('=')[1];
+    } else if (arg.startsWith('--env-file=')) {
+      options.envFile = arg.split('=')[1];
+    }
   }
 
-  // Fall back to environment variable
-  return process.env.STATE || null;
+  return options;
 }
 
-/**
- * List available state overlays
- */
-function listAvailableStates() {
-  if (!existsSync(overlaysDir)) {
-    return [];
-  }
+function showHelp() {
+  console.log(`
+Resolve OpenAPI Overlays
 
-  return readdirSync(overlaysDir, { withFileTypes: true })
-    .filter(entry => entry.isDirectory() && existsSync(join(overlaysDir, entry.name, 'modifications.yaml')))
-    .map(entry => entry.name);
+Applies overlay transformations to base specs, producing resolved output.
+
+Usage:
+  node scripts/resolve-overlay.js --base=<dir> --out=<dir> [--overlays=<dir>] [--env=<env>] [--env-file=<file>]
+
+Flags:
+  --base=<dir>       Path to base specs directory (required)
+  --overlays=<dir>   Path to overlay directory (optional)
+  --out=<dir>        Output directory for resolved specs (required)
+  --env=<env>        Target environment for x-environments filtering (optional)
+  --env-file=<file>  Path to env file for \${VAR} placeholder substitution (optional)
+  -h, --help         Show this help message
+
+Without --overlays, base specs are copied to --out unchanged.
+With --env, nodes whose x-environments array doesn't include the target env are removed.
+With --env-file, \${VAR} placeholders in string values are substituted (process.env overrides file values).
+
+Examples:
+  node scripts/resolve-overlay.js --base=./openapi --out=./resolved
+  node scripts/resolve-overlay.js --base=./openapi --overlays=./overlays/california --out=./resolved
+  node scripts/resolve-overlay.js --base=./openapi --out=./resolved --env=production
+  node scripts/resolve-overlay.js --base=./openapi --out=./resolved --env-file=.env
+`);
 }
+
+// =============================================================================
+// File Collection
+// =============================================================================
 
 /**
  * Recursively collect all YAML files with their relative paths and contents
@@ -71,10 +111,6 @@ function collectYamlFiles(sourceDir, baseDir = sourceDir) {
     const sourcePath = join(sourceDir, file.name);
 
     if (file.isDirectory()) {
-      // Skip overlays and resolved directories
-      if (file.name === 'overlays' || file.name === 'resolved') {
-        continue;
-      }
       yamlFiles = yamlFiles.concat(collectYamlFiles(sourcePath, baseDir));
     } else if (file.name.endsWith('.yaml')) {
       const relativePath = relative(baseDir, sourcePath);
@@ -85,6 +121,55 @@ function collectYamlFiles(sourceDir, baseDir = sourceDir) {
   }
 
   return yamlFiles;
+}
+
+/**
+ * Recursively discover all overlay YAML files in the overlays directory.
+ * Each file must have `overlay: 1.0.0` at the top level to be recognized.
+ */
+function discoverOverlayFiles(overlaysDir) {
+  if (!existsSync(overlaysDir)) {
+    return [];
+  }
+
+  const overlayFiles = [];
+
+  function walk(dir) {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+      } else if (entry.name.endsWith('.yaml')) {
+        try {
+          const content = readFileSync(fullPath, 'utf8');
+          const parsed = yaml.load(content);
+          if (parsed && parsed.overlay === '1.0.0') {
+            overlayFiles.push(fullPath);
+          }
+        } catch {
+          // Skip files that can't be parsed
+        }
+      }
+    }
+  }
+
+  walk(overlaysDir);
+  return overlayFiles.sort();
+}
+
+// =============================================================================
+// Overlay Resolution
+// =============================================================================
+
+/**
+ * Extract version number from a spec filename.
+ * No suffix = version 1, -v2 suffix = version 2, etc.
+ */
+function getVersionFromFilename(relativePath) {
+  const basename = relativePath.replace(/\.yaml$/, '').split('/').pop();
+  const match = basename.match(/-v(\d+)$/);
+  return match ? parseInt(match[1], 10) : 1;
 }
 
 /**
@@ -103,12 +188,16 @@ function analyzeTargetLocations(overlay, yamlFiles) {
 
     if (!target) continue;
 
-    // Find all files where the full target path exists
+    // Find all files where the full target path exists, with metadata
     const matchingFiles = [];
     for (const { relativePath, spec } of yamlFiles) {
       const pathCheck = checkPathExists(spec, target);
       if (pathCheck.fullPathExists) {
-        matchingFiles.push(relativePath);
+        matchingFiles.push({
+          relativePath,
+          apiId: spec.info?.['x-api-id'] || null,
+          version: getVersionFromFilename(relativePath)
+        });
       }
     }
 
@@ -124,22 +213,28 @@ function analyzeTargetLocations(overlay, yamlFiles) {
 }
 
 /**
- * Determine which files each action should apply to, generating warnings as needed
+ * Determine which files each action should apply to, generating warnings as needed.
+ * Supports disambiguation via:
+ *   - file/files: explicit file paths
+ *   - target-api: match spec's info.x-api-id
+ *   - target-version: match filename version suffix (no suffix = 1, -v2 = 2)
  */
 function resolveActionTargets(actionFileMap) {
   const warnings = [];
-  const actionTargets = new Map(); // actionIndex -> array of file paths to apply to
+  const actionTargets = new Map();
 
   for (const [actionIndex, info] of actionFileMap) {
     const { action, matchingFiles, explicitFile, explicitFiles } = info;
     const actionDesc = action.description || action.target;
+    const targetApi = action['target-api'];
+    const targetVersion = action['target-version'];
 
     // Handle explicit file/files specification
     if (explicitFile || explicitFiles) {
       const specifiedFiles = explicitFiles || [explicitFile];
-      // Validate specified files exist in matching files
-      const validFiles = specifiedFiles.filter(f => matchingFiles.includes(f));
-      const invalidFiles = specifiedFiles.filter(f => !matchingFiles.includes(f));
+      const matchPaths = matchingFiles.map(m => m.relativePath);
+      const validFiles = specifiedFiles.filter(f => matchPaths.includes(f));
+      const invalidFiles = specifiedFiles.filter(f => !matchPaths.includes(f));
 
       if (invalidFiles.length > 0) {
         warnings.push(`Target ${action.target} does not exist in specified file(s): ${invalidFiles.join(', ')} (action: "${actionDesc}")`);
@@ -149,16 +244,32 @@ function resolveActionTargets(actionFileMap) {
       continue;
     }
 
-    // Auto-resolve based on matching files
-    if (matchingFiles.length === 0) {
-      warnings.push(`Target ${action.target} does not exist in any file (action: "${actionDesc}")`);
+    // Apply target-api and target-version filters
+    let filtered = matchingFiles;
+
+    if (targetApi) {
+      filtered = filtered.filter(m => m.apiId === targetApi);
+    }
+
+    if (targetVersion !== undefined && targetVersion !== null) {
+      const ver = parseInt(targetVersion, 10);
+      filtered = filtered.filter(m => m.version === ver);
+    }
+
+    const filteredPaths = filtered.map(m => m.relativePath);
+
+    // Auto-resolve based on filtered matches
+    if (filteredPaths.length === 0) {
+      if (matchingFiles.length === 0) {
+        warnings.push(`Target ${action.target} does not exist in any file (action: "${actionDesc}")`);
+      } else {
+        warnings.push(`Target ${action.target} matched ${matchingFiles.length} file(s) but none passed target-api/target-version filters (action: "${actionDesc}")`);
+      }
       actionTargets.set(actionIndex, []);
-    } else if (matchingFiles.length === 1) {
-      // Exactly one file - auto-apply
-      actionTargets.set(actionIndex, matchingFiles);
+    } else if (filteredPaths.length === 1) {
+      actionTargets.set(actionIndex, filteredPaths);
     } else {
-      // Multiple files - require explicit specification
-      warnings.push(`Target ${action.target} exists in multiple files (${matchingFiles.join(', ')}). Specify 'file' or 'files' to disambiguate (action: "${actionDesc}")`);
+      warnings.push(`Target ${action.target} exists in multiple files (${filteredPaths.join(', ')}). Use file, target-api, or target-version to disambiguate (action: "${actionDesc}")`);
       actionTargets.set(actionIndex, []);
     }
   }
@@ -190,14 +301,12 @@ function applyOverlayWithTargets(yamlFiles, overlay, actionTargets, overlayDir) 
       const spec = results.get(relativePath);
       if (!spec) continue;
 
-      // Apply single action
       const singleOverlay = { actions: [action] };
       const { result } = applyOverlay(spec, singleOverlay, { overlayDir, silent: true });
       results.set(relativePath, result);
 
-      // Log application
       if (action.description) {
-        console.log(`  - Applied: ${action.description} → ${relativePath}`);
+        console.log(`  - Applied: ${action.description} -> ${relativePath}`);
       }
     }
   }
@@ -205,10 +314,129 @@ function applyOverlayWithTargets(yamlFiles, overlay, actionTargets, overlayDir) 
   return results;
 }
 
+// =============================================================================
+// Environment Filtering
+// =============================================================================
+
+/**
+ * Recursively filter a spec tree by x-environments.
+ * Removes nodes whose x-environments array doesn't include the target env.
+ * Strips x-environments from surviving nodes.
+ * Returns the filtered tree (or null if the root node itself should be removed).
+ */
+function filterByEnvironment(node, targetEnv) {
+  if (node === null || node === undefined || typeof node !== 'object') {
+    return node;
+  }
+
+  if (Array.isArray(node)) {
+    return node
+      .filter(item => {
+        if (item && typeof item === 'object' && !Array.isArray(item) && item['x-environments']) {
+          return item['x-environments'].includes(targetEnv);
+        }
+        return true;
+      })
+      .map(item => filterByEnvironment(item, targetEnv));
+  }
+
+  // Check if this node should be removed
+  if (node['x-environments']) {
+    if (!node['x-environments'].includes(targetEnv)) {
+      return null;
+    }
+  }
+
+  // Recurse into object properties
+  const result = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'x-environments') continue; // Strip from surviving nodes
+
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const filtered = filterByEnvironment(value, targetEnv);
+      if (filtered !== null) {
+        result[key] = filtered;
+      }
+    } else if (Array.isArray(value)) {
+      result[key] = filterByEnvironment(value, targetEnv);
+    } else {
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
+
+// =============================================================================
+// Placeholder Substitution
+// =============================================================================
+
+/**
+ * Parse an env file (key=value pairs, one per line).
+ * Ignores blank lines and comments (lines starting with #).
+ * Supports quoted values (single or double quotes are stripped).
+ */
+function parseEnvFile(filePath) {
+  const vars = {};
+  const content = readFileSync(filePath, 'utf8');
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIndex = trimmed.indexOf('=');
+    if (eqIndex === -1) continue;
+    const key = trimmed.substring(0, eqIndex).trim();
+    let value = trimmed.substring(eqIndex + 1).trim();
+    // Strip surrounding quotes
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    vars[key] = value;
+  }
+  return vars;
+}
+
+/**
+ * Recursively substitute ${VAR} placeholders in all string values.
+ * Returns { result, warnings } where warnings lists unresolved variables.
+ */
+function substitutePlaceholders(node, vars, warnings = []) {
+  if (typeof node === 'string') {
+    const substituted = node.replace(/\$\{([^}]+)\}/g, (match, varName) => {
+      if (varName in vars) {
+        return vars[varName];
+      }
+      if (!warnings.includes(varName)) {
+        warnings.push(varName);
+      }
+      return match; // Leave unresolved placeholder as-is
+    });
+    return substituted;
+  }
+
+  if (node === null || node === undefined || typeof node !== 'object') {
+    return node;
+  }
+
+  if (Array.isArray(node)) {
+    return node.map(item => substitutePlaceholders(item, vars, warnings));
+  }
+
+  const result = {};
+  for (const [key, value] of Object.entries(node)) {
+    result[key] = substitutePlaceholders(value, vars, warnings);
+  }
+  return result;
+}
+
+// =============================================================================
+// Output
+// =============================================================================
+
 /**
  * Write resolved specs to target directory
  */
-function writeResolvedSpecs(results, targetDir, baseDir) {
+function writeResolvedSpecs(results, targetDir) {
   for (const [relativePath, spec] of results) {
     const targetPath = join(targetDir, relativePath);
     const targetDirPath = dirname(targetPath);
@@ -216,8 +444,8 @@ function writeResolvedSpecs(results, targetDir, baseDir) {
     mkdirSync(targetDirPath, { recursive: true });
 
     const output = yaml.dump(spec, {
-      lineWidth: -1,  // Don't wrap lines
-      noRefs: true,   // Don't use aliases
+      lineWidth: -1,
+      noRefs: true,
       quotingType: '"',
       forceQuotes: false
     });
@@ -226,88 +454,180 @@ function writeResolvedSpecs(results, targetDir, baseDir) {
 }
 
 /**
- * Main execution
+ * Copy base specs to output directory unchanged
  */
-function main() {
-  const state = getState();
-  const availableStates = listAvailableStates();
+function copyBaseSpecs(baseDir, outDir) {
+  const files = readdirSync(baseDir, { withFileTypes: true });
+  for (const file of files) {
+    const source = join(baseDir, file.name);
+    const target = join(outDir, file.name);
 
-  // Clean and recreate resolved directory
-  if (existsSync(resolvedDir)) {
-    rmSync(resolvedDir, { recursive: true });
-  }
-  mkdirSync(resolvedDir, { recursive: true });
-
-  if (!state) {
-    // No state specified - copy base specs as-is
-    console.log('No STATE specified, using base specifications');
-    console.log(`Available states: ${availableStates.join(', ') || '(none)'}`);
-    console.log('');
-
-    // Copy all files except overlays and resolved
-    const files = readdirSync(openapiDir, { withFileTypes: true });
-    for (const file of files) {
-      if (file.name === 'overlays' || file.name === 'resolved') continue;
-
-      const source = join(openapiDir, file.name);
-      const target = join(resolvedDir, file.name);
-
-      if (file.isDirectory()) {
-        cpSync(source, target, { recursive: true });
-      } else {
-        cpSync(source, target);
-      }
+    if (file.isDirectory()) {
+      cpSync(source, target, { recursive: true });
+    } else {
+      cpSync(source, target);
     }
+  }
+}
 
-    console.log(`Base specs copied to ${resolvedDir}`);
-    return;
+// =============================================================================
+// Main
+// =============================================================================
+
+function main() {
+  const options = parseArgs();
+
+  if (options.help) {
+    showHelp();
+    process.exit(0);
   }
 
-  // Validate state exists
-  if (!availableStates.includes(state)) {
-    console.error(`Error: Unknown state '${state}'`);
-    console.error(`Available states: ${availableStates.join(', ') || '(none)'}`);
+  if (!options.base || !options.out) {
+    console.error('Error: --base and --out are required.\n');
+    showHelp();
     process.exit(1);
   }
 
-  // Load overlay
-  const stateOverlayDir = join(overlaysDir, state);
-  const overlayPath = join(stateOverlayDir, 'modifications.yaml');
-  console.log(`Applying overlay: ${state}`);
-  console.log(`Overlay file: ${overlayPath}`);
-  console.log('');
+  const baseDir = resolve(options.base);
+  const outDir = resolve(options.out);
 
-  const overlayContent = readFileSync(overlayPath, 'utf8');
-  const overlay = yaml.load(overlayContent);
+  if (!existsSync(baseDir)) {
+    console.error(`Error: Base directory does not exist: ${baseDir}`);
+    process.exit(1);
+  }
 
-  console.log(`Overlay: ${overlay.info?.title || state}`);
-  console.log(`Version: ${overlay.info?.version || 'unknown'}`);
-  console.log('');
+  // Clean and recreate output directory
+  if (existsSync(outDir)) {
+    rmSync(outDir, { recursive: true });
+  }
+  mkdirSync(outDir, { recursive: true });
 
-  // Two-pass processing
-  // Pass 1: Collect all YAML files and analyze target locations
-  const yamlFiles = collectYamlFiles(openapiDir);
-  const actionFileMap = analyzeTargetLocations(overlay, yamlFiles);
-  const { actionTargets, warnings } = resolveActionTargets(actionFileMap);
+  if (!options.overlays && !options.env && !options.envFile) {
+    // No processing needed - copy base specs as-is
+    console.log('No --overlays, --env, or --env-file specified, copying base specs unchanged');
+    copyBaseSpecs(baseDir, outDir);
+    console.log(`Base specs copied to ${outDir}`);
+    return;
+  }
 
-  // Pass 2: Apply overlay actions to resolved targets
-  const results = applyOverlayWithTargets(yamlFiles, overlay, actionTargets, stateOverlayDir);
+  console.log(`Base specs: ${baseDir}`);
+  console.log(`Output:     ${outDir}`);
+
+  // Collect base YAML files
+  const yamlFiles = collectYamlFiles(baseDir);
+  let allWarnings = [];
+  let currentResults = null;
+
+  // Apply overlays if specified
+  if (options.overlays) {
+    const overlaysDir = resolve(options.overlays);
+
+    if (!existsSync(overlaysDir)) {
+      console.error(`Error: Overlays directory does not exist: ${overlaysDir}`);
+      process.exit(1);
+    }
+
+    const overlayFiles = discoverOverlayFiles(overlaysDir);
+    if (overlayFiles.length === 0) {
+      console.log('No overlay files found');
+    } else {
+      console.log(`Overlays:   ${overlaysDir}`);
+      console.log('');
+
+      for (const overlayPath of overlayFiles) {
+        const overlayContent = readFileSync(overlayPath, 'utf8');
+        const overlay = yaml.load(overlayContent);
+
+        console.log(`Overlay: ${overlay.info?.title || relative(overlaysDir, overlayPath)}`);
+        if (overlay.info?.version) {
+          console.log(`Version: ${overlay.info.version}`);
+        }
+        console.log('');
+
+        const inputFiles = currentResults
+          ? [...currentResults.entries()].map(([relativePath, spec]) => ({ relativePath, spec }))
+          : yamlFiles;
+
+        const actionFileMap = analyzeTargetLocations(overlay, inputFiles);
+        const { actionTargets, warnings } = resolveActionTargets(actionFileMap);
+        allWarnings = allWarnings.concat(warnings);
+
+        currentResults = applyOverlayWithTargets(inputFiles, overlay, actionTargets, overlaysDir);
+      }
+    }
+  }
+
+  // Build final results map (from overlays or original files)
+  if (!currentResults) {
+    currentResults = new Map();
+    for (const { relativePath, spec } of yamlFiles) {
+      currentResults.set(relativePath, JSON.parse(JSON.stringify(spec)));
+    }
+  }
+
+  // Filter by environment if --env specified
+  if (options.env) {
+    console.log(`Environment: ${options.env}`);
+    for (const [relativePath, spec] of currentResults) {
+      currentResults.set(relativePath, filterByEnvironment(spec, options.env));
+    }
+  }
+
+  // Substitute placeholders if --env-file specified or process.env has values
+  if (options.envFile) {
+    const envFilePath = resolve(options.envFile);
+    if (!existsSync(envFilePath)) {
+      console.error(`Error: Env file does not exist: ${envFilePath}`);
+      process.exit(1);
+    }
+
+    const fileVars = parseEnvFile(envFilePath);
+    // process.env overrides file values
+    const vars = { ...fileVars, ...process.env };
+
+    console.log(`Env file:   ${envFilePath}`);
+
+    const placeholderWarnings = [];
+    for (const [relativePath, spec] of currentResults) {
+      currentResults.set(relativePath, substitutePlaceholders(spec, vars, placeholderWarnings));
+    }
+
+    if (placeholderWarnings.length > 0) {
+      for (const varName of placeholderWarnings) {
+        allWarnings.push(`Unresolved placeholder: \${${varName}}`);
+      }
+    }
+  }
 
   // Write resolved specs
-  writeResolvedSpecs(results, resolvedDir, openapiDir);
+  writeResolvedSpecs(currentResults, outDir);
 
   // Display warnings if any
-  if (warnings.length > 0) {
+  if (allWarnings.length > 0) {
     console.log('');
     console.log('Warnings:');
-    for (const warning of warnings) {
-      console.log(`  ⚠ ${warning}`);
+    for (const warning of allWarnings) {
+      console.log(`  ! ${warning}`);
     }
   }
 
   console.log('');
-  console.log(`Resolved specs written to ${resolvedDir}`);
-  console.log(`State: ${state}`);
+  console.log(`Resolved specs written to ${outDir}`);
 }
 
-main();
+// Export for testing
+export {
+  discoverOverlayFiles,
+  analyzeTargetLocations,
+  resolveActionTargets,
+  getVersionFromFilename,
+  filterByEnvironment,
+  parseEnvFile,
+  substitutePlaceholders
+};
+
+// Run main when executed directly
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
+if (isDirectRun) {
+  main();
+}

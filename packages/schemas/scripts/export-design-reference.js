@@ -8,11 +8,10 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 import yaml from 'js-yaml';
 import $RefParser from '@apidevtools/json-schema-ref-parser';
 import { discoverApiSpecs } from '../src/validation/openapi-loader.js';
-import { applyOverlay } from '../src/overlay/overlay-resolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -220,46 +219,6 @@ function extractPropertyRefs(rawSchemas) {
 /**
  * Discover available state overlays
  */
-function discoverOverlays() {
-  const overlaysDir = join(__dirname, '../openapi/overlays');
-  if (!existsSync(overlaysDir)) return [];
-
-  return readdirSync(overlaysDir, { withFileTypes: true })
-    .filter(d => d.isDirectory())
-    .map(d => ({
-      state: d.name,
-      name: d.name.charAt(0).toUpperCase() + d.name.slice(1),
-      path: join(overlaysDir, d.name, 'modifications.yaml')
-    }))
-    .filter(o => existsSync(o.path));
-}
-
-/**
- * Load and parse overlay file
- */
-function loadOverlay(overlayPath) {
-  const content = readFileSync(overlayPath, 'utf8');
-  return yaml.load(content);
-}
-
-/**
- * Apply overlay to schemas and return modified copy
- */
-function applyOverlayToSchemas(baseSchemas, overlay, overlayDir) {
-  const modified = {};
-
-  for (const [name, schema] of Object.entries(baseSchemas)) {
-    const { result } = applyOverlay(
-      { [name]: JSON.parse(JSON.stringify(schema)) },
-      overlay,
-      { silent: true, overlayDir }
-    );
-    modified[name] = result[name];
-  }
-
-  return modified;
-}
-
 /**
  * Capitalize first letter and convert camelCase to title case
  */
@@ -3295,19 +3254,25 @@ ${contentHtml}
  * Main function
  */
 async function main() {
+  // Parse --specs flag
+  const args = process.argv.slice(2);
+  const specsArg = args.find(a => a.startsWith('--specs='));
+  if (!specsArg) {
+    console.error('Error: --specs=<dir> is required.\n');
+    console.error('Usage: node scripts/export-design-reference.js --specs=<dir>');
+    process.exit(1);
+  }
+  const specsDir = resolve(specsArg.split('=')[1]);
+
   console.log('Generating ORCA Design Reference...\n');
+  console.log(`Specs: ${specsDir}\n`);
 
   try {
-    const apiSpecs = discoverApiSpecs();
+    const apiSpecs = discoverApiSpecs({ specsDir });
     console.log(`Found ${apiSpecs.length} API specifications`);
-
-    // Discover state overlays
-    const states = discoverOverlays();
-    console.log(`Found ${states.length} state overlays: ${states.map(s => s.name).join(', ')}`);
 
     const baseSchemas = {};
 
-    // Load base schemas from specs
     // Patterns for CRUD operation schemas that should be excluded from design reference
     const CRUD_SCHEMA_PATTERNS = [/Create$/, /Update$/, /List$/, /^Conflict$/];
     const isCrudSchema = (name) => CRUD_SCHEMA_PATTERNS.some(pattern => pattern.test(name));
@@ -3320,50 +3285,12 @@ async function main() {
         });
         if (spec.components?.schemas) {
           for (const [name, schema] of Object.entries(spec.components.schemas)) {
-            // Skip CRUD operation schemas - they're API implementation details, not domain objects
             if (isCrudSchema(name)) continue;
             baseSchemas[name] = schema;
           }
         }
       } catch (err) {
         console.warn(`  Warning: Could not process ${apiSpec.name}: ${err.message}`);
-      }
-    }
-
-    // Load component files directly with $ref resolution
-    const componentFiles = ['person.yaml', 'household.yaml', 'application.yaml', 'income.yaml', 'common.yaml'];
-    const componentsDir = join(__dirname, '../openapi/components');
-
-    // First pass: extract property refs from raw YAML (before dereferencing)
-    for (const file of componentFiles) {
-      const filePath = join(componentsDir, file);
-      if (existsSync(filePath)) {
-        try {
-          const content = readFileSync(filePath, 'utf8');
-          const rawSchemas = yaml.load(content);
-          extractPropertyRefs(rawSchemas);
-        } catch (err) {
-          // Ignore errors in first pass
-        }
-      }
-    }
-
-    // Second pass: load with $RefParser to resolve allOf $refs
-    for (const file of componentFiles) {
-      const filePath = join(componentsDir, file);
-      if (existsSync(filePath)) {
-        try {
-          const dereferenced = await $RefParser.dereference(filePath, {
-            dereference: { circular: 'ignore' }
-          });
-          for (const [name, schema] of Object.entries(dereferenced)) {
-            if (typeof schema === 'object' && schema !== null) {
-              baseSchemas[name] = schema;
-            }
-          }
-        } catch (err) {
-          console.warn(`  Warning: Could not load ${file}: ${err.message}`);
-        }
       }
     }
 
@@ -3375,9 +3302,8 @@ async function main() {
     // Pre-scan schemas to discover inline objects (so links work)
     inlineObjectSchemas.clear();
     for (const [schemaName, schema] of Object.entries(baseSchemas)) {
-      processSchema(schema, schemaName); // This populates inlineObjectSchemas
+      processSchema(schema, schemaName);
     }
-    // Add inline object names to valid schemas so links work
     for (const inlineName of inlineObjectSchemas.keys()) {
       validSchemaNames.add(inlineName);
     }
@@ -3391,20 +3317,9 @@ async function main() {
     console.log('Extracting API operations...');
     const operations = extractOperations(apiSpecs);
 
-    // Apply overlays for each state
+    // Generate HTML (no state overlays — states use resolve-overlay.js separately)
     const stateSchemas = {};
-    for (const state of states) {
-      console.log(`Applying overlay: ${state.name}`);
-      try {
-        const overlay = loadOverlay(state.path);
-        const overlayDir = dirname(state.path);
-        stateSchemas[state.state] = applyOverlayToSchemas(baseSchemas, overlay, overlayDir);
-      } catch (err) {
-        console.warn(`  Warning: Could not apply ${state.name} overlay: ${err.message}`);
-      }
-    }
-
-    // Generate HTML
+    const states = [];
     const html = generateHtml(baseSchemas, stateSchemas, states, relationships, operations);
 
     // Write output to root docs/ folder (for GitHub Pages)

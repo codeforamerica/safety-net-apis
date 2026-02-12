@@ -15,20 +15,25 @@ const __dirname = dirname(__filename);
 /**
  * Perform setup: load specs and seed databases
  * @param {Object} options - Setup options
+ * @param {string} options.specsDir - Path to specs directory (required)
  * @param {boolean} options.verbose - Show detailed output
  * @param {boolean} options.skipValidation - Skip validation step
  * @returns {Promise<Object>} Setup result with apiSpecs and summary
  */
-export async function performSetup({ verbose = true, skipValidation = false } = {}) {
+export async function performSetup({ specsDir, verbose = true, skipValidation = false } = {}) {
+  if (!specsDir) {
+    throw new Error('specsDir is required — pass --specs <dir> to specify the specs directory');
+  }
   // Check environment variable for skip validation
   if (process.env.SKIP_VALIDATION === 'true') {
     skipValidation = true;
   }
   if (verbose) {
     console.log('\nDiscovering OpenAPI specifications...');
+    console.log(`  Specs: ${specsDir}`);
   }
-  
-  const apiSpecs = await loadAllSpecs();
+
+  const apiSpecs = await loadAllSpecs({ specsDir });
   
   if (apiSpecs.length === 0) {
     throw new Error('No OpenAPI specifications found in openapi/ directory');
@@ -45,10 +50,10 @@ export async function performSetup({ verbose = true, skipValidation = false } = 
       console.log('\nValidating specifications and examples...');
     }
     
-    const discoveredSpecs = discoverApiSpecs();
+    const discoveredSpecs = discoverApiSpecs({ specsDir });
     const specsWithExamples = discoveredSpecs.map(spec => ({
       ...spec,
-      examplesPath: join(__dirname, '../../openapi/examples', `${spec.name}.yaml`)
+      examplesPath: join(specsDir, `${spec.name}-examples.yaml`)
     }));
     
     const validationResults = await validateAll(specsWithExamples);
@@ -78,7 +83,7 @@ export async function performSetup({ verbose = true, skipValidation = false } = 
   }
   
   // Seed databases from example files
-  const summary = seedAllDatabases(apiSpecs);
+  const summary = seedAllDatabases(apiSpecs, specsDir);
   
   return { apiSpecs, summary };
 }
