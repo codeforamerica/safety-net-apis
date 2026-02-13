@@ -1,5 +1,7 @@
 # CI/CD for Frontend
 
+> **Status: Draft**
+
 This guide covers building and testing frontend applications that consume Safety Net APIs.
 
 ## Testing Against the Mock Server
@@ -31,15 +33,15 @@ jobs:
       - name: Checkout API toolkit
         uses: actions/checkout@v4
         with:
-          repository: codeforamerica/safety-net-apis
+          repository: codeforamerica/safety-net-blueprint
           path: openapi-toolkit
 
       - name: Start mock server
         working-directory: openapi-toolkit
         run: |
           npm install
-          npm run mock:setup
-          npm run mock:start &
+          STATE=<your-state> npm run mock:setup
+          STATE=<your-state> npm run mock:start &
 
           # Wait for server to be ready
           sleep 5
@@ -70,7 +72,7 @@ test:
   services:
     - name: node:20
       alias: mock-server
-      command: ["sh", "-c", "git clone https://github.com/codeforamerica/safety-net-apis.git && cd safety-net-apis && npm install && npm run mock:start"]
+      command: ["sh", "-c", "git clone https://github.com/codeforamerica/safety-net-blueprint.git && cd safety-net-blueprint && npm install && STATE=<your-state> npm run mock:start"]
 
   script:
     - npm install
@@ -107,16 +109,10 @@ Add to your frontend's `package.json`:
 ```json
 {
   "scripts": {
-    "api:update": "cd ../safety-net-apis && git pull && npm run overlay:resolve -- --specs=./packages/schemas/openapi --overlays=../your-frontend/overlays --out=../your-frontend/resolved && cd ../your-frontend && npm run clients:typescript -- --specs=./resolved --out=./src/api"
+    "api:update": "cd ../safety-net-blueprint && git pull && STATE=<your-state> npm run clients:generate && cp -r packages/clients/dist-packages/<your-state>/* ../your-frontend/src/api/generated/"
   }
 }
 ```
-
-This assumes:
-- `safety-net-apis` repo is cloned adjacent to your frontend
-- Your state overlays are in `your-frontend/overlays/modifications.yaml`
-- Resolved specs go to `your-frontend/resolved/`
-- Generated clients go to `your-frontend/src/api/`
 
 ### Automated PR on Spec Changes
 
@@ -143,33 +139,22 @@ jobs:
         with:
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
       - name: Clone API toolkit
         run: |
-          git clone https://github.com/codeforamerica/safety-net-apis.git
-          cd safety-net-apis
+          git clone https://github.com/codeforamerica/safety-net-blueprint.git
+          cd safety-net-blueprint
           npm install
-
-      - name: Resolve overlay
-        run: |
-          node safety-net-apis/packages/schemas/scripts/resolve-overlay.js \
-            --specs=./safety-net-apis/packages/schemas/openapi \
-            --overlays=./overlays \
-            --out=./resolved
 
       - name: Generate clients
         run: |
-          npm run clients:typescript -- --specs=./resolved --out=./src/api
+          cd safety-net-blueprint
+          STATE=<your-state> npm run clients:generate
 
       - name: Check for changes
         id: diff
         run: |
-          git add src/api/
-          git diff --cached --quiet src/api/ || echo "changed=true" >> $GITHUB_OUTPUT
+          cp -r safety-net-blueprint/packages/clients/dist-packages/<your-state>/* src/api/generated/
+          git diff --quiet src/api/generated/ || echo "changed=true" >> $GITHUB_OUTPUT
 
       - name: Create PR
         if: steps.diff.outputs.changed == 'true'
@@ -225,8 +210,8 @@ NEXT_PUBLIC_API_URL=https://api.example.com
 ### API Client Configuration
 
 ```typescript
-// src/api/client.ts
-import { createClient, createConfig } from './api/persons/client';
+// src/api/config.ts
+import { createClient, createConfig } from './generated/workflow/client';
 
 const API_URL = process.env.REACT_APP_API_URL
   || process.env.VITE_API_URL
@@ -236,12 +221,6 @@ const API_URL = process.env.REACT_APP_API_URL
 export const client = createClient(createConfig({
   baseURL: API_URL,
 }));
-
-// Use in components
-import { listPersons } from './api/persons';
-import { client } from './api/client';
-
-const response = await listPersons({ query: { limit: 25 }, client });
 ```
 
 ## E2E Testing with Cypress
@@ -249,7 +228,7 @@ const response = await listPersons({ query: { limit: 25 }, client });
 ```javascript
 // cypress/support/commands.js
 Cypress.Commands.add('resetMockData', () => {
-  cy.exec('cd ../safety-net-apis && npm run mock:reset');
+  cy.exec('cd ../safety-net-blueprint && npm run mock:reset');
 });
 
 // cypress/e2e/persons.cy.js
@@ -272,7 +251,7 @@ describe('Persons', () => {
 export default defineConfig({
   webServer: [
     {
-      command: 'cd ../safety-net-apis && npm run mock:start',
+      command: 'cd ../safety-net-blueprint && STATE=<your-state> npm run mock:start',
       port: 1080,
       reuseExistingServer: !process.env.CI,
     },
@@ -324,7 +303,7 @@ Speed up CI by caching the toolkit:
 - name: Start mock server with logs
   working-directory: openapi-toolkit
   run: |
-    npm run mock:start 2>&1 | tee mock-server.log &
+    STATE=<your-state> npm run mock:start 2>&1 | tee mock-server.log &
     sleep 5
 
 - name: Upload mock server logs

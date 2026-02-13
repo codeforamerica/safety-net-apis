@@ -1,5 +1,7 @@
 # CI/CD for Backend
 
+> **Status: Draft**
+
 This guide covers validating API specifications in CI and contract testing your backend implementation against the spec.
 
 ## Validating Specifications
@@ -29,7 +31,7 @@ jobs:
         run: npm run validate
 
       - name: Validate all state specs
-        run: npm run validate:all-states
+        run: STATE=<your-state> npm run overlay:resolve
 ```
 
 ### GitLab CI
@@ -41,7 +43,7 @@ validate:
   script:
     - npm install
     - npm run validate
-    - npm run validate:all-states
+    - STATE=<your-state> npm run overlay:resolve
 ```
 
 ## Contract Testing Your Backend
@@ -88,10 +90,10 @@ jobs:
           sleep 10
           curl --retry 10 --retry-delay 2 http://localhost:8080/health
 
-      - name: Checkout Safety Net OpenAPI toolkit
+      - name: Checkout Safety Net Blueprint
         uses: actions/checkout@v4
         with:
-          repository: codeforamerica/safety-net-apis
+          repository: codeforamerica/safety-net-blueprint
           path: openapi-toolkit
 
       - name: Generate Postman collection
@@ -128,7 +130,7 @@ jobs:
 If you prefer not to clone the toolkit in CI, generate the collection locally and commit it to your backend repository:
 
 ```bash
-# In the safety-net-apis toolkit
+# In the safety-net-blueprint toolkit
 STATE=<your-state> npm run postman:generate
 
 # Copy to your backend repo
@@ -161,15 +163,15 @@ Check for spec changes and regenerate only when needed:
   run: |
     # Compare spec version or hash
     CURRENT_HASH=$(cat tests/contract/.spec-hash 2>/dev/null || echo "none")
-    git clone --depth 1 https://github.com/codeforamerica/safety-net-apis.git
-    NEW_HASH=$(cd safety-net-apis && git rev-parse HEAD)
+    git clone --depth 1 https://github.com/codeforamerica/safety-net-blueprint.git
+    NEW_HASH=$(cd safety-net-blueprint && git rev-parse HEAD)
     echo "current=$CURRENT_HASH" >> $GITHUB_OUTPUT
     echo "new=$NEW_HASH" >> $GITHUB_OUTPUT
 
 - name: Regenerate collection
   if: steps.spec-check.outputs.current != steps.spec-check.outputs.new
   run: |
-    cd safety-net-apis
+    cd safety-net-blueprint
     npm install
     STATE=<your-state> npm run postman:generate
     cp generated/postman-collection.json ../tests/contract/

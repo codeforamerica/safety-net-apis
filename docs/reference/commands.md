@@ -1,6 +1,8 @@
 # Command Reference
 
-All available npm scripts in the Safety Net OpenAPI toolkit.
+> **Status: Draft**
+
+All available npm scripts in the Safety Net APIs toolkit.
 
 ## Quick Reference
 
@@ -8,10 +10,6 @@ All available npm scripts in the Safety Net OpenAPI toolkit.
 |---------|-------------|
 | `npm start` | Start mock server + Swagger UI |
 | `npm run validate` | Validate base specs |
-| `npm run validate:state` | Validate specs for current STATE |
-| `npm run validate:all-states` | Validate all states |
-| `npm run clients:typescript` | Generate TypeScript SDK from resolved specs |
-| `npm run clients:json-schema` | Convert OpenAPI specs to JSON Schema files |
 | `npm run mock:start` | Start mock server only |
 | `npm run mock:reset` | Reset database to example data |
 | `npm test` | Run unit tests |
@@ -41,15 +39,15 @@ Validates OpenAPI syntax only:
 npm run validate:syntax
 ```
 
-### `npm run validate:lint`
+### `npm run validate:lint -w @safety-net/contracts`
 
-Runs Spectral linting only:
+Runs Spectral linting only (available in the schemas package):
 - Naming conventions
 - HTTP method rules
 - Response codes
 
 ```bash
-npm run validate:lint
+npm run validate:lint -w @safety-net/contracts
 ```
 
 ### `npm run validate:patterns`
@@ -61,24 +59,6 @@ Validates API design patterns only:
 
 ```bash
 npm run validate:patterns
-```
-
-### `npm run validate:state`
-
-Resolves the overlay for the current STATE and validates the resolved specs.
-
-```bash
-STATE=<your-state> npm run validate:state
-# or
-npm run validate:state -- --state=<your-state>
-```
-
-### `npm run validate:all-states`
-
-Validates all available state overlays.
-
-```bash
-npm run validate:all-states
 ```
 
 ## Overlay Commands
@@ -113,68 +93,25 @@ Creates:
 - `openapi/components/benefit.yaml`
 - `openapi/examples/benefits.yaml`
 
-### `npm run clients:typescript`
+### Building State Packages
 
-Generates TypeScript SDK with Zod schemas from resolved OpenAPI specs.
+Build a state-specific npm package with TypeScript SDK and Zod schemas:
 
 ```bash
-# From state application repository
-npm run clients:typescript -- --specs=./resolved --out=./src/api
+node packages/clients/scripts/build-state-package.js --state=<your-state> --version=1.0.0
 ```
 
-This generates TypeScript clients directly to your output directory containing:
-- SDK functions per domain (`getPerson`, `createPerson`, etc.)
-- TypeScript type definitions
+This generates a complete npm package in `packages/clients/dist-packages/{state}/` containing:
+- Typed SDK functions (`getPerson`, `createPerson`, etc.)
+- TypeScript interfaces
 - Zod schemas for runtime validation
 - Axios-based HTTP client
-- Search helper utilities
 
-Output structure:
-```
-{out}/
-  index.ts                  # Re-exports all domains
-  search-helpers.ts         # Query string builder utilities
-  persons/
-    index.ts                # SDK functions + types
-    sdk.gen.ts              # getPerson, createPerson, etc.
-    types.gen.ts            # TypeScript interfaces
-    zod.gen.ts              # Zod schemas for validation
-    client/                 # HTTP client utilities
-```
-
-### `npm run clients:json-schema`
-
-Converts resolved OpenAPI 3.1 specs to JSON Schema Draft 2020-12 format.
-
-```bash
-# From state application repository
-npm run clients:json-schema -- --specs=./resolved --out=./json-schemas
-```
-
-This extracts `components.schemas` from each OpenAPI spec and outputs individual JSON Schema files:
-- Removes OpenAPI-specific keywords (`discriminator`, `xml`, `externalDocs`, `example`)
-- Adds JSON Schema metadata (`$schema`, `$id`)
-- Organizes by domain (persons/, applications/, etc.)
-
-Output structure:
-```
-{out}/
-  persons/
-    Person.json
-    DemographicInfo.json
-    CitizenshipInfo.json
-  applications/
-    Application.json
-    HouseholdMember.json
-  users/
-    User.json
-```
-
-**Use cases:**
-- Form validation libraries (e.g., react-jsonschema-form, Ajv)
-- API documentation tools
-- Code generation for other languages
-- Schema validation in backend services
+The package is built using `@hey-api/openapi-ts` with the following plugins:
+- `@hey-api/typescript` - TypeScript types
+- `@hey-api/sdk` - SDK functions with validation
+- `@hey-api/zod` - Zod schemas
+- `@hey-api/client-axios` - Axios HTTP client
 
 ## Server Commands
 
@@ -223,12 +160,12 @@ Clears all data and reseeds from examples.
 npm run mock:reset
 ```
 
-### `npm run swagger:start`
+### `npm run mock:swagger`
 
 Starts only the Swagger UI server.
 
 ```bash
-npm run swagger:start
+npm run mock:swagger
 ```
 
 Default: http://localhost:3000
@@ -283,7 +220,7 @@ Common command combinations:
 
 ```bash
 # Full validation
-npm run validate && npm run validate:all-states
+npm run validate
 
 # Reset and start
 npm run mock:reset && npm start

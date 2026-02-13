@@ -15,6 +15,13 @@
   },
   "dependencies": {
     "@apidevtools/json-schema-ref-parser": "^11.7.2",
+<<<<<<< HEAD
+=======
+    "@safety-net/contracts": "*",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+>>>>>>> main
     "@hey-api/openapi-ts": "^0.90.3",
     "@safety-net/schemas": "*",
     "js-yaml": "^4.1.0",
