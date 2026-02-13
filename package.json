@@ -30,9 +30,7 @@
     "test:all": "npm run test:all -w @safety-net/mock-server",
     "preflight": "bash scripts/preflight.sh",
     "docs:slides": "marp docs/presentation/safety-net-openapi-overview.md -o docs/presentation/safety-net-openapi-overview.html",
-    "design:export": "npm run design:export -w @safety-net/contracts",
-    "design:reference": "npm run design:reference -w @safety-net/contracts",
-    "design:figma-data": "npm run design:figma-data -w @safety-net/contracts"
+    "design:reference": "npm run design:reference -w @safety-net/contracts"
   },
   "devDependencies": {
     "@marp-team/marp-cli": "^4.2.3"

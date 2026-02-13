@@ -28,7 +28,7 @@ Choose your path based on your role:
 
 | Role | You want to... | Start here |
 |------|----------------|------------|
-| **UX Designer** | Explore the data model, populate Figma designs with sample data | [UX Designer Guide](./packages/contracts/docs/ux-designer-guide.md) |
+| **UX Designer** | Explore the data model and design reference | [UX Designer Guide](./docs/getting-started/ux-designers.md) |
 | **Backend Developer** | Author contracts, validate specs, build production adapters | [Backend Developer Guide](./docs/getting-started/backend-developers.md) |
 | **Frontend Developer** | Build UIs against REST and RPC APIs, use generated clients | [Frontend Developer Guide](./docs/getting-started/frontend-developers.md) |
 
