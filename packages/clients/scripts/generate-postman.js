@@ -3,8 +3,8 @@
  * Generates a Postman collection from OpenAPI specifications and examples
  */
 
-import { loadAllSpecs, discoverApiSpecs, getExamplesPath } from '@safety-net/schemas/loader';
-import { validateAll, getValidationStatus } from '@safety-net/schemas/validation';
+import { loadAllSpecs, discoverApiSpecs, getExamplesPath } from '@safety-net/contracts/loader';
+import { validateAll, getValidationStatus } from '@safety-net/contracts/validation';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';

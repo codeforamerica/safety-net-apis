@@ -4,7 +4,7 @@
  */
 
 import { performSetup, displaySetupSummary } from '../src/setup.js';
-import { loadAllSpecs } from '@safety-net/schemas/loader';
+import { loadAllSpecs } from '@safety-net/contracts/loader';
 import { clearAll, closeAll } from '../src/database-manager.js';
 
 async function reset() {
@@ -18,7 +18,7 @@ async function reset() {
     const apiSpecs = await loadAllSpecs();
     
     if (apiSpecs.length === 0) {
-      throw new Error('No OpenAPI specifications found in openapi/ directory');
+      throw new Error('No OpenAPI specifications found in specs directory');
     }
     
     console.log(`✓ Discovered ${apiSpecs.length} API(s):`);
