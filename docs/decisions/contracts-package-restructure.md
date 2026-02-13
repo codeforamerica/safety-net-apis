@@ -16,15 +16,12 @@ The [contract-driven architecture](../architecture/contract-driven-architecture.
 
 - **Package name reflects scope** — consumers see `@safety-net/schemas` in import statements, which is misleading when the package also contains state machines, rules, metrics, and form definitions
 - **Naming convention supports multiple artifact types** — each domain may have 1–6 artifacts (OpenAPI, state machine, rules, metrics, forms, examples); the convention must make it easy to discover all artifacts for a domain and validate cross-artifact consistency
-- **No dependency on directory structure** — tooling discovers artifacts by filename convention (recursive glob `**/*-{suffix}.yaml`), not by directory path. The naming convention encodes domain and artifact type in the filename itself, so files can be reorganized into subdirectories later without breaking discovery, validation, or overlay resolution. The initial layout is flat (all artifacts at the package root) for simplicity and cross-artifact visibility, but this is a convention, not a constraint that tooling enforces. The one exception is `$ref` paths within OpenAPI specs — those are inherently relative. However, because domain specs are self-contained (all domain schemas inline) with only external `$ref`s to shared `components/`, and shared components should not be moved, reorganizing domain files has zero `$ref` breakage
+- **No dependency on directory structure** — tooling discovers artifacts by filename convention (recursive glob `**/*-{suffix}.yaml`), not by directory path. The naming convention encodes domain and artifact type in the filename itself, so files can be reorganized into subdirectories later without breaking discovery, validation, or overlay resolution. The initial layout is flat (all artifacts at the package root) for simplicity and cross-artifact visibility, but this is a convention, not a constraint that tooling enforces
+- **Domain specs are self-contained** — all domain-specific schemas are defined inline. The only external `$ref`s point to shared `components/`, which has a fixed location and should not be moved. This means reorganizing domain files has zero `$ref` breakage
 - **Convention is documented and enforced by tooling** — naming conventions only hold if they're discoverable by developers and violations are caught by validation before merge
-- Existing imports, CI, scripts, and documentation are updated consistently
-
-### Constraints
-
-- Must not break any existing functionality — all validation, mock server, client generation, and overlay resolution must work after the restructure
-- Must be independently mergeable to `main` (no dependency on other branches)
-- The restructure is mechanical — no behavioral changes
+- **Non-breaking** — all validation, mock server, client generation, and overlay resolution must work after the restructure
+- **Independently mergeable** to `main` (no dependency on other branches)
+- **Mechanical only** — no behavioral changes
 
 ---
 
