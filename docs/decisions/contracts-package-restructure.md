@@ -14,10 +14,10 @@ The [contract-driven architecture](../architecture/contract-driven-architecture.
 
 ### Requirements
 
-- Package name reflects that it holds behavioral contracts, not just schemas
-- File naming convention supports multiple artifact types per domain (OpenAPI, state machine, rules, metrics, forms)
-- Flat directory structure — all contract artifacts for a domain are siblings, not nested in type-specific subdirectories
-- Convention is documented and enforced by tooling
+- **Package name reflects scope** — consumers see `@safety-net/schemas` in import statements, which is misleading when the package also contains state machines, rules, metrics, and form definitions
+- **Naming convention supports multiple artifact types** — each domain may have 1–6 artifacts (OpenAPI, state machine, rules, metrics, forms, examples); the convention must make it easy to discover all artifacts for a domain and validate cross-artifact consistency
+- **Flat directory structure** — all contract artifacts for a domain are siblings, not nested in type-specific subdirectories. Rationale: (1) cross-artifact relationships are visible at a glance — you see everything for a domain together; (2) tools can discover all artifacts for a domain with a single glob (`applications-*`) rather than searching multiple directories; (3) overlay targeting is simpler — overlays match by domain prefix, not nested paths; (4) adding a new artifact type doesn't require creating new directories or deciding where files belong
+- **Convention is documented and enforced by tooling** — naming conventions only hold if they're discoverable by developers and violations are caught by validation before merge
 - Existing imports, CI, scripts, and documentation are updated consistently
 
 ### Constraints
