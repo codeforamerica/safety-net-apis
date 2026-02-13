@@ -209,8 +209,8 @@ npm install
 
 ```bash
 # Resolve overlay
-node safety-net-apis/packages/schemas/scripts/resolve-overlay.js \
-  --specs=./safety-net-apis/packages/schemas/openapi \
+node safety-net-apis/packages/contracts/scripts/resolve-overlay.js \
+  --base=./safety-net-apis/packages/contracts \
   --overlays=./overlays \
   --out=./resolved
 

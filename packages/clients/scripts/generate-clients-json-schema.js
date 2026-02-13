@@ -5,7 +5,7 @@
  *
  * Usage:
  *   openapi-to-json-schema --specs=./resolved --out=./json-schemas
- *   node scripts/openapi-to-json-schema.js --specs=./resolved --out=./json-schemas
+ *   node scripts/generate-clients-json-schema.js --specs=./resolved --out=./json-schemas
  *
  * This script:
  * 1. Discovers all OpenAPI spec files in --specs directory
@@ -30,7 +30,7 @@
  */
 
 import { writeFileSync, mkdirSync, readdirSync, statSync } from 'fs';
-import { join, dirname, basename, extname } from 'path';
+import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import $RefParser from '@apidevtools/json-schema-ref-parser';
 
@@ -90,21 +90,13 @@ function discoverSpecs(specsDir) {
       const fullPath = join(specsDir, entry);
       const stat = statSync(fullPath);
 
-      if (stat.isFile()) {
-        const ext = extname(entry).toLowerCase();
-        if (ext === '.yaml' || ext === '.yml' || ext === '.json') {
-          // Skip certain files
-          const name = basename(entry, ext);
-          if (name.includes('-examples') || name.includes('patterns')) {
-            continue;
-          }
-
-          specs.push({
-            path: fullPath,
-            name: name,
-            ext: ext
-          });
-        }
+      if (stat.isFile() && entry.endsWith('-openapi.yaml')) {
+        const name = basename(entry, '-openapi.yaml');
+        specs.push({
+          path: fullPath,
+          name: name,
+          ext: '.yaml'
+        });
       }
     }
   } catch (err) {

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { parseArgs, createOpenApiTsConfig } from '../scripts/generate-clients.js';
+import { parseArgs, createOpenApiTsConfig } from '../scripts/generate-clients-typescript.js';
 
 describe('Client Generation', () => {
   describe('parseArgs', () => {

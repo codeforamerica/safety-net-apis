@@ -23,7 +23,7 @@ Two problems need solving:
 
 ### Conversion: Custom code, not a library
 
-We wrote a small custom converter (`openapi-to-json-schema.js`) rather than adopting a library.
+We wrote a small custom converter (`generate-clients-json-schema.js`) rather than adopting a library.
 
 OpenAPI 3.1 intentionally aligned its schema object model with JSON Schema Draft 2020-12. The schemas are already JSON Schema — the only difference is a handful of OpenAPI-specific keywords (`discriminator`, `xml`, `externalDocs`, `example`, `deprecated`, `x-*` extensions) that need to be stripped, plus adding `$schema` and `$id` metadata.
 
@@ -80,5 +80,5 @@ This library was already a project dependency used by `openapi-loader.js` for th
 ## References
 
 - [OpenAPI 3.1 and JSON Schema alignment](https://www.openapis.org/blog/2021/02/18/openapi-specification-3-1-released) — OAI blog post on the 3.1 alignment with JSON Schema Draft 2020-12
-- `packages/schemas/src/validation/openapi-loader.js` — existing `$RefParser.dereference()` usage in this project
-- `packages/clients/scripts/openapi-to-json-schema.js` — the converter implementation
+- `packages/contracts/src/validation/openapi-loader.js` — existing `$RefParser.dereference()` usage in this project
+- `packages/clients/scripts/generate-clients-json-schema.js` — the converter implementation
