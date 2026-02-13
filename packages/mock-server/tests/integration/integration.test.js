@@ -533,7 +533,7 @@ async function runTests() {
   for (const api of apis) {
     try {
       clearAll(api.name);
-      const count = seedDatabase(api.name);
+      const count = seedDatabase(api.name, specsDir);
       console.log(`  ✓ ${api.name}: ${count} resources`);
     } catch (error) {
       console.log(`  ⚠️  ${api.name}: ${error.message}`);
