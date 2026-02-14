@@ -18,6 +18,7 @@ This document explains how to read `federal-eligibility-data-model.csv` and prov
 | **Program columns** | `Required` means the program needs this field for eligibility determination. Blank means the program does not use this field. |
 | **Policy/Statute** | Federal regulation or statute citation. |
 | **Notes** | Implementation guidance, edge cases, or cross-references. |
+| **OBBBA (H.R.1)** | Flags fields affected by the One Big Beautiful Bill Act (signed July 4, 2025). Values: `New field` (added to reflect OBBBA requirements), `Modified` (existing field whose rules, enums, or derivation changed), or blank (unaffected). See [OBBBA changes](#obbba-hr1-changes) below. |
 
 ### Source types
 
@@ -111,6 +112,43 @@ The 10 program columns represent federal benefit programs:
 
 Important: "Required" reflects federal rules only. States may require additional data elements or may waive collection of some federal fields through waivers or simplified reporting. This model is a federal baseline.
 
+### OBBBA (H.R.1) changes
+
+The **One Big Beautiful Bill Act** (OBBBA, H.R.1) was signed into law on July 4, 2025. It made significant changes to SNAP and Medicaid eligibility rules. The data model has been updated to reflect these changes, and the `OBBBA (H.R.1)` column flags every affected row.
+
+#### Modified fields
+
+| Field | Entity | What changed |
+|-------|--------|-------------|
+| `citizenshipStatus` | Person | Added `cofa_citizen` enum value. SNAP non-citizen eligibility narrowed: only US citizens, US nationals, LPRs with 5+ years, refugees/asylees, Cuban/Haitian entrants, and COFA citizens (Compact of Free Association) remain eligible. Most other qualified non-citizen categories removed from SNAP. |
+| `isElderlyOrDisabled` | Person | Updated derivation note: OBBBA changed the LIHEAP/SNAP HCSUA (Heating and Cooling Standard Utility Allowance) interaction so LIHEAP receipt no longer confers HCSUA for non-elderly/non-disabled households. |
+| `isAbawdEligible` | Person | ABAWD (Able-Bodied Adults Without Dependents) age range raised from 18–54 to 18–64. Dependent child exemption narrowed from under 18 to under 14. |
+| `abawdExemptionReason` | Person | Enum values overhauled: removed `homeless`, `veteran`, `aged_out_foster_care`. Added `indian_tribal_member`. Remaining exemptions: `pregnant`, `physically_mentally_unfit`, `caring_for_child_under_14`, `indian_tribal_member`, `exempt_from_work_registration`, `other`, `none`. |
+| `workRequirementMet` | Eligibility Determination | Now marked Required for Medicaid (MAGI) in addition to SNAP and TANF. Reflects the new Medicaid community engagement requirement. |
+
+#### New fields
+
+| Field | Entity | DataType | Purpose |
+|-------|--------|----------|---------|
+| `isIndianTribalMember` | Person | boolean | Required for SNAP (ABAWD exemption) and Medicaid MAGI (community engagement exemption). Indian/tribal members are exempt from both SNAP work requirements and the new Medicaid community engagement requirement. |
+| `medicaidWorkExemptionReason` | Person | enum | Captures the reason a person is exempt from the Medicaid community engagement requirement (80 hours/month for ages 19–64, effective January 2027). 16 exemption categories including pregnant, disabled, caretaker of dependent, student, tribal member, and others. |
+| `medicaidWorkHoursPerMonth` | Person | integer | The number of qualifying community engagement hours per month. Must reach 80 hours to satisfy the requirement. |
+
+#### Key OBBBA policy changes summarized
+
+**SNAP:**
+- ABAWD time limits now apply to ages 18–64 (previously 18–54)
+- Dependent child exemption: child must be under 14 (previously under 18)
+- Removed ABAWD exemptions for homeless individuals, veterans, and former foster youth
+- Added ABAWD exemption for Indian/tribal members
+- Non-citizen SNAP eligibility significantly narrowed
+- LIHEAP receipt no longer confers HCSUA for non-elderly/non-disabled households
+
+**Medicaid:**
+- New community engagement requirement: 80 hours/month of qualifying activities for ages 19–64 in Medicaid expansion population, effective January 1, 2027
+- 9 exemption categories (pregnant, medically frail/disabled, caretaker of dependent child under 6, full-time student, receiving unemployment benefits, tribal member, under 19, age 55+, and others)
+- Six-month redetermination cycle for expansion population (previously 12 months)
+
 ---
 
 ## SME review guidance
@@ -121,8 +159,8 @@ This data model was generated through analysis of federal statutes and regulatio
 
 | Program | Confidence | Notes |
 |---------|------------|-------|
-| **SNAP** | High | Well-defined federal rules in 7 CFR 273. Income, asset, deduction, and disqualification rules are thoroughly documented. Enum values for deduction types and exemptions may be incomplete at the state level. |
-| **Medicaid (MAGI)** | High | Clear federal framework in 42 CFR 435.603. MAGI income counting and tax-household composition rules are well-specified. |
+| **SNAP** | High | Well-defined federal rules in 7 CFR 273. Updated for OBBBA (July 2025) ABAWD and non-citizen eligibility changes. Enum values for deduction types and exemptions may be incomplete at the state level. |
+| **Medicaid (MAGI)** | High | Clear federal framework in 42 CFR 435.603. Updated for OBBBA community engagement requirement (effective Jan 2027). Exemption categories sourced from the enacted statute; implementing regulations may add detail. |
 | **Medicaid (Non-MAGI)** | Medium | Newly added column. Core pathways (aged, blind, disabled) and asset test are well-understood. Confidence is lower for: spend-down calculation details, spousal impoverishment data requirements, transfer-of-assets penalty specifics, and the variation between states that use SSI methodology vs. 209(b) methodology. |
 | **TANF** | Medium | Federal rules set a framework (42 USC 601-619, 45 CFR 260-265) but TANF is the most state-defined program. Work activity types and time limit rules are federal; almost everything else (income limits, asset limits, benefit amounts, exemptions) is state-determined. |
 | **SSI** | High | Fully federal program administered by SSA with detailed rules in 20 CFR 416. Income counting, resource limits, deeming, and exclusions are thoroughly specified. The five-step disability evaluation is simplified in this model (see known gap below). |
@@ -183,10 +221,11 @@ CFR and USC citations were sourced from the most recent available versions. Spec
 
 In order of impact:
 
-1. **Non-MAGI Medicaid column** — Newest addition, lowest confidence. Verify Required/blank mappings for the aged, blind, and disabled pathways. Check whether spousal impoverishment and spend-down data requirements are complete.
-2. **LIHEAP column** — Weakest federal requirements. An SME familiar with common state LIHEAP implementations should verify which fields are genuinely federally required vs. commonly collected by states.
-3. **TANF column** — Federal framework is correct but thin. Verify that no federal TANF data requirements are missing.
-4. **Hidden objects and missing fields** listed above — Confirm AuthorizedRepresentative cardinality, institutionalization date, Medicare parts.
-5. **Enum values** — Spot-check critical enums (citizenshipStatus, Income.type, Asset.type) against current federal guidance.
-6. **Cross-program interactions** — Verify categorical/adjunctive eligibility mappings (BenefitParticipation type requirements). Confirm that the programs listed as triggers for categorical eligibility are complete and correct.
-7. **Derived field logic** — Review Notes column for all `derived` and `assessed` fields to confirm the derivation logic is accurate.
+1. **OBBBA (H.R.1) changes** — Filter the `OBBBA (H.R.1)` column for "New field" and "Modified" rows. Verify that: (a) the SNAP ABAWD age expansion, exemption changes, and non-citizen narrowing are accurately captured; (b) the Medicaid community engagement requirement exemption categories are complete; (c) no other OBBBA provisions affecting eligibility data collection were missed. The implementing regulations for Medicaid community engagement (effective Jan 2027) may not yet be finalized — compare against the latest CMS guidance.
+2. **Non-MAGI Medicaid column** — Lowest confidence among established programs. Verify Required/blank mappings for the aged, blind, and disabled pathways. Check whether spousal impoverishment and spend-down data requirements are complete.
+3. **LIHEAP column** — Weakest federal requirements. An SME familiar with common state LIHEAP implementations should verify which fields are genuinely federally required vs. commonly collected by states.
+4. **TANF column** — Federal framework is correct but thin. Verify that no federal TANF data requirements are missing.
+5. **Hidden objects and missing fields** listed above — Confirm AuthorizedRepresentative cardinality, institutionalization date, Medicare parts.
+6. **Enum values** — Spot-check critical enums (citizenshipStatus, Income.type, Asset.type) against current federal guidance. Pay particular attention to `abawdExemptionReason` and `medicaidWorkExemptionReason` which were added/updated for OBBBA.
+7. **Cross-program interactions** — Verify categorical/adjunctive eligibility mappings (BenefitParticipation type requirements). Confirm that the programs listed as triggers for categorical eligibility are complete and correct.
+8. **Derived field logic** — Review Notes column for all `derived` and `assessed` fields to confirm the derivation logic is accurate.
