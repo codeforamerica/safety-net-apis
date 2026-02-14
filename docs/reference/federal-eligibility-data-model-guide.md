@@ -113,7 +113,11 @@ The 10 program columns represent federal benefit programs:
 
 Important: "Required" reflects federal rules only. States may require additional data elements or may waive collection of some federal fields through waivers or simplified reporting. This model is a federal baseline.
 
-The **Application/Enrollment** column works differently from program columns. It marks fields needed for the application process itself (signatures, consent, voter registration) rather than for any specific program's eligibility determination. A field can be Required in both a program column and the Application/Enrollment column — for example, `applicationDate` is Required for SNAP (determines first-month proration and processing deadline) and also Required for Application/Enrollment (every application needs a date). Fields like `race` and `ethnicity` are Required only for Application/Enrollment — they are collected for civil rights compliance, not eligibility.
+The **Application/Enrollment** column works differently from program columns. It tracks whether a field is needed for the application process itself (signatures, consent, voter registration) rather than for any specific program's eligibility determination. This creates three patterns:
+
+- **Program columns = Required, Application/Enrollment = blank** — Most fields fall here. These are eligibility fields: programs need them to determine if someone qualifies, but they are not application-process requirements. Examples: `grossAmount`, `dateOfBirth`, `citizenshipStatus`.
+- **Program columns = blank, Application/Enrollment = Required** — Process-only fields needed for legal, administrative, or compliance reasons, not for any program's eligibility rules. Examples: `signatureOfApplicant`, `race`, `ethnicity`, `voterRegistrationOffered`.
+- **Both = Required** — Fields needed for both. Example: `applicationDate` is Required for SNAP (determines first-month proration and processing deadline) and also Required for Application/Enrollment (every application needs a received date).
 
 ### OBBBA (H.R.1) changes
 
