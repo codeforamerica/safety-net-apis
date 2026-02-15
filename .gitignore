@@ -13,6 +13,9 @@ packages/contracts/resolved
 # Cursor AI working files
 cursor/
 
+# Storybook build output
+storybook-static/
+
 # Claude Code local settings
 .claude/
 CLAUDE.md
