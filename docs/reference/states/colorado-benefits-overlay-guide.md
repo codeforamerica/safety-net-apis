@@ -153,4 +153,4 @@ Additional states follow the same pattern in this directory:
 - `{state}-benefits-overlay.csv` — State overlay CSV
 - `{state}-benefits-overlay-guide.md` — Companion guide
 
-Each state overlay uses the same 25-column structure and OverlayAction semantics.
+Each state overlay uses the same column structure and OverlayAction semantics, with the number of columns varying by state based on the number of state-only programs.
