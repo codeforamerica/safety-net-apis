@@ -5,7 +5,7 @@ export const REFERENCE_CONTENT = `\
 form:
   id: my-form
   title: My Form
-  schema: persons/PersonCreate    # domain/SchemaName from OpenAPI
+  schema: persons/PersonCreate    # Zod schema used for validation (via zodResolver)
   layout: wizard                  # wizard (multi-page) | review (accordion)
   pages:
     - id: basic-info
@@ -21,7 +21,7 @@ form:
   hint: Legal first name          # helper text below the label
 
 # ── Custom Labels (radio / select / checkbox-group) ───────
-# Override the display text for enum values from the schema.
+# Override the display text for enum values.
 # Keys are the raw enum values; values are what the user sees.
 
 - ref: citizenshipInfo.status
@@ -45,6 +45,31 @@ form:
     applicant: editable           # editable | read-only | masked | hidden
     caseworker: editable
     reviewer: masked
+
+# ── Repeatable Field Group (field-array) ──────────────────
+# Use field-array for repeatable rows (household members, addresses, etc.).
+# Sub-field refs are relative — they get qualified at runtime.
+
+- ref: household.members
+  component: field-array
+  hint: List all people in your household
+  min_items: 1                        # minimum rows (prevents removing last)
+  max_items: 10                       # maximum rows (hides Add button at limit)
+  fields:
+    - ref: firstName                  # becomes household.members.0.firstName
+      component: text-input
+      width: half
+    - ref: lastName
+      component: text-input
+      width: half
+    - ref: relationship
+      component: select
+      labels:
+        spouse: Spouse
+        child: Child
+        parent: Parent
+        sibling: Sibling
+        other: Other
 
 # ── Conditional Visibility: Simple ────────────────────────
 
@@ -85,7 +110,7 @@ name:
 dateOfBirth: "1990-01-15"         # ISO 8601: YYYY-MM-DD
 socialSecurityNumber: "123-45-6789"
 demographicInfo:
-  sex: female                     # from OpenAPI enum
+  sex: female                     # from Zod enum
   race:                           # array for checkbox-group
     - white
     - asian

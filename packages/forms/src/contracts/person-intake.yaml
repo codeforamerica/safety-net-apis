@@ -47,6 +47,30 @@ form:
         - ref: demographicInfo.race
           component: checkbox-group
 
+    - id: household
+      title: Household Members
+      fields:
+        - ref: household.members
+          component: field-array
+          hint: List all people in your household
+          min_items: 1
+          max_items: 10
+          fields:
+            - ref: firstName
+              component: text-input
+              width: half
+            - ref: lastName
+              component: text-input
+              width: half
+            - ref: relationship
+              component: select
+              labels:
+                spouse: Spouse
+                child: Child
+                parent: Parent
+                sibling: Sibling
+                other: Other
+
     - id: citizenship
       title: Citizenship
       fields:

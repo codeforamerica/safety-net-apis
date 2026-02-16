@@ -4,7 +4,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, Button, Accordion } from '@trussworks/react-uswds';
 import type { ZodSchema } from 'zod';
 import type { FormContract, Role, Page, PermissionsPolicy } from './types';
+
+/** Resolve a dot-path like 'name.firstName' from a nested object. */
+function get(obj: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], obj);
+}
 import { ComponentMapper } from './ComponentMapper';
+import { FieldArrayRenderer } from './FieldArrayRenderer';
 import { resolveCondition } from './ConditionResolver';
 import { resolvePermission } from './PermissionsResolver';
 import { PageStepper } from './PageStepper';
@@ -38,6 +44,7 @@ export function FormRenderer({
     handleSubmit,
     watch,
     reset,
+    control,
     formState: { errors },
   } = useForm<Record<string, unknown>>({
     resolver: zodResolver(schema),
@@ -68,6 +75,22 @@ export function FormRenderer({
         const permission = resolvePermission(field, role, permissionsPolicy);
         if (permission === 'hidden') return null;
 
+        if (field.component === 'field-array') {
+          return (
+            <div key={field.ref} className="grid-col-12">
+              <FieldArrayRenderer
+                field={field}
+                control={control}
+                register={register}
+                errors={errors}
+                formValues={formValues}
+                role={role}
+                permissionsPolicy={permissionsPolicy}
+              />
+            </div>
+          );
+        }
+
         const widthClass =
           field.width === 'half'
             ? 'grid-col-6'
@@ -84,7 +107,7 @@ export function FormRenderer({
               register={register}
               errors={errors}
               permission={permission}
-              value={formValues[field.ref]}
+              value={get(formValues, field.ref)}
             />
           </div>
         );

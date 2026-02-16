@@ -183,7 +183,7 @@ export function ComponentMapper({
             value: val,
             label: lbl,
           }))
-        : ENUM_OPTIONS[field.ref] ?? [];
+        : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
 
       return (
         <FormGroup error={!!errorMsg}>
@@ -206,7 +206,12 @@ export function ComponentMapper({
     }
 
     case 'select': {
-      const options = ENUM_OPTIONS[field.ref] ?? [];
+      const options = field.labels
+        ? Object.entries(field.labels).map(([val, lbl]) => ({
+            value: val,
+            label: lbl,
+          }))
+        : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
       return (
         <FormGroup error={!!errorMsg}>
           <Label htmlFor={inputId}>{label}</Label>
@@ -229,7 +234,12 @@ export function ComponentMapper({
     }
 
     case 'checkbox-group': {
-      const options = ENUM_OPTIONS[field.ref] ?? [];
+      const options = field.labels
+        ? Object.entries(field.labels).map(([val, lbl]) => ({
+            value: val,
+            label: lbl,
+          }))
+        : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
       return (
         <FormGroup error={!!errorMsg}>
           <Fieldset legend={label}>

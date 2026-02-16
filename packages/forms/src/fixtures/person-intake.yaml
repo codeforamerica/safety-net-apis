@@ -29,6 +29,14 @@ demographicInfo:
   isHispanicOrLatino: true
   race:
     - white
+household:
+  members:
+    - firstName: Carlos
+      lastName: Garcia
+      relationship: spouse
+    - firstName: Sofia
+      lastName: Garcia
+      relationship: child
 citizenshipInfo:
   status: permanent_resident
   immigrationInfo:

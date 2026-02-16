@@ -1,6 +1,7 @@
 export { FormRenderer } from './FormRenderer';
 export { ContractPreview } from './ContractPreview';
 export { ComponentMapper } from './ComponentMapper';
+export { FieldArrayRenderer } from './FieldArrayRenderer';
 export { resolveCondition } from './ConditionResolver';
 export { resolvePermission } from './PermissionsResolver';
 export { PageStepper } from './PageStepper';

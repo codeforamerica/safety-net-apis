@@ -3,7 +3,8 @@ export type ComponentType =
   | 'date-input'
   | 'radio'
   | 'select'
-  | 'checkbox-group';
+  | 'checkbox-group'
+  | 'field-array';
 
 export type FieldWidth = 'full' | 'half' | 'third' | 'two-thirds';
 
@@ -36,6 +37,12 @@ export interface FieldDefinition {
   labels?: Record<string, string>;
   permissions?: Partial<Record<Role, PermissionLevel>>;
   show_when?: ShowWhen;
+  /** Sub-fields for field-array component. */
+  fields?: FieldDefinition[];
+  /** Minimum number of rows (field-array). */
+  min_items?: number;
+  /** Maximum number of rows (field-array). */
+  max_items?: number;
 }
 
 export interface Page {

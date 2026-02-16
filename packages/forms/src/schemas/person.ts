@@ -50,6 +50,21 @@ export const personCreateSchema = z.object({
         .optional(),
     })
     .optional(),
+  household: z
+    .object({
+      members: z
+        .array(
+          z.object({
+            firstName: z.string().max(100).optional(),
+            lastName: z.string().max(100).optional(),
+            relationship: z
+              .enum(['spouse', 'child', 'parent', 'sibling', 'other'])
+              .optional(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
   citizenshipInfo: z
     .object({
       status: z
