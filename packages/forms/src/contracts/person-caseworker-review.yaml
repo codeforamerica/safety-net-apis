@@ -1,8 +1,11 @@
 form:
   id: person-caseworker-review
   title: Person Review
-  schema: persons/PersonCreate
+  schema: persons/PersonUpdate
   layout: review
+  storybook:
+    role: caseworker
+    permissions: caseworker
   pages:
     - id: personal-info
       title: Personal Information

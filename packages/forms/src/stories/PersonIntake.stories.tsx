@@ -1,105 +1,74 @@
-import React, { useState, useCallback } from 'react';
+// Auto-generated from contracts/person-intake.yaml. Run `npm run generate:stories` to regenerate.
+import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { FormRenderer } from '../engine/FormRenderer';
-import { ContractPreview } from '../engine/ContractPreview';
+import { ContractPreview, type EditorTab } from '../engine/ContractPreview';
 import { personCreateSchema } from '../schemas/person';
-import type { FormContract, Role } from '../engine/types';
+import type { FormContract, Role, PermissionsPolicy } from '../engine/types';
 
-// Parsed YAML (via vite-plugin-yaml) — file edits hot-reload here
+// Layout
 import contract from '../contracts/person-intake.yaml';
-// Raw YAML source for the editable preview
-import yamlSource from '../contracts/person-intake.yaml?raw';
+import layoutYaml from '../contracts/person-intake.yaml?raw';
+// Test data
+import fixtures from '../fixtures/person-intake.yaml';
+import fixturesYaml from '../fixtures/person-intake.yaml?raw';
+// Permissions
+import permsData from '../permissions/applicant.yaml';
+import permsYaml from '../permissions/applicant.yaml?raw';
+// Schema (read-only, from contracts package)
+import schemaYaml from '../../../contracts/persons-openapi.yaml?raw';
 
-const personIntakeContract = contract as unknown as FormContract;
+const typedContract = contract as unknown as FormContract;
+const typedFixtures = fixtures as unknown as Record<string, unknown>;
+const typedPerms = permsData as unknown as PermissionsPolicy;
 
 const meta: Meta = {
   title: 'Forms/Person Intake',
-  parameters: {
-    layout: 'fullscreen',
-  },
+  parameters: { layout: 'fullscreen' },
 };
 
 export default meta;
 
-const defaultSubmit = (data: Record<string, unknown>) => {
+const logSubmit = (data: Record<string, unknown>) => {
   console.log('Form submitted:', data);
-  alert('Form submitted! Check console for data.');
+  alert('Submitted! Check console for data.');
 };
 
-// -- Side-by-side stories (editable contract source + rendered form) --
+function StoryWrapper() {
+  const [activeContract, setActiveContract] = useState(typedContract);
+  const [testData, setTestData] = useState(typedFixtures);
+  const [perms, setPerms] = useState(typedPerms);
 
-function SideBySideStory({
-  initialPage = 0,
-  role = 'applicant',
-}: {
-  initialPage?: number;
-  role?: Role;
-}) {
-  const [activeContract, setActiveContract] = useState(personIntakeContract);
-  const startPageId = activeContract.form.pages[initialPage]?.id;
-  const [currentPageId, setCurrentPageId] = useState(startPageId);
-
-  const handleContractChange = useCallback((updated: FormContract) => {
-    setActiveContract(updated);
-  }, []);
+  const tabs: EditorTab[] = [
+    { id: 'test-data', label: 'Test Data', filename: 'fixtures/person-intake.yaml', source: fixturesYaml },
+    { id: 'layout', label: 'Layout', filename: 'person-intake.yaml', source: layoutYaml },
+    { id: 'permissions', label: 'Permissions', filename: 'permissions/applicant.yaml', source: permsYaml },
+    { id: 'schema', label: 'Schema', filename: 'persons-openapi.yaml', source: schemaYaml, readOnly: true },
+  ];
 
   return (
     <ContractPreview
-      yamlSource={yamlSource}
-      filename="person-intake.yaml"
-      initialContract={personIntakeContract}
-      onContractChange={handleContractChange}
-      currentPageId={currentPageId}
+      tabs={tabs}
+      contractId="person-intake"
+      formTitle="Person Intake"
+      onLayoutChange={setActiveContract}
+      onPermissionsChange={setPerms}
+      onTestDataChange={setTestData}
     >
       <FormRenderer
         contract={activeContract}
         schema={personCreateSchema}
-        role={role}
-        initialPage={initialPage}
-        onSubmit={defaultSubmit}
-        onPageChange={setCurrentPageId}
+        role={'applicant' as Role}
+        initialPage={0}
+        defaultValues={testData}
+        permissionsPolicy={perms}
+        onSubmit={logSubmit}
       />
     </ContractPreview>
   );
 }
 
-export const Page1PersonalInfo: StoryObj = {
-  name: 'Page 1 - Personal Info',
-  render: () => <SideBySideStory initialPage={0} />,
-};
-
-export const Page2Demographics: StoryObj = {
-  name: 'Page 2 - Demographics',
-  render: () => <SideBySideStory initialPage={1} />,
-};
-
-export const Page3CitizenshipCitizen: StoryObj = {
-  name: 'Page 3 - Citizenship (Citizen)',
-  render: () => <SideBySideStory initialPage={2} />,
-};
-
-export const Page3CitizenshipNonCitizen: StoryObj = {
-  name: 'Page 3 - Citizenship (Non-Citizen)',
-  render: () => <SideBySideStory initialPage={2} />,
-};
-
-export const FullWizard: StoryObj = {
-  name: 'Full Wizard',
-  render: () => <SideBySideStory initialPage={0} />,
-};
-
-// -- Form-only stories (no source panel) --
-
-export const FormOnly: StoryObj = {
-  name: 'Form Only (No Source)',
-  parameters: { layout: 'padded' },
-  render: () => (
-    <FormRenderer
-      contract={personIntakeContract}
-      schema={personCreateSchema}
-      role="applicant"
-      initialPage={0}
-      onSubmit={defaultSubmit}
-    />
-  ),
+export const PersonIntake: StoryObj = {
+  name: 'Person Intake',
+  render: () => <StoryWrapper />,
 };

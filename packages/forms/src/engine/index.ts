@@ -14,4 +14,6 @@ export type {
   ComponentType,
   FieldWidth,
   FormLayout,
+  StoryBookMeta,
+  PermissionsPolicy,
 } from './types';

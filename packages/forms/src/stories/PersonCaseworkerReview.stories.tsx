@@ -1,67 +1,73 @@
-import React, { useState, useCallback } from 'react';
+// Auto-generated from contracts/person-caseworker-review.yaml. Run `npm run generate:stories` to regenerate.
+import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { FormRenderer } from '../engine/FormRenderer';
-import { ContractPreview } from '../engine/ContractPreview';
-import { personCreateSchema } from '../schemas/person';
-import type { FormContract } from '../engine/types';
+import { ContractPreview, type EditorTab } from '../engine/ContractPreview';
+import { personUpdateSchema } from '../schemas/person';
+import type { FormContract, PermissionsPolicy } from '../engine/types';
 
+// Layout
 import contract from '../contracts/person-caseworker-review.yaml';
-import yamlSource from '../contracts/person-caseworker-review.yaml?raw';
+import layoutYaml from '../contracts/person-caseworker-review.yaml?raw';
+// Test data
+import fixtures from '../fixtures/person-caseworker-review.yaml';
+import fixturesYaml from '../fixtures/person-caseworker-review.yaml?raw';
+// Permissions
+import permsData from '../permissions/caseworker.yaml';
+import permsYaml from '../permissions/caseworker.yaml?raw';
+// Schema (read-only, from contracts package)
+import schemaYaml from '../../../contracts/persons-openapi.yaml?raw';
 
-const caseworkerContract = contract as unknown as FormContract;
+const typedContract = contract as unknown as FormContract;
+const typedFixtures = fixtures as unknown as Record<string, unknown>;
+const typedPerms = permsData as unknown as PermissionsPolicy;
 
 const meta: Meta = {
-  title: 'Forms/Person Caseworker Review',
-  parameters: {
-    layout: 'fullscreen',
-  },
+  title: 'Forms/Person Review',
+  parameters: { layout: 'fullscreen' },
 };
 
 export default meta;
 
-const defaultSubmit = (data: Record<string, unknown>) => {
-  console.log('Caseworker review submitted:', data);
-  alert('Saved! Check console for data.');
+const logSubmit = (data: Record<string, unknown>) => {
+  console.log('Form submitted:', data);
+  alert('Submitted! Check console for data.');
 };
 
-function CaseworkerStory() {
-  const [activeContract, setActiveContract] = useState(caseworkerContract);
+function StoryWrapper() {
+  const [activeContract, setActiveContract] = useState(typedContract);
+  const [testData, setTestData] = useState(typedFixtures);
+  const [perms, setPerms] = useState(typedPerms);
 
-  const handleContractChange = useCallback((updated: FormContract) => {
-    setActiveContract(updated);
-  }, []);
+  const tabs: EditorTab[] = [
+    { id: 'test-data', label: 'Test Data', filename: 'fixtures/person-caseworker-review.yaml', source: fixturesYaml },
+    { id: 'layout', label: 'Layout', filename: 'person-caseworker-review.yaml', source: layoutYaml },
+    { id: 'permissions', label: 'Permissions', filename: 'permissions/caseworker.yaml', source: permsYaml },
+    { id: 'schema', label: 'Schema', filename: 'persons-openapi.yaml', source: schemaYaml, readOnly: true },
+  ];
 
   return (
     <ContractPreview
-      yamlSource={yamlSource}
-      filename="person-caseworker-review.yaml"
-      initialContract={caseworkerContract}
-      onContractChange={handleContractChange}
+      tabs={tabs}
+      contractId="person-caseworker-review"
+      formTitle="Person Review"
+      onLayoutChange={setActiveContract}
+      onPermissionsChange={setPerms}
+      onTestDataChange={setTestData}
     >
       <FormRenderer
         contract={activeContract}
-        schema={personCreateSchema}
+        schema={personUpdateSchema}
         role="caseworker"
-        onSubmit={defaultSubmit}
+        defaultValues={testData}
+        permissionsPolicy={perms}
+        onSubmit={logSubmit}
       />
     </ContractPreview>
   );
 }
 
-export const CaseworkerReview: StoryObj = {
-  name: 'Caseworker Review',
-  render: () => <CaseworkerStory />,
-};
-
-export const FormOnly: StoryObj = {
-  name: 'Form Only (No Source)',
-  parameters: { layout: 'padded' },
-  render: () => (
-    <FormRenderer
-      contract={caseworkerContract}
-      schema={personCreateSchema}
-      role="caseworker"
-      onSubmit={defaultSubmit}
-    />
-  ),
+export const PersonCaseworkerReview: StoryObj = {
+  name: 'Person Review',
+  render: () => <StoryWrapper />,
 };

@@ -14,6 +14,9 @@ const preview: Preview = {
     },
     options: {
       bottomPanelHeight: 0,
+      storySort: {
+        order: ['Forms', 'Scenarios'],
+      },
     },
   },
   initialGlobals: {

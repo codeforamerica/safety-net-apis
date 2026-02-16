@@ -42,9 +42,16 @@ export interface Page {
   id: string;
   title: string;
   fields: FieldDefinition[];
+  /** For review layout: whether this section starts expanded (default: true). */
+  expanded?: boolean;
 }
 
 export type FormLayout = 'wizard' | 'review';
+
+export interface StoryBookMeta {
+  role: Role;
+  permissions: string;
+}
 
 export interface FormContract {
   form: {
@@ -52,6 +59,13 @@ export interface FormContract {
     title: string;
     schema: string;
     layout?: FormLayout;
+    storybook?: StoryBookMeta;
     pages: Page[];
   };
+}
+
+export interface PermissionsPolicy {
+  role: Role;
+  defaults: PermissionLevel;
+  fields?: Record<string, PermissionLevel>;
 }

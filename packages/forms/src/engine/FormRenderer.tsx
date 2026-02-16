@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Form, Button } from '@trussworks/react-uswds';
+import { Form, Button, Accordion } from '@trussworks/react-uswds';
 import type { ZodSchema } from 'zod';
-import type { FormContract, Role, Page } from './types';
+import type { FormContract, Role, Page, PermissionsPolicy } from './types';
 import { ComponentMapper } from './ComponentMapper';
 import { resolveCondition } from './ConditionResolver';
 import { resolvePermission } from './PermissionsResolver';
@@ -15,6 +15,7 @@ interface FormRendererProps {
   role?: Role;
   initialPage?: number;
   defaultValues?: Record<string, unknown>;
+  permissionsPolicy?: PermissionsPolicy;
   onSubmit?: (data: Record<string, unknown>) => void;
   onPageChange?: (pageId: string) => void;
 }
@@ -24,9 +25,10 @@ export function FormRenderer({
   schema,
   role = 'applicant',
   initialPage = 0,
+  defaultValues,
+  permissionsPolicy,
   onSubmit,
   onPageChange,
-  defaultValues,
 }: FormRendererProps) {
   const [currentPage, setCurrentPage] = useState(initialPage);
   const { pages, layout = 'wizard' } = contract.form;
@@ -35,12 +37,20 @@ export function FormRenderer({
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors },
   } = useForm<Record<string, unknown>>({
     resolver: zodResolver(schema),
     mode: 'onTouched',
     defaultValues,
   });
+
+  // Reset form when defaultValues change (e.g. test data edited in Storybook)
+  useEffect(() => {
+    if (defaultValues) {
+      reset(defaultValues);
+    }
+  }, [defaultValues, reset]);
 
   const formValues = watch();
 
@@ -55,7 +65,7 @@ export function FormRenderer({
           return null;
         }
 
-        const permission = resolvePermission(field, role);
+        const permission = resolvePermission(field, role, permissionsPolicy);
         if (permission === 'hidden') return null;
 
         const widthClass =
@@ -83,26 +93,19 @@ export function FormRenderer({
   );
 
   if (layout === 'review') {
+    const accordionItems = pages.map((page) => ({
+      id: page.id,
+      title: page.title,
+      expanded: page.expanded !== false,
+      headingLevel: 'h2' as const,
+      content: renderFields(page),
+    }));
+
     return (
       <div className="grid-container">
         <h1>{contract.form.title}</h1>
         <Form onSubmit={handleFormSubmit} large>
-          {pages.map((page) => (
-            <fieldset
-              key={page.id}
-              className="usa-fieldset"
-              style={{
-                borderTop: '1px solid #dfe1e2',
-                paddingTop: '1.5rem',
-                marginTop: '1.5rem',
-              }}
-            >
-              <legend className="usa-legend usa-legend--large">
-                {page.title}
-              </legend>
-              {renderFields(page)}
-            </fieldset>
-          ))}
+          <Accordion bordered multiselectable items={accordionItems} />
           <Button type="submit" style={{ marginTop: '1.5rem' }}>
             Save
           </Button>

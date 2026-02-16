@@ -83,3 +83,11 @@ export const personCreateSchema = z.object({
 });
 
 export type PersonCreate = z.infer<typeof personCreateSchema>;
+
+/**
+ * PersonUpdate schema — all fields optional for partial updates.
+ * Matches the PersonUpdate OpenAPI schema (minProperties: 1).
+ */
+export const personUpdateSchema = personCreateSchema.partial();
+
+export type PersonUpdate = z.infer<typeof personUpdateSchema>;
