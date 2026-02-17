@@ -1,7 +1,7 @@
 {
-  "name": "@safety-net/forms",
+  "name": "@safety-net/harness",
   "version": "1.0.0",
-  "description": "Contract-driven form engine for Safety Net APIs",
+  "description": "Safety Harness - sandbox for exploring the contract-driven approach",
   "type": "module",
   "private": true,
   "scripts": {
