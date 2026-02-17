@@ -133,6 +133,27 @@ export const CA_PROGRAM_MAP = {
 
 export const CA_PROGRAM_COLUMNS = Object.keys(CA_PROGRAM_MAP);
 
+// ─── Colorado program columns → x-extension keys ─────────────────────────────
+
+export const CO_PROGRAM_MAP = {
+  'CO SNAP':              'x-co-snap',
+  'Health First Colorado (MAGI)': 'x-health-first-co-magi',
+  'Health First Colorado (Non-MAGI)': 'x-health-first-co-non-magi',
+  'Colorado Works':       'x-colorado-works',
+  'SSI':                  'x-co-ssi',
+  'Colorado WIC':         'x-colorado-wic',
+  'CHP+':                 'x-chp-plus',
+  'Section 8 Housing':    'x-co-section-8',
+  'LEAP':                 'x-leap',
+  'Colorado Summer EBT':  'x-co-summer-ebt',
+  'OAP':                  'x-oap',
+  'AND':                  'x-and',
+  'AB':                   'x-ab',
+  'CCCAP':                'x-cccap',
+};
+
+export const CO_PROGRAM_COLUMNS = Object.keys(CO_PROGRAM_MAP);
+
 // ─── Annotation dot-path prefixes ────────────────────────────────────────────
 // Maps entity name to the prefix used in form-engine dot-paths.
 

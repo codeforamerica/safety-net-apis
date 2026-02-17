@@ -669,10 +669,10 @@ export const applicationCreateSchema = z.object({
   accommodationType: accommodationTypeEnum.optional(),
   household: householdSchema,
   calsawsCaseNumber: z.string().optional(),
-});
+}).describe('california-benefits-schema/ApplicationCreate');
 
 export type ApplicationCreate = z.infer<typeof applicationCreateSchema>;
 
-export const applicationUpdateSchema = applicationCreateSchema.partial();
+export const applicationUpdateSchema = applicationCreateSchema.partial().describe('california-benefits-schema/ApplicationUpdate');
 
 export type ApplicationUpdate = z.infer<typeof applicationUpdateSchema>;

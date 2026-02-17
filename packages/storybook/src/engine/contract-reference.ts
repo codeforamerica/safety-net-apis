@@ -1,122 +1,172 @@
 export const REFERENCE_CONTENT = `\
-# ── Form Contract Layout ─────────────────────────────────
-# The layout tab defines pages, fields, and visibility rules.
+# ── Form Contract Reference ─────────────────────────────
+# Everything you can put in a .form.yaml layout file.
+
+# ── Top-Level Structure ──────────────────────────────────
 
 form:
-  id: my-form
-  title: My Form
-  schema: applications/ApplicationCreate  # Zod schema used for validation (via zodResolver)
-  layout: wizard                  # wizard (multi-page) | review (accordion)
+  id: my-form                       # unique identifier (kebab-case)
+  title: My Form                    # display title
+  schema: Application               # data model object name
+  scope: california                 # state scope (resolves schema file)
+  layout: wizard                    # wizard | review | reference
+
+  # wizard  — multi-page stepper with Next/Back (uses Create schema)
+  # review  — single-page accordion (uses Update schema)
+  # reference — read-only table (requires columns)
+
+  annotations: [federal, california]  # annotation layers to load
+  storybook:
+    role: caseworker                # default role for the story
+    permissions: caseworker         # which permissions file to load
   pages:
-    - id: basic-info
-      title: Basic Information
-      expanded: true              # review layout only: start open (default: true)
+    - id: section-id
+      title: Section Title
+      expanded: true                # review only: start open (default: true)
       fields: [...]
 
 # ── Field Definition ──────────────────────────────────────
 
 - ref: household.members.0.firstName  # dot-path into the data model
-  component: text-input           # text-input | date-input | radio | select | checkbox-group
+  component: text-input
   width: half                     # full (default) | half | third | two-thirds
   hint: Legal first name          # helper text below the label
 
-# ── Custom Labels (radio / select / checkbox-group) ───────
-# Override the display text for enum values.
-# Keys are the raw enum values; values are what the user sees.
+# Components: text-input | date-input | radio | select
+#             checkbox-group | field-array
 
-- ref: household.members.citizenshipStatus
+# ── Custom Labels ────────────────────────────────────────
+# Override display text for enum values (radio/select/checkbox-group).
+
+- ref: citizenshipStatus
   component: select
-  labels:                           # works with any enum values
+  labels:
     citizen: U.S. Citizen
     permanent_resident: Permanent Resident
-    qualified_non_citizen: Qualified Non-Citizen
 
 - ref: consentToVerifyInformation
   component: radio
   labels:
-    "true": "Yes"                   # quotes required — without them YAML
-    "false": "No"                   # parses true/false as booleans, not strings
+    "true": "Yes"                   # quotes required for boolean keys
+    "false": "No"
 
-# ── Inline Permissions (per-field, per-role) ──────────────
+# ── Inline Permissions ───────────────────────────────────
+# Per-field, per-role overrides. Values: editable | read-only | masked | hidden
 
 - ref: household.members.0.ssn
   component: text-input
   permissions:
-    applicant: editable           # editable | read-only | masked | hidden
+    applicant: editable
     caseworker: editable
     reviewer: masked
 
-# ── Repeatable Field Group (field-array) ──────────────────
-# Use field-array for repeatable rows (household members, addresses, etc.).
-# Sub-field refs are relative — they get qualified at runtime.
+# ── Repeatable Field Group (field-array) ─────────────────
+# Sub-field refs are relative — qualified at runtime.
 
 - ref: household.members
   component: field-array
-  hint: List all people in your household
-  min_items: 1                        # minimum rows (prevents removing last)
-  max_items: 10                       # maximum rows (hides Add button at limit)
+  min_items: 1                      # minimum rows
+  max_items: 10                     # maximum rows
   fields:
-    - ref: firstName                  # becomes household.members.0.firstName
+    - ref: firstName                # → household.members.0.firstName
       component: text-input
       width: half
     - ref: lastName
       component: text-input
       width: half
-    - ref: relationship
-      component: select
-      labels:
-        spouse: Spouse
-        child: Child
-        parent: Parent
-        sibling: Sibling
-        other: Other
 
-# ── Conditional Visibility: Simple ────────────────────────
+# ── Conditional Visibility ───────────────────────────────
 
-- ref: household.members.immigrationDocumentType
+# Simple condition:
+- ref: immigrationDocumentType
   component: text-input
   show_when:
     field: citizenshipStatus
-    not_equals: citizen           # equals | not_equals
+    not_equals: citizen             # equals | not_equals
 
-# ── Conditional Visibility: JSON Logic (compound) ─────────
-
-- ref: household.members.immigrationDocumentNumber
+# JSON Logic (compound):
+- ref: immigrationDocumentNumber
   component: text-input
   show_when:
     jsonlogic:
       and:
-        - "!=":
-            - var: citizenshipStatus
-            - citizen
-        - "!=":
-            - var: immigrationDocumentType
-            - ""
+        - "!=": [{ var: citizenshipStatus }, citizen]
+        - "!=": [{ var: immigrationDocumentType }, ""]
 
-# ── Permissions Policy ────────────────────────────────────
-# (Permissions tab)
+# ══════════════════════════════════════════════════════════
+# Reference Layout — Column Configuration
+# ══════════════════════════════════════════════════════════
+# The reference layout renders a read-only table.
+# Each column pulls data from one of four namespaces.
 
-role: caseworker                  # applicant | caseworker | reviewer
-defaults: editable                # default permission for all fields
-fields:                           # per-field overrides
+  columns:
+    - from: <namespace>.<path>
+      label: Column Header
+
+# ── Namespace: field ─────────────────────────────────────
+# Properties of the field definition itself.
+
+    - from: field.ref               # dot-path (e.g. household.members.firstName)
+    - from: field.component         # text-input, select, etc.
+    - from: field.label             # auto-generated label from ref
+    - from: field.hint              # hint text
+    - from: field.width             # full, half, third, two-thirds
+
+# ── Namespace: schema ────────────────────────────────────
+# OpenAPI property info from the resolved spec.
+
+    - from: schema.type             # string, integer, boolean, array
+    - from: schema.format           # date, email, etc.
+    - from: schema.enum             # comma-separated enum values
+    - from: schema.description      # OpenAPI description
+
+# ── Namespace: annotation ────────────────────────────────
+# Layer-qualified: annotation.<layer>.<property>
+# Layers come from the annotations: [...] list above.
+
+    - from: annotation.federal.label       # field label
+    - from: annotation.federal.source      # data source (applicant, system, derived)
+    - from: annotation.federal.statute     # federal statute reference
+    - from: annotation.federal.programs.SNAP  # "Required" or empty
+
+    - from: annotation.california.statute  # state statute reference
+    - from: annotation.california.notes    # state-specific notes
+    - from: annotation.california.programs.CalFresh
+    - from: annotation.california.programs.Medi-Cal (MAGI)
+
+    - from: annotation.colorado.statute
+    - from: annotation.colorado.notes
+    - from: annotation.colorado.programs.CO SNAP
+    - from: annotation.colorado.programs.LEAP
+
+# To see all available program names, check the annotation
+# files in the reference tabs.
+
+# ── Namespace: permissions ───────────────────────────────
+# Resolved permission level for a role.
+
+    - from: permissions.applicant   # editable | read-only | masked | hidden
+    - from: permissions.caseworker
+    - from: permissions.reviewer
+
+# ══════════════════════════════════════════════════════════
+# Permissions Policy (separate file)
+# ══════════════════════════════════════════════════════════
+
+role: caseworker
+defaults: editable
+fields:
   socialSecurityNumber: masked
 
-# ── Test Data ─────────────────────────────────────────────
-# (Test Data tab — mirrors the data model)
+# ══════════════════════════════════════════════════════════
+# Test Data (separate file — mirrors the data model)
+# ══════════════════════════════════════════════════════════
 
-programsAppliedFor:
-  - SNAP
-  - Medicaid_MAGI
+programsAppliedFor: [SNAP, Medicaid_MAGI]
 household:
   size: 2
-  livingArrangement: rent
   members:
     - firstName: Jane
-      lastName: Doe
-      dateOfBirth: "1990-01-15"     # ISO 8601: YYYY-MM-DD
+      dateOfBirth: "1990-01-15"     # ISO 8601
       ssn: "123-45-6789"
-      gender: female                # from Zod enum
-      race:                         # array for checkbox-group
-        - white
-        - asian
 `;

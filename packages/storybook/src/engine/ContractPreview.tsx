@@ -7,11 +7,8 @@ import {
   scenarioStoryId,
 } from './naming';
 import { REFERENCE_CONTENT } from './contract-reference';
-import {
-  useViewportAutoHide,
-  getStoredShowSource,
-  setStoredShowSource,
-} from './useViewportAutoHide';
+import { useViewportAutoHide } from './useViewportAutoHide';
+import { useEditorVisibility } from './EditorVisibilityContext';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -111,26 +108,23 @@ export function ContractPreview({
   children,
 }: ContractPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [showSource, setShowSourceRaw] = useState(getStoredShowSource);
-  const setShowSource = useCallback((show: boolean) => {
-    setStoredShowSource(show);
-    setShowSourceRaw(show);
-  }, []);
+  const { visible: showSource, setVisible: setShowSource } = useEditorVisibility();
   const [activeTabId, setActiveTabId] = useState(tabs[0]?.id ?? '');
   const [activeReferenceId, setActiveReferenceId] = useState('');
   const [scenarioSaveStatus, setScenarioSaveStatus] = useState<SaveStatus>('idle');
 
-  // Auto-hide editor when Storybook switches to a narrow viewport (mobile/tablet),
-  // and auto-show when reset. Only fires on transitions, so manual toggle still works.
+  // Detect narrow viewport (mobile/tablet).  When the viewport shrinks,
+  // the hook calls setShowSource(false) which flows back through context
+  // to update the Storybook toolbar, keeping everything in sync.
   const isNarrowViewport = useViewportAutoHide(containerRef, setShowSource);
 
   // Collect reference-group tabs and build a synthetic "Reference" top-level tab.
-  // The Syntax reference is always appended as the last reference sub-tab.
+  // Syntax reference is first so it's the default sub-tab.
   const referenceTabs = useMemo<EditorTab[]>(() => {
     const grouped = tabs.filter((t) => t.group === 'reference');
     return [
+      { id: 'syntax', label: 'Syntax', filename: 'Form Contract Reference', source: REFERENCE_CONTENT, readOnly: true, group: 'reference' },
       ...grouped,
-      { id: 'syntax', label: 'Syntax', filename: 'Form Contract Syntax', source: REFERENCE_CONTENT, readOnly: true, group: 'reference' },
     ];
   }, [tabs]);
 
@@ -389,7 +383,7 @@ export function ContractPreview({
   if (!state && !isReferenceActive) return <>{children}</>;
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', gap: '1.5rem', height: '85vh' }}>
+    <div ref={containerRef} style={{ display: 'flex', gap: '1.5rem', height: '100vh' }}>
       {showSource && (
         <div
           style={{
@@ -482,20 +476,6 @@ export function ContractPreview({
               gap: '0.75rem',
             }}
           >
-            <button
-              onClick={() => setShowSource(false)}
-              style={{
-                background: 'transparent',
-                border: '1px solid #666',
-                color: '#cdd6f4',
-                borderRadius: '4px',
-                padding: '2px 8px',
-                cursor: 'pointer',
-                fontSize: '12px',
-              }}
-            >
-              Hide
-            </button>
             <span>
               {activeTab.filename}
               {activeTab.readOnly && (
@@ -618,22 +598,6 @@ export function ContractPreview({
       {/* In narrow viewport with editor open, hide form content to give editor full width */}
       {!(isNarrowViewport && showSource) && (
         <div style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
-          <button
-            onClick={() => setShowSource(!showSource)}
-            style={{
-              marginBottom: '0.75rem',
-              background: '#1e1e2e',
-              color: '#cdd6f4',
-              border: '1px solid #444',
-              borderRadius: '4px',
-              padding: '4px 12px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontFamily: 'monospace',
-            }}
-          >
-            {showSource ? 'Hide Editor' : 'Show Editor'}
-          </button>
           {children}
         </div>
       )}

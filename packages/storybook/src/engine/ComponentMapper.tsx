@@ -14,6 +14,7 @@ import {
 } from '@trussworks/react-uswds';
 import type { FieldDefinition, PermissionLevel } from './types';
 import type { UseFormRegister, FieldErrors } from 'react-hook-form';
+import { labelFromRef } from './field-utils';
 
 interface ComponentMapperProps {
   field: FieldDefinition;
@@ -23,16 +24,6 @@ interface ComponentMapperProps {
   value?: unknown;
   annotations?: Record<string, string[]>;
   pagePrograms?: string[];
-}
-
-/** Derive a human-readable label from a dotted field ref. */
-function labelFromRef(ref: string): string {
-  const last = ref.split('.').pop() ?? ref;
-  // camelCase → Title Case
-  return last
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, (s) => s.toUpperCase())
-    .trim();
 }
 
 /** Get nested error message from FieldErrors. */

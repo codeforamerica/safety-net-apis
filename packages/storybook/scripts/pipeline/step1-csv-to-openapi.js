@@ -116,6 +116,7 @@ export function generateOpenAPISchema(csvPath, outPath) {
       title: 'Federal Benefits Data Model',
       version: '1.0.0',
       description: 'Generated from federal-benefits-data-model.csv',
+      'x-api-id': 'applications',
     },
     paths: {},
     components: { schemas },

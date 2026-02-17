@@ -7,11 +7,11 @@
  * The resolver's setAtPath does shallow object merge, so CA x-extensions merge
  * alongside federal ones on existing fields.
  *
- * Output: generated/resolved/california-benefits-schema.yaml
+ * Output: generated/openapi/{state}-benefits-schema.yaml
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { dirname, basename } from 'path';
 import yaml from 'js-yaml';
 import { applyOverlay } from '@safety-net/contracts/overlay';
 
@@ -46,6 +46,10 @@ export function applyOverlays(basePath, overlayPaths, outPath) {
       }
     }
   }
+
+  // Stamp x-api-id to match the output filename (e.g. "california-benefits-schema")
+  const apiId = basename(outPath, '.yaml');
+  spec.info = { ...spec.info, 'x-api-id': apiId };
 
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, yaml.dump(spec, { lineWidth: 120, noRefs: true }));

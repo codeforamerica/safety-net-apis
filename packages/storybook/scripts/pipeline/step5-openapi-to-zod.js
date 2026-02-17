@@ -23,6 +23,7 @@ export function generateZodSchemas(specPath, outPath) {
   const text = readFileSync(specPath, 'utf-8');
   const spec = yaml.load(text);
   const schemas = spec.components?.schemas || {};
+  const apiId = spec.info?.['x-api-id'] || null;
 
   const lines = [];
   lines.push("import { z } from 'zod';");
@@ -72,13 +73,15 @@ export function generateZodSchemas(specPath, outPath) {
 
   const appSchema = schemas.Application;
   if (appSchema) {
+    const describeCreate = apiId ? `.describe('${apiId}/ApplicationCreate')` : '';
+    const describeUpdate = apiId ? `.describe('${apiId}/ApplicationUpdate')` : '';
     lines.push('export const applicationCreateSchema = z.object({');
     generateProperties(appSchema.properties || {}, schemas, enums, lines, '  ');
-    lines.push('});');
+    lines.push(`})${describeCreate};`);
     lines.push('');
     lines.push('export type ApplicationCreate = z.infer<typeof applicationCreateSchema>;');
     lines.push('');
-    lines.push('export const applicationUpdateSchema = applicationCreateSchema.partial();');
+    lines.push(`export const applicationUpdateSchema = applicationCreateSchema.partial()${describeUpdate};`);
     lines.push('');
     lines.push('export type ApplicationUpdate = z.infer<typeof applicationUpdateSchema>;');
     lines.push('');

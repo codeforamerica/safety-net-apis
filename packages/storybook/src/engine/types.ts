@@ -53,7 +53,12 @@ export interface Page {
   expanded?: boolean;
 }
 
-export type FormLayout = 'wizard' | 'review';
+export type FormLayout = 'wizard' | 'review' | 'reference';
+
+export interface ReferenceColumn {
+  from: string;
+  label: string;
+}
 
 export interface StoryBookMeta {
   role: Role;
@@ -65,8 +70,11 @@ export interface FormContract {
     id: string;
     title: string;
     schema: string;
+    scope?: string;
     layout?: FormLayout;
     storybook?: StoryBookMeta;
+    annotations?: string[];
+    columns?: ReferenceColumn[];
     pages: Page[];
   };
 }

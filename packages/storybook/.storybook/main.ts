@@ -3,7 +3,7 @@ import yaml from '@modyfi/vite-plugin-yaml';
 import { saveContractPlugin } from './save-contract-plugin';
 
 const config: StorybookConfig = {
-  stories: ['../src/**/*.stories.@(ts|tsx)'],
+  stories: ['../storybook/**/*.stories.@(ts|tsx)'],
   addons: ['@storybook/addon-essentials'],
   framework: {
     name: '@storybook/react-vite',

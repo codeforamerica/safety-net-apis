@@ -1,22 +1,22 @@
-// Auto-generated from contracts/application/intake.form.yaml. Run `npm run generate:stories` to regenerate.
+// Auto-generated from authored/contracts/application/intake.form.yaml. Run `npm run generate:stories` to regenerate.
 import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { FormRenderer } from '../engine/FormRenderer';
-import { ContractPreview, type EditorTab } from '../engine/ContractPreview';
-import { applicationCreateSchema } from '../schemas/application';
-import type { FormContract, Role, PermissionsPolicy } from '../engine/types';
+import { FormRenderer } from '../../src/engine/FormRenderer';
+import { ContractPreview, type EditorTab } from '../../src/engine/ContractPreview';
+import { applicationCreateSchema } from '../../generated/schemas/application-california';
+import type { FormContract, Role, PermissionsPolicy } from '../../src/engine/types';
 
 // Layout
-import contract from '../contracts/application/intake.form.yaml';
-import layoutYaml from '../contracts/application/intake.form.yaml?raw';
+import contract from '../../authored/contracts/application/intake.form.yaml';
+import layoutYaml from '../../authored/contracts/application/intake.form.yaml?raw';
 // Test data
-import fixtures from '../fixtures/application-intake.yaml';
-import fixturesYaml from '../fixtures/application-intake.yaml?raw';
+import fixtures from '../../authored/fixtures/application-intake.yaml';
+import fixturesYaml from '../../authored/fixtures/application-intake.yaml?raw';
 // Permissions
-import permsData from '../permissions/applicant.yaml';
-import permsYaml from '../permissions/applicant.yaml?raw';
+import permsData from '../../authored/permissions/applicant.yaml';
+import permsYaml from '../../authored/permissions/applicant.yaml?raw';
 // Schema (read-only Zod source)
-import schemaSource from '../schemas/application.ts?raw';
+import schemaSource from '../../generated/schemas/application-california.ts?raw';
 
 
 const typedContract = contract as unknown as FormContract;
@@ -42,10 +42,10 @@ function StoryWrapper() {
   const [perms, setPerms] = useState(typedPerms);
 
   const tabs: EditorTab[] = [
-    { id: 'layout', label: 'Layout', filename: 'contracts/application/intake.form.yaml', source: layoutYaml },
-    { id: 'test-data', label: 'Test Data', filename: 'fixtures/application-intake.yaml', source: fixturesYaml },
-    { id: 'permissions', label: 'Permissions', filename: 'permissions/applicant.yaml', source: permsYaml },
-    { id: 'schema', label: 'Schema', filename: 'schemas/application.ts', source: schemaSource, readOnly: true, group: 'reference' as const },
+    { id: 'layout', label: 'Layout', filename: 'authored/contracts/application/intake.form.yaml', source: layoutYaml },
+    { id: 'test-data', label: 'Test Data', filename: 'authored/fixtures/application-intake.yaml', source: fixturesYaml },
+    { id: 'permissions', label: 'Permissions', filename: 'authored/permissions/applicant.yaml', source: permsYaml },
+    { id: 'schema', label: 'Schema', filename: 'generated/schemas/application-california.ts', source: schemaSource, readOnly: true, group: 'reference' as const },
   ];
 
   return (
