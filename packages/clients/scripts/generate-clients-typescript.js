@@ -31,7 +31,7 @@
  */
 
 import { spawn } from 'child_process';
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync, copyFileSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync, copyFileSync, realpathSync } from 'fs';
 import { join, dirname, resolve as resolvePath } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -269,7 +269,7 @@ export { q, search } from './search-helpers.js';
 export { parseArgs, createOpenApiTsConfig, exec };
 
 // Run main function only if this is the entry point
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${realpathSync(process.argv[1])}`) {
   main().catch(err => {
     console.error('\nError:', err.message);
     process.exit(1);
