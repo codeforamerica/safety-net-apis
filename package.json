@@ -29,7 +29,7 @@
     "test:integration": "npm run test:integration -w @safety-net/mock-server",
     "test:all": "npm run test:all -w @safety-net/mock-server",
     "preflight": "bash scripts/preflight.sh",
-    "docs:slides": "marp docs/presentation/safety-net-openapi-overview.md -o docs/presentation/safety-net-openapi-overview.html",
+    "docs:slides": "marp docs/presentation/safety-net-blueprint-overview.md -o docs/presentation/safety-net-blueprint-overview.html",
     "design:reference": "npm run design:reference -w @safety-net/contracts"
   },
   "devDependencies": {

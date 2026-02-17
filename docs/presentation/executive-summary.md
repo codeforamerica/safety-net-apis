@@ -38,7 +38,7 @@ The Safety Net Blueprint provides **a shared systems integration blueprint for b
 
 ### Get Started
 
-Visit the [Toolkit Overview presentation](https://codeforamerica.github.io/safety-net-blueprint/docs/presentation/safety-net-openapi-overview.html) for a detailed walkthrough, explore the [ORCA Data Explorer](https://codeforamerica.github.io/safety-net-blueprint/docs/schema-reference.html) to see the data model, or visit the [repository on GitHub](https://github.com/codeforamerica/safety-net-blueprint).
+Visit the [Toolkit Overview presentation](https://codeforamerica.github.io/safety-net-blueprint/docs/presentation/safety-net-blueprint-overview.html) for a detailed walkthrough, explore the [ORCA Data Explorer](https://codeforamerica.github.io/safety-net-blueprint/docs/schema-reference.html) to see the data model, or visit the [repository on GitHub](https://github.com/codeforamerica/safety-net-blueprint).
 
 ---
 
