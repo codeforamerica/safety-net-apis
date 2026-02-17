@@ -29,7 +29,7 @@
  *       ...
  */
 
-import { writeFileSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { writeFileSync, mkdirSync, readdirSync, statSync, realpathSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import $RefParser from '@apidevtools/json-schema-ref-parser';
@@ -267,6 +267,6 @@ async function main() {
 export { convertToJsonSchema, parseArgs, discoverSpecs, loadSpec, extractSchemas };
 
 // Only run main if this is the entry point
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${realpathSync(process.argv[1])}`) {
   main();
 }

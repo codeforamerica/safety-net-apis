@@ -24,7 +24,7 @@
  *   --env-file   Path to env file with key=value pairs for placeholder substitution (optional)
  */
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, cpSync, rmSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, cpSync, rmSync, realpathSync } from 'fs';
 import { join, dirname, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import yaml from 'js-yaml';
@@ -630,7 +630,7 @@ export {
 };
 
 // Run main when executed directly
-const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(resolve(process.argv[1]));
 if (isDirectRun) {
   main();
 }
