@@ -48,6 +48,8 @@ interface FieldArrayRendererProps {
   annotations?: Record<string, string[]>;
   pagePrograms?: string[];
   idPrefix?: string;
+  /** Original values for diff highlighting. */
+  compareValues?: Record<string, unknown>;
 }
 
 export function FieldArrayRenderer({
@@ -62,6 +64,7 @@ export function FieldArrayRenderer({
   annotations,
   pagePrograms,
   idPrefix = '',
+  compareValues,
 }: FieldArrayRendererProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic path from contract
   const { fields: rows, append, remove } = useFieldArray({
@@ -132,6 +135,7 @@ export function FieldArrayRenderer({
                     annotations={annotations}
                     pagePrograms={pagePrograms}
                     idPrefix={idPrefix}
+                    compareValues={compareValues}
                   />
                 </div>
               );

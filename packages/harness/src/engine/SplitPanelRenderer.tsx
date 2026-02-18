@@ -67,6 +67,11 @@ export function SplitPanelRenderer({
       >
         {(['left', 'right'] as const).map((side) => {
           const panel = panels[side];
+          const otherSide = side === 'left' ? 'right' : 'left';
+          const otherPanel = panels[otherSide];
+          // Only pass compareValues to the editable panel so only it shows diff highlights
+          const compareValues =
+            panel.viewMode === 'editable' ? otherPanel.data : undefined;
           return (
             <div key={side}>
               <h3
@@ -91,6 +96,7 @@ export function SplitPanelRenderer({
                 onSubmit={onSubmit}
                 hideChrome
                 idPrefix={`${side}-`}
+                compareValues={compareValues}
               />
             </div>
           );

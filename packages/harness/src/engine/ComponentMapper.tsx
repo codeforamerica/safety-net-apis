@@ -15,6 +15,12 @@ import {
 import type { FieldDefinition, PermissionLevel } from './types';
 import type { UseFormRegister, FieldErrors } from 'react-hook-form';
 import { labelFromRef } from './field-utils';
+import { deepEqual } from './utils';
+
+/** Resolve a dot-path from a nested object. */
+function get(obj: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], obj);
+}
 
 interface ComponentMapperProps {
   field: FieldDefinition;
@@ -26,6 +32,8 @@ interface ComponentMapperProps {
   pagePrograms?: string[];
   /** Prefix for DOM element IDs to avoid collisions when multiple renderers share a page. */
   idPrefix?: string;
+  /** Original values for diff highlighting. When provided, fields whose value differs get a visual indicator. */
+  compareValues?: Record<string, unknown>;
 }
 
 /** Get nested error message from FieldErrors. */
@@ -131,6 +139,7 @@ export function ComponentMapper({
   annotations,
   pagePrograms,
   idPrefix = '',
+  compareValues,
 }: ComponentMapperProps) {
   if (permission === 'hidden') return null;
 
@@ -139,6 +148,31 @@ export function ComponentMapper({
   const isDisabled = permission === 'read-only' || permission === 'masked';
   const inputId = idPrefix + field.ref.replace(/\./g, '-');
   const programs = annotations?.[field.ref] ?? annotations?.[stripIndices(field.ref)];
+
+  // Diff highlighting: compare current value against original
+  const originalValue = compareValues ? get(compareValues, field.ref) : undefined;
+  const isChanged = compareValues !== undefined && !deepEqual(value, originalValue);
+
+  const modifiedBadge = isChanged ? (
+    <span style={{ marginLeft: '6px', verticalAlign: 'middle' }}>
+      <Tag
+        className="font-sans-3xs"
+        style={{
+          fontSize: '10px',
+          padding: '1px 6px',
+          lineHeight: '1.4',
+          backgroundColor: '#005ea2',
+          color: '#ffffff',
+        }}
+      >
+        Modified
+      </Tag>
+    </span>
+  ) : null;
+
+  const changedStyle: React.CSSProperties = isChanged
+    ? { borderLeft: '4px solid #005ea2', paddingLeft: '8px', backgroundColor: '#e8f5ff' }
+    : {};
 
   // Compute exception badge: only show when field's programs differ from the page baseline
   let badges: React.ReactNode = null;
@@ -178,8 +212,8 @@ export function ComponentMapper({
 
   if (permission === 'masked') {
     return (
-      <FormGroup error={!!errorMsg}>
-        <Label htmlFor={inputId}>{label}{badges}</Label>
+      <FormGroup error={!!errorMsg} style={changedStyle}>
+        <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
         {field.hint && <span className="usa-hint">{field.hint}</span>}
         <TextInput
           id={inputId}
@@ -196,8 +230,8 @@ export function ComponentMapper({
   switch (field.component) {
     case 'text-input': {
       return (
-        <FormGroup error={!!errorMsg}>
-          <Label htmlFor={inputId}>{label}{badges}</Label>
+        <FormGroup error={!!errorMsg} style={changedStyle}>
+          <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
           {field.hint && <span className="usa-hint">{field.hint}</span>}
           {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
           <TextInput
@@ -216,8 +250,8 @@ export function ComponentMapper({
       const dayId = `${inputId}-day`;
       const yearId = `${inputId}-year`;
       return (
-        <FormGroup error={!!errorMsg}>
-          <Fieldset legend={<>{label}{badges}</>}>
+        <FormGroup error={!!errorMsg} style={changedStyle}>
+          <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
             {field.hint && <span className="usa-hint">{field.hint}</span>}
             {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
             <DateInputGroup>
@@ -260,8 +294,8 @@ export function ComponentMapper({
         : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
 
       return (
-        <FormGroup error={!!errorMsg}>
-          <Fieldset legend={<>{label}{badges}</>}>
+        <FormGroup error={!!errorMsg} style={changedStyle}>
+          <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
             {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
             {options.map((opt) => (
               <Radio
@@ -287,8 +321,8 @@ export function ComponentMapper({
           }))
         : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
       return (
-        <FormGroup error={!!errorMsg}>
-          <Label htmlFor={inputId}>{label}{badges}</Label>
+        <FormGroup error={!!errorMsg} style={changedStyle}>
+          <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
           {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
           <Select
             id={inputId}
@@ -315,8 +349,8 @@ export function ComponentMapper({
           }))
         : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
       return (
-        <FormGroup error={!!errorMsg}>
-          <Fieldset legend={<>{label}{badges}</>}>
+        <FormGroup error={!!errorMsg} style={changedStyle}>
+          <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
             {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
             {options.map((opt) => (
               <Checkbox

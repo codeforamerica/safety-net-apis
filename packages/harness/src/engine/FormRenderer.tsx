@@ -68,6 +68,8 @@ interface FormRendererProps {
   hideChrome?: boolean;
   /** Prefix for DOM element IDs to avoid collisions when multiple renderers share a page. */
   idPrefix?: string;
+  /** Original values for diff highlighting. Fields whose value differs get a visual indicator. */
+  compareValues?: Record<string, unknown>;
 }
 
 export function FormRenderer({
@@ -84,6 +86,7 @@ export function FormRenderer({
   onPageChange,
   hideChrome = false,
   idPrefix = '',
+  compareValues,
 }: FormRendererProps) {
   const [internalPage, setInternalPage] = useState(initialPage);
   const currentPage = controlledPage ?? internalPage;
@@ -171,6 +174,7 @@ export function FormRenderer({
                     annotations={annotations}
                     pagePrograms={pagePrograms}
                     idPrefix={idPrefix}
+                    compareValues={compareValues}
                   />
                 </div>
               );
@@ -196,6 +200,7 @@ export function FormRenderer({
                   annotations={annotations}
                   pagePrograms={pagePrograms}
                   idPrefix={idPrefix}
+                  compareValues={compareValues}
                 />
               </div>
             );
