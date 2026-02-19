@@ -212,36 +212,40 @@ export function ComponentMapper({
 
   if (permission === 'masked') {
     return (
-      <FormGroup error={!!errorMsg} style={changedStyle}>
-        <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
-        {field.hint && <span className="usa-hint">{field.hint}</span>}
-        <TextInput
-          id={inputId}
-          name={field.ref}
-          type="text"
-          value={maskValue(value)}
-          disabled
-          inputRef={() => {}}
-        />
-      </FormGroup>
+      <div style={changedStyle}>
+        <FormGroup error={!!errorMsg}>
+          <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
+          {field.hint && <span className="usa-hint">{field.hint}</span>}
+          <TextInput
+            id={inputId}
+            name={field.ref}
+            type="text"
+            value={maskValue(value)}
+            disabled
+            inputRef={() => {}}
+          />
+        </FormGroup>
+      </div>
     );
   }
 
   switch (field.component) {
     case 'text-input': {
       return (
-        <FormGroup error={!!errorMsg} style={changedStyle}>
-          <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
-          {field.hint && <span className="usa-hint">{field.hint}</span>}
-          {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
-          <TextInput
-            id={inputId}
-            type="text"
-            disabled={isDisabled}
-            {...register(field.ref)}
-            inputRef={register(field.ref).ref}
-          />
-        </FormGroup>
+        <div style={changedStyle}>
+          <FormGroup error={!!errorMsg}>
+            <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
+            {field.hint && <span className="usa-hint">{field.hint}</span>}
+            {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
+            <TextInput
+              id={inputId}
+              type="text"
+              disabled={isDisabled}
+              {...register(field.ref)}
+              inputRef={register(field.ref).ref}
+            />
+          </FormGroup>
+        </div>
       );
     }
 
@@ -250,38 +254,40 @@ export function ComponentMapper({
       const dayId = `${inputId}-day`;
       const yearId = `${inputId}-year`;
       return (
-        <FormGroup error={!!errorMsg} style={changedStyle}>
-          <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
-            {field.hint && <span className="usa-hint">{field.hint}</span>}
-            {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
-            <DateInputGroup>
-              <DateInput
-                id={monthId}
-                name={`${field.ref}_month`}
-                label="Month"
-                unit="month"
-                maxLength={2}
-                disabled={isDisabled}
-              />
-              <DateInput
-                id={dayId}
-                name={`${field.ref}_day`}
-                label="Day"
-                unit="day"
-                maxLength={2}
-                disabled={isDisabled}
-              />
-              <DateInput
-                id={yearId}
-                name={`${field.ref}_year`}
-                label="Year"
-                unit="year"
-                maxLength={4}
-                disabled={isDisabled}
-              />
-            </DateInputGroup>
-          </Fieldset>
-        </FormGroup>
+        <div style={changedStyle}>
+          <FormGroup error={!!errorMsg}>
+            <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
+              {field.hint && <span className="usa-hint">{field.hint}</span>}
+              {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
+              <DateInputGroup>
+                <DateInput
+                  id={monthId}
+                  name={`${field.ref}_month`}
+                  label="Month"
+                  unit="month"
+                  maxLength={2}
+                  disabled={isDisabled}
+                />
+                <DateInput
+                  id={dayId}
+                  name={`${field.ref}_day`}
+                  label="Day"
+                  unit="day"
+                  maxLength={2}
+                  disabled={isDisabled}
+                />
+                <DateInput
+                  id={yearId}
+                  name={`${field.ref}_year`}
+                  label="Year"
+                  unit="year"
+                  maxLength={4}
+                  disabled={isDisabled}
+                />
+              </DateInputGroup>
+            </Fieldset>
+          </FormGroup>
+        </div>
       );
     }
 
@@ -294,22 +300,24 @@ export function ComponentMapper({
         : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
 
       return (
-        <FormGroup error={!!errorMsg} style={changedStyle}>
-          <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
-            {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
-            {options.map((opt) => (
-              <Radio
-                key={opt.value}
-                id={`${inputId}-${opt.value}`}
-                label={opt.label}
-                value={opt.value}
-                disabled={isDisabled}
-                {...register(field.ref)}
-                inputRef={register(field.ref).ref}
-              />
-            ))}
-          </Fieldset>
-        </FormGroup>
+        <div style={changedStyle}>
+          <FormGroup error={!!errorMsg}>
+            <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
+              {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
+              {options.map((opt) => (
+                <Radio
+                  key={opt.value}
+                  id={`${inputId}-${opt.value}`}
+                  label={opt.label}
+                  value={opt.value}
+                  disabled={isDisabled}
+                  {...register(field.ref)}
+                  inputRef={register(field.ref).ref}
+                />
+              ))}
+            </Fieldset>
+          </FormGroup>
+        </div>
       );
     }
 
@@ -321,23 +329,25 @@ export function ComponentMapper({
           }))
         : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
       return (
-        <FormGroup error={!!errorMsg} style={changedStyle}>
-          <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
-          {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
-          <Select
-            id={inputId}
-            disabled={isDisabled}
-            {...register(field.ref)}
-            inputRef={register(field.ref).ref}
-          >
-            <option value="">- Select -</option>
-            {options.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </Select>
-        </FormGroup>
+        <div style={changedStyle}>
+          <FormGroup error={!!errorMsg}>
+            <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
+            {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
+            <Select
+              id={inputId}
+              disabled={isDisabled}
+              {...register(field.ref)}
+              inputRef={register(field.ref).ref}
+            >
+              <option value="">- Select -</option>
+              {options.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+          </FormGroup>
+        </div>
       );
     }
 
@@ -349,22 +359,24 @@ export function ComponentMapper({
           }))
         : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
       return (
-        <FormGroup error={!!errorMsg} style={changedStyle}>
-          <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
-            {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
-            {options.map((opt) => (
-              <Checkbox
-                key={opt.value}
-                id={`${inputId}-${opt.value}`}
-                label={opt.label}
-                value={opt.value}
-                disabled={isDisabled}
-                {...register(field.ref)}
-                inputRef={register(field.ref).ref}
-              />
-            ))}
-          </Fieldset>
-        </FormGroup>
+        <div style={changedStyle}>
+          <FormGroup error={!!errorMsg}>
+            <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
+              {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
+              {options.map((opt) => (
+                <Checkbox
+                  key={opt.value}
+                  id={`${inputId}-${opt.value}`}
+                  label={opt.label}
+                  value={opt.value}
+                  disabled={isDisabled}
+                  {...register(field.ref)}
+                  inputRef={register(field.ref).ref}
+                />
+              ))}
+            </Fieldset>
+          </FormGroup>
+        </div>
       );
     }
 

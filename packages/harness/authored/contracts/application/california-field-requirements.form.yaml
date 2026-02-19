@@ -2,7 +2,9 @@ form:
   id: application-california-field-requirements
   title: California
   schema: Application
-  layout: reference
+  layout:
+    navigation: none
+    display: data-table
   role: caseworker
   columns:
     - from: field.ref

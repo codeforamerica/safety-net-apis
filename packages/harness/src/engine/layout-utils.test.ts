@@ -37,10 +37,13 @@ describe('resolveLayout', () => {
     expect(resolveLayout(config)).toEqual(config);
   });
 
-  it('returns safe default for "reference"', () => {
-    expect(resolveLayout('reference')).toEqual({
-      navigation: 'step-indicator',
-      display: 'paginated',
-    });
+  it('passes through none + data-table', () => {
+    const config = { navigation: 'none' as const, display: 'data-table' as const };
+    expect(resolveLayout(config)).toEqual(config);
+  });
+
+  it('passes through side-nav + data-table', () => {
+    const config = { navigation: 'side-nav' as const, display: 'data-table' as const };
+    expect(resolveLayout(config)).toEqual(config);
   });
 });

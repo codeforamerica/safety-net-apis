@@ -442,10 +442,16 @@ function generateCustomStory(contract, manifest, customName, customDir, category
   const hasPermissions = existsSync(join(customPath, 'permissions.yaml'));
 
   const isSplitPanel = typeof layout === 'object' && layout.display === 'split-panel';
-  const isReference = layout === 'reference';
+  const isDataTable = typeof layout === 'object' && layout.display === 'data-table';
+  const hasDetail = contract.form.pages?.some(p => p.detail) && src.detail;
 
-  if (isReference) {
-    return generateReferenceCustomStory({ id, role, src, layers, allPerms, metaTitle, customName, customDisplayName, category });
+  if (hasDetail) {
+    // List-detail custom stories not yet supported — fall through to data-table
+    return generateDataTableCustomStory({ id, role, src, layers, allPerms, metaTitle, customName, customDisplayName, category });
+  }
+
+  if (isDataTable) {
+    return generateDataTableCustomStory({ id, role, src, layers, allPerms, metaTitle, customName, customDisplayName, category });
   }
 
   // Form-based layouts: all composable configs
@@ -580,14 +586,14 @@ export const ${toPascalCase(customName)}: StoryObj = {
 }
 
 // =============================================================================
-// Template: reference custom story
+// Template: data-table custom story
 // =============================================================================
 
 /**
- * Generate a custom story for a reference-layout contract.
+ * Generate a custom story for a data-table-layout contract.
  * Layout comes from the custom dir; annotations and permissions come from the parent manifest.
  */
-function generateReferenceCustomStory({ id, role, src, layers, allPerms, metaTitle, customName, customDisplayName, category }) {
+function generateDataTableCustomStory({ id, role, src, layers, allPerms, metaTitle, customName, customDisplayName, category }) {
   const hasAnnotations = layers.length > 0;
 
   // Annotation imports — each layer passed separately
@@ -625,9 +631,9 @@ function generateReferenceCustomStory({ id, role, src, layers, allPerms, metaTit
   return `// Auto-generated custom story. Run \`npm run generate:stories\` to regenerate.
 import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { ReferenceRenderer } from '../../../src/engine/ReferenceRenderer';
+import { DataTableRenderer } from '../../../src/engine/DataTableRenderer';
 import { ContractPreview, type EditorTab } from '../../../src/engine/ContractPreview';
-import type { FormContract, PermissionsPolicy } from '../../../src/engine/types';
+import type { FormContract, PermissionsPolicy, AnnotationLayer } from '../../../src/engine/types';
 
 // Layout (from custom)
 import customLayout from './layout.yaml';
@@ -640,7 +646,7 @@ const typedContract = customLayout as unknown as FormContract;
 const allPermissions: PermissionsPolicy[] = [
 ${permsTypedArray}
 ];
-const annotationLayers = [
+const annotationLayers: AnnotationLayer[] = [
 ${annotationLayerEntries}
 ];
 
@@ -676,8 +682,11 @@ ${permissionsTab}
       onPermissionsChange={() => {}}
       onTestDataChange={() => {}}
     >
-      <ReferenceRenderer
-        contract={activeContract}
+      <DataTableRenderer
+        pages={activeContract.form.pages}
+        columns={activeContract.form.columns ?? []}
+        title={activeContract.form.title}
+        source="contract"
 ${hasAnnotations ? '        annotationLayers={annotationLayers}\n' : ''}        permissionsPolicies={allPermissions}
       />
     </ContractPreview>
@@ -758,7 +767,7 @@ function buildPermissionsReference(perms) {
   return lines.join('\n');
 }
 
-function generateReferenceStory(contract, manifest, category) {
+function generateDataTableStory(contract, manifest, category) {
   const { id, title, role } = contract.form;
   const metaTitle = buildMetaTitle(role, category, title);
   const src = manifest.sources;
@@ -805,9 +814,9 @@ function generateReferenceStory(contract, manifest, category) {
   return `// Auto-generated from ${contractPath}. Run \`npm run generate:stories\` to regenerate.
 import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { ReferenceRenderer } from '../../src/engine/ReferenceRenderer';
+import { DataTableRenderer } from '../../src/engine/DataTableRenderer';
 import { ContractPreview, type EditorTab } from '../../src/engine/ContractPreview';
-import type { FormContract, PermissionsPolicy } from '../../src/engine/types';
+import type { FormContract, PermissionsPolicy, AnnotationLayer } from '../../src/engine/types';
 
 // Layout
 import contract from '../../${contractPath}';
@@ -820,7 +829,7 @@ const typedContract = contract as unknown as FormContract;
 const allPermissions: PermissionsPolicy[] = [
 ${permsTypedArray}
 ];
-const annotationLayers = [
+const annotationLayers: AnnotationLayer[] = [
 ${annotationLayerEntries}
 ];
 
@@ -856,9 +865,113 @@ ${permissionsTab}
       onPermissionsChange={() => {}}
       onTestDataChange={() => {}}
     >
-      <ReferenceRenderer
-        contract={activeContract}
+      <DataTableRenderer
+        pages={activeContract.form.pages}
+        columns={activeContract.form.columns ?? []}
+        title={activeContract.form.title}
+        source="contract"
 ${hasAnnotations ? '        annotationLayers={annotationLayers}\n' : ''}        permissionsPolicies={allPermissions}
+      />
+    </ContractPreview>
+  );
+}
+
+export const ${pascalName}: StoryObj = {
+  name: '${title}',
+  render: () => <StoryWrapper />,
+};
+`;
+}
+
+// =============================================================================
+// Template: list-detail layout
+// =============================================================================
+
+/**
+ * Generate a story for a data-table contract that has list-detail navigation.
+ * The manifest must include a `detail` block pointing to the detail form contract.
+ */
+function generateListDetailStory(contract, manifest, category) {
+  const { id, title, role } = contract.form;
+  const metaTitle = buildMetaTitle(role, category, title);
+  const src = manifest.sources;
+  const detail = src.detail;
+  const contractPath = src.contract;
+  const fixturesPath = src.fixtures;
+  const pascalName = toPascalCase(id);
+
+  const detailZodExport = detail.zodExport;
+  const detailSchemaModule = detail.schema.replace(/\.ts$/, '');
+  const detailContractPath = detail.contract;
+  const detailFixturesPath = detail.fixtures;
+
+  return `// Auto-generated from ${contractPath}. Run \`npm run generate:stories\` to regenerate.
+import React, { useState } from 'react';
+import type { Meta, StoryObj } from '@storybook/react';
+import { ListDetailRenderer } from '../../src/engine/ListDetailRenderer';
+import { ContractPreview, type EditorTab } from '../../src/engine/ContractPreview';
+import { ${detailZodExport} } from '../../${detailSchemaModule}';
+import type { FormContract, Role } from '../../src/engine/types';
+
+// Layout (list contract)
+import contract from '../../${contractPath}';
+import layoutYaml from '../../${contractPath}?raw';
+// List data (API-style fixtures)
+import listData from '../../${fixturesPath}';
+import listDataYaml from '../../${fixturesPath}?raw';
+// Detail contract
+import detailContract from '../../${detailContractPath}';
+import detailContractYaml from '../../${detailContractPath}?raw';
+// Detail test data
+import detailFixtures from '../../${detailFixturesPath}';
+import detailFixturesYaml from '../../${detailFixturesPath}?raw';
+
+const typedContract = contract as unknown as FormContract;
+const typedDetailContract = detailContract as unknown as FormContract;
+const typedListData = listData as unknown as Record<string, unknown>[];
+const typedDetailFixtures = detailFixtures as unknown as Record<string, unknown>;
+
+const meta: Meta = {
+  title: '${metaTitle}',
+  tags: ['read-only'],
+  parameters: { layout: 'fullscreen' },
+};
+
+export default meta;
+
+function StoryWrapper() {
+  const [activeContract, setActiveContract] = useState(typedContract);
+
+  const tabs: EditorTab[] = [
+    { id: 'layout', label: 'Layout', filename: '${contractPath}', source: layoutYaml },
+    { id: 'list-data', label: 'List Data', filename: '${fixturesPath}', source: listDataYaml },
+    { id: 'detail-contract', label: 'Detail Contract', filename: '${detailContractPath}', source: detailContractYaml, readOnly: true, group: 'reference' as const },
+    { id: 'detail-data', label: 'Detail Data', filename: '${detailFixturesPath}', source: detailFixturesYaml, readOnly: true, group: 'reference' as const },
+  ];
+
+  // Use page-level columns (list-detail pages define columns per-page)
+  const firstPage = activeContract.form.pages[0];
+  const columns = firstPage?.columns ?? activeContract.form.columns ?? [];
+
+  return (
+    <ContractPreview
+      tabs={tabs}
+      contractId="${id}"
+      role="${role}"${category ? `
+      category="${category}"` : ''}
+      onLayoutChange={setActiveContract}
+      onPermissionsChange={() => {}}
+      onTestDataChange={() => {}}
+    >
+      <ListDetailRenderer
+        pages={activeContract.form.pages}
+        columns={columns}
+        title={activeContract.form.title}
+        source="api"
+        data={typedListData}
+        detailContract={typedDetailContract}
+        detailSchema={${detailZodExport}}
+        detailRole={'${role}' as Role}
       />
     </ContractPreview>
   );
@@ -903,18 +1016,21 @@ function main() {
     const manifest = { sources };
 
     // Dispatch to the right story template.
-    // 'reference' and split-panel display use dedicated renderers;
+    // list-detail, data-table, and split-panel use dedicated renderers;
     // everything else uses FormRenderer (wizard template).
     const isSplitPanel = typeof layout === 'object' && layout.display === 'split-panel';
-    const isReference = layout === 'reference';
+    const isDataTable = typeof layout === 'object' && layout.display === 'data-table';
+    const hasDetail = doc.form.pages?.some(p => p.detail) && sources.detail;
 
-    const source = isReference
-      ? generateReferenceStory(doc, manifest, category)
+    const source = hasDetail
+      ? generateListDetailStory(doc, manifest, category)
+      : isDataTable
+      ? generateDataTableStory(doc, manifest, category)
       : isSplitPanel
         ? generateSplitPanelStory(doc, manifest, category)
         : generateWizardStory(doc, manifest, category);
 
-    const layoutLabel = typeof layout === 'object' ? `${layout.navigation}+${layout.display}` : layout;
+    const layoutLabel = `${layout.navigation}+${layout.display}`;
     if (writeIfChanged(outPath, source)) {
       console.log(`  write  ${pascalName}.stories.tsx  (${layoutLabel})`);
     } else {

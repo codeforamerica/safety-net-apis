@@ -1,6 +1,7 @@
 export { FormRenderer } from './FormRenderer';
 export { SplitPanelRenderer } from './SplitPanelRenderer';
-export { ReferenceRenderer } from './ReferenceRenderer';
+export { DataTableRenderer } from './DataTableRenderer';
+export { ListDetailRenderer } from './ListDetailRenderer';
 export { ContractPreview } from './ContractPreview';
 export { ComponentMapper } from './ComponentMapper';
 export { FieldArrayRenderer } from './FieldArrayRenderer';
@@ -11,6 +12,21 @@ export { FormSideNav } from './FormSideNav';
 export { FormInPageNav } from './FormInPageNav';
 export { resolveLayout } from './layout-utils';
 export { labelFromRef, stripIndices } from './field-utils';
+export {
+  resolveSchemaProperty,
+  resolveAnnotation,
+  resolveAnnotationValue,
+  resolveColumnValue,
+  flattenFields,
+  resolveContractRows,
+  sortRows,
+} from './data-table-resolvers';
+export type {
+  ResolvedRow,
+  SortDirection,
+  SchemaProperty,
+  AnnotationEntry,
+} from './data-table-resolvers';
 export type {
   FormContract,
   Page,
@@ -29,4 +45,7 @@ export type {
   ReferenceColumn,
   StoryBookMeta,
   PermissionsPolicy,
+  DataTableSource,
+  AnnotationLayer,
+  DetailConfig,
 } from './types';

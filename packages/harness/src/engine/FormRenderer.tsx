@@ -3,7 +3,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, Button, Accordion, Tag } from '@trussworks/react-uswds';
 import type { ZodSchema } from 'zod';
-import type { FormContract, Role, Page, PermissionsPolicy, FieldDefinition, ViewMode } from './types';
+import type { FormContract, Role, Page, PermissionsPolicy, FieldDefinition, ViewMode, AnnotationLayer, DisplayType, LayoutConfig } from './types';
+import { DataTableRenderer } from './DataTableRenderer';
+import { ListDetailRenderer } from './ListDetailRenderer';
 
 /** Resolve a dot-path like 'name.firstName' from a nested object. */
 function get(obj: Record<string, unknown>, path: string): unknown {
@@ -73,6 +75,23 @@ interface FormRendererProps {
   idPrefix?: string;
   /** Original values for diff highlighting. Fields whose value differs get a visual indicator. */
   compareValues?: Record<string, unknown>;
+  /** Annotation layers for data-table pages. */
+  annotationLayers?: AnnotationLayer[];
+  /** Permissions policies for data-table pages. */
+  permissionsPolicies?: PermissionsPolicy[];
+  /** OpenAPI spec for schema column resolution in data-table pages. */
+  schemaSpec?: Record<string, unknown>;
+  /** Detail form contract for list-detail navigation in data-table mode. */
+  detailContract?: FormContract;
+  /** Zod schema for the detail form. */
+  detailSchema?: ZodSchema;
+  /** Role for the detail form. */
+  detailRole?: Role;
+}
+
+/** Resolve effective display type for a page (page override or form-level config). */
+function resolvePageDisplay(page: Page, config: LayoutConfig): DisplayType {
+  return page.display ?? config.display;
 }
 
 export function FormRenderer({
@@ -90,6 +109,12 @@ export function FormRenderer({
   hideChrome = false,
   idPrefix = '',
   compareValues,
+  annotationLayers = [],
+  permissionsPolicies = [],
+  schemaSpec,
+  detailContract,
+  detailSchema,
+  detailRole,
 }: FormRendererProps) {
   const [internalPage, setInternalPage] = useState(initialPage);
   const currentPage = controlledPage ?? internalPage;
@@ -126,9 +151,10 @@ export function FormRenderer({
   });
 
   const renderFields = (page: Page) => {
+    const pageFields = page.fields ?? [];
     // Compute page-level annotation baseline
     const fieldMap = annotations
-      ? collectFieldPrograms(page.fields, annotations)
+      ? collectFieldPrograms(pageFields, annotations)
       : new Map<string, string[]>();
     const pagePrograms = programUnion(fieldMap);
 
@@ -153,7 +179,7 @@ export function FormRenderer({
           </div>
         )}
         <div className="grid-row grid-gap">
-          {page.fields.map((field) => {
+          {pageFields.map((field) => {
             if (!resolveCondition(field.show_when, formValues)) {
               return null;
             }
@@ -249,6 +275,37 @@ export function FormRenderer({
 
   // --- Display content ---
   let content: React.ReactNode;
+  if (config.display === 'data-table') {
+    // Full data-table mode: all pages rendered in a single table
+    const tableColumns = contract.form.columns ?? [];
+    if (detailContract) {
+      return (
+        <ListDetailRenderer
+          pages={pages}
+          columns={tableColumns}
+          title={contract.form.title}
+          source="contract"
+          detailContract={detailContract}
+          detailSchema={detailSchema}
+          detailRole={detailRole}
+          annotationLayers={annotationLayers}
+          permissionsPolicies={permissionsPolicies}
+          schemaSpec={schemaSpec}
+        />
+      );
+    }
+    return (
+      <DataTableRenderer
+        pages={pages}
+        columns={tableColumns}
+        title={contract.form.title}
+        source="contract"
+        annotationLayers={annotationLayers}
+        permissionsPolicies={permissionsPolicies}
+        schemaSpec={schemaSpec}
+      />
+    );
+  }
   if (config.display === 'accordion') {
     const accordionItems = pages.map((p) => ({
       id: p.id,

@@ -2,7 +2,9 @@ form:
   id: application-colorado-field-requirements
   title: Colorado
   schema: Application
-  layout: reference
+  layout:
+    navigation: none
+    display: data-table
   role: caseworker
   columns:
     - from: field.ref

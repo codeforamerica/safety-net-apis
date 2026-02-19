@@ -65,6 +65,27 @@ form:
 #                    config). Used for comparing working copy vs original.
 #                    Uses SplitPanelRenderer.
 #
+#   data-table       Read-only table view. Pages become row groups,
+#                    columns are configurable (field, schema, annotation,
+#                    permissions namespaces). Uses DataTableRenderer.
+#                    Requires columns config (see Data Table section).
+#                    source: contract (default) resolves rows from pages;
+#                    source: api maps external data rows by key.
+#                    Supports list-detail navigation via per-page
+#                    detail config (see Detail Navigation section).
+#
+# ── Per-Page Display Override ─────────────────────────────
+# Individual pages can override the form-level display:
+#
+#   pages:
+#     - id: summary-table
+#       title: Field Summary
+#       display: data-table        # this page renders as a table
+#       columns: [...]             # optional page-level column override
+#     - id: personal-info
+#       title: Personal Info       # inherits form-level display
+#       fields: [...]
+#
 # ── Common Combinations ─────────────────────────────────
 #
 # Applicant wizard (step-by-step intake):
@@ -121,13 +142,17 @@ form:
 #       label: Original Submission
 #       mode: readonly
 #
-# ── Reference layout (string, not composable) ───────────
-# The reference layout is a read-only table view.
-# It uses a dedicated renderer and is specified as a string:
-#
-#   layout: reference
-#
-# Requires columns config (see Reference Layout section below).
+# Data table (read-only field reference):
+#   layout:
+#     navigation: none
+#     display: data-table
+#   columns:
+#     - from: field.ref
+#       label: Field
+#     - from: schema.type
+#       label: Type
+#     - from: annotation.federal.programs.SNAP
+#       label: SNAP
 
 # ── Field Definition ──────────────────────────────────────
 
@@ -198,9 +223,9 @@ form:
         - "!=": [{ var: immigrationDocumentType }, ""]
 
 # ══════════════════════════════════════════════════════════
-# Reference Layout — Column Configuration
+# Data Table — Column Configuration
 # ══════════════════════════════════════════════════════════
-# The reference layout renders a read-only table.
+# The data-table display renders a read-only table.
 # Each column pulls data from one of four namespaces.
 
   columns:
@@ -252,6 +277,24 @@ form:
     - from: permissions.applicant   # editable | read-only | masked | hidden
     - from: permissions.caseworker
     - from: permissions.reviewer
+
+# ══════════════════════════════════════════════════════════
+# Detail Navigation (list-detail)
+# ══════════════════════════════════════════════════════════
+# Per-page detail config for row-click navigation.
+# Clicking a row shows a detail form with breadcrumb back-nav.
+#
+#   pages:
+#     - id: applications
+#       title: Applications
+#       source: api
+#       columns: [...]
+#       detail:
+#         form: application-intake    # ID of form contract for detail view
+#         fetch: /api/applications/{id}  # API endpoint template
+#
+# The detail.form value must match the id of another form contract.
+# The detail.fetch value is an endpoint template with {field} placeholders.
 
 # ══════════════════════════════════════════════════════════
 # Permissions Policy (separate file)
