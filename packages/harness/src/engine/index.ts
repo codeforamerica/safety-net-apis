@@ -7,6 +7,9 @@ export { FieldArrayRenderer } from './FieldArrayRenderer';
 export { resolveCondition } from './ConditionResolver';
 export { resolvePermission } from './PermissionsResolver';
 export { PageStepper } from './PageStepper';
+export { FormSideNav } from './FormSideNav';
+export { FormInPageNav } from './FormInPageNav';
+export { resolveLayout } from './layout-utils';
 export { labelFromRef, stripIndices } from './field-utils';
 export type {
   FormContract,
@@ -18,6 +21,9 @@ export type {
   ComponentType,
   FieldWidth,
   FormLayout,
+  NavigationType,
+  DisplayType,
+  LayoutConfig,
   ViewMode,
   PanelConfig,
   ReferenceColumn,

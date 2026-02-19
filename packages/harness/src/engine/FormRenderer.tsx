@@ -14,6 +14,9 @@ import { FieldArrayRenderer } from './FieldArrayRenderer';
 import { resolveCondition } from './ConditionResolver';
 import { resolvePermission } from './PermissionsResolver';
 import { PageStepper } from './PageStepper';
+import { FormSideNav } from './FormSideNav';
+import { FormInPageNav } from './FormInPageNav';
+import { resolveLayout } from './layout-utils';
 
 /** Strip numeric indices from a qualified ref (e.g. household.members.0.ssn → household.members.ssn). */
 function stripIndices(ref: string): string {
@@ -94,7 +97,7 @@ export function FormRenderer({
     setInternalPage(page);
   };
   const isReadonly = viewMode === 'readonly';
-  const { pages, layout = 'wizard' } = contract.form;
+  const { pages, layout } = contract.form;
 
   const {
     register,
@@ -210,31 +213,8 @@ export function FormRenderer({
     );
   };
 
-  if (layout === 'review') {
-    const accordionItems = pages.map((page) => ({
-      id: page.id,
-      title: page.title,
-      expanded: page.expanded !== false,
-      headingLevel: 'h2' as const,
-      content: renderFields(page),
-    }));
+  const config = resolveLayout(layout);
 
-    return (
-      <div className="grid-container">
-        <h1>{contract.form.title}</h1>
-        <Form onSubmit={handleFormSubmit} large>
-          <Accordion bordered multiselectable items={accordionItems} />
-          {!isReadonly && (
-            <Button type="submit" style={{ marginTop: '1.5rem' }}>
-              Save
-            </Button>
-          )}
-        </Form>
-      </div>
-    );
-  }
-
-  // Wizard layout (default)
   const page = pages[currentPage];
 
   const handleNext = () => {
@@ -253,6 +233,11 @@ export function FormRenderer({
     }
   };
 
+  const handlePageSelect = (index: number) => {
+    setCurrentPage(index);
+    onPageChange?.(pages[index].id);
+  };
+
   if (hideChrome) {
     return (
       <Form onSubmit={handleFormSubmit} large>
@@ -262,21 +247,113 @@ export function FormRenderer({
     );
   }
 
+  // --- Display content ---
+  let content: React.ReactNode;
+  if (config.display === 'accordion') {
+    const accordionItems = pages.map((p) => ({
+      id: p.id,
+      title: p.title,
+      expanded: p.expanded !== false,
+      headingLevel: 'h2' as const,
+      content: renderFields(p),
+    }));
+    content = (
+      <>
+        <Accordion bordered multiselectable items={accordionItems} />
+        {!isReadonly && (
+          <Button type="submit" style={{ marginTop: '1.5rem' }}>
+            Save
+          </Button>
+        )}
+      </>
+    );
+  } else if (config.display === 'scrollable') {
+    content = pages.map((p) => (
+      <section key={p.id} id={p.id}>
+        <h2>{p.title}</h2>
+        {renderFields(p)}
+      </section>
+    ));
+  } else {
+    // paginated
+    content = (
+      <>
+        <h2>{page.title}</h2>
+        {renderFields(page)}
+      </>
+    );
+  }
+
+  // --- Navigation + layout assembly ---
+  if (config.navigation === 'side-nav') {
+    return (
+      <div className="grid-container">
+        <h1>{contract.form.title}</h1>
+        <div className="grid-row grid-gap">
+          <div className="grid-col-3">
+            <FormSideNav
+              pages={pages}
+              currentPage={currentPage}
+              onPageSelect={handlePageSelect}
+            />
+          </div>
+          <div className="grid-col-9">
+            <Form onSubmit={handleFormSubmit} large>
+              {content}
+            </Form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (config.navigation === 'step-indicator') {
+    return (
+      <div className="grid-container">
+        <h1>{contract.form.title}</h1>
+        <PageStepper
+          pages={pages}
+          currentPage={currentPage}
+          onNext={handleNext}
+          onBack={handleBack}
+          onSubmit={() => void handleFormSubmit()}
+        />
+        <Form onSubmit={handleFormSubmit} large>
+          {content}
+        </Form>
+      </div>
+    );
+  }
+
+  if (config.navigation === 'in-page') {
+    return (
+      <div className="grid-container">
+        <h1>{contract.form.title}</h1>
+        <div className="grid-row grid-gap">
+          <div className="grid-col-9">
+            <Form onSubmit={handleFormSubmit} large>
+              {pages.map((p) => (
+                <section key={p.id} id={p.id}>
+                  <h2>{p.title}</h2>
+                  {renderFields(p)}
+                </section>
+              ))}
+            </Form>
+          </div>
+          <div className="grid-col-3" style={{ position: 'sticky', top: '1rem', alignSelf: 'start' }}>
+            <FormInPageNav pages={pages} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // navigation: 'none'
   return (
     <div className="grid-container">
       <h1>{contract.form.title}</h1>
-
-      <PageStepper
-        pages={pages}
-        currentPage={currentPage}
-        onNext={handleNext}
-        onBack={handleBack}
-        onSubmit={() => void handleFormSubmit()}
-      />
-
       <Form onSubmit={handleFormSubmit} large>
-        <h2>{page.title}</h2>
-        {renderFields(page)}
+        {content}
       </Form>
     </div>
   );

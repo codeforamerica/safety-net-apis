@@ -55,7 +55,16 @@ export interface Page {
   expanded?: boolean;
 }
 
-export type FormLayout = 'wizard' | 'review' | 'reference' | 'split-panel';
+export type NavigationType = 'step-indicator' | 'side-nav' | 'in-page' | 'none';
+
+export type DisplayType = 'paginated' | 'scrollable' | 'accordion' | 'split-panel';
+
+export interface LayoutConfig {
+  navigation: NavigationType;
+  display: DisplayType;
+}
+
+export type FormLayout = 'reference' | LayoutConfig;
 
 export interface ReferenceColumn {
   from: string;
@@ -77,8 +86,7 @@ export interface FormContract {
     id: string;
     title: string;
     schema: string;
-    scope?: string;
-    layout?: FormLayout;
+    layout: FormLayout;
     storybook?: StoryBookMeta;
     annotations?: string[];
     columns?: ReferenceColumn[];

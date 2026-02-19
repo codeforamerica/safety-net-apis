@@ -2,7 +2,9 @@ form:
   id: application-caseworker-review
   title: Accordion Example
   schema: Application
-  layout: review
+  layout:
+    navigation: none
+    display: accordion
   role: caseworker
   pages:
     - id: programs

@@ -2,7 +2,9 @@ form:
   id: application-colorado-caseworker-review
   title: Colorado Side-by-Side
   schema: Application
-  layout: split-panel
+  layout:
+    navigation: step-indicator
+    display: split-panel
   panels:
     left:
       label: Working Copy

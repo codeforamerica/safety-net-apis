@@ -314,104 +314,6 @@ export const ${pascalName}: StoryObj = {
 }
 
 // =============================================================================
-// Template: review layout
-// =============================================================================
-
-function generateReviewStory(contract, manifest, category) {
-  const { id, title, role } = contract.form;
-  const metaTitle = buildMetaTitle(role, category, title);
-  const src = manifest.sources;
-  const zodExport = src.zodExport;
-  const schemaModule = src.schema.replace(/\.ts$/, '');
-  const contractPath = src.contract;
-  const fixturesPath = src.fixtures;
-  const permsPath = src.permissions[0];
-  const layers = parseAnnotationPaths(src.annotations);
-  const pascalName = toPascalCase(id);
-  const ann = annotationBlock(layers, '../..');
-  const annTab = annotationsTabEntry(layers);
-
-  return `// Auto-generated from ${contractPath}. Run \`npm run generate:stories\` to regenerate.
-import React, { useState } from 'react';
-import type { Meta, StoryObj } from '@storybook/react';
-import { FormRenderer } from '../../src/engine/FormRenderer';
-import { ContractPreview, type EditorTab } from '../../src/engine/ContractPreview';
-import { ${zodExport} } from '../../${schemaModule}';
-import type { FormContract, PermissionsPolicy } from '../../src/engine/types';
-
-// Layout
-import contract from '../../${contractPath}';
-import layoutYaml from '../../${contractPath}?raw';
-// Test data
-import fixtures from '../../${fixturesPath}';
-import fixturesYaml from '../../${fixturesPath}?raw';
-// Permissions
-import permsData from '../../${permsPath}';
-import permsYaml from '../../${permsPath}?raw';
-// Schema (read-only Zod source)
-import schemaSource from '../../${src.schema}?raw';
-${ann.imports}
-
-const typedContract = contract as unknown as FormContract;
-const typedFixtures = fixtures as unknown as Record<string, unknown>;
-const typedPerms = permsData as unknown as PermissionsPolicy;
-${ann.setup}
-
-const meta: Meta = {
-  title: '${metaTitle}',
-  tags: ['read-only'],
-  parameters: { layout: 'fullscreen' },
-};
-
-export default meta;
-
-const logSubmit = (data: Record<string, unknown>) => {
-  console.log('Form submitted:', data);
-  alert('Submitted! Check console for data.');
-};
-
-function StoryWrapper() {
-  const [activeContract, setActiveContract] = useState(typedContract);
-  const [testData, setTestData] = useState(typedFixtures);
-  const [perms, setPerms] = useState(typedPerms);
-
-  const tabs: EditorTab[] = [
-    { id: 'layout', label: 'Layout', filename: '${contractPath}', source: layoutYaml },
-    { id: 'test-data', label: 'Test Data', filename: '${fixturesPath}', source: fixturesYaml },
-    { id: 'permissions', label: 'Permissions', filename: '${permsPath}', source: permsYaml },
-    { id: 'schema', label: 'Schema', filename: '${src.schema}', source: schemaSource, readOnly: true, group: 'reference' as const },${annTab}
-  ];
-
-  return (
-    <ContractPreview
-      tabs={tabs}
-      contractId="${id}"
-      role="${role}"${category ? `
-      category="${category}"` : ''}
-      onLayoutChange={setActiveContract}
-      onPermissionsChange={setPerms}
-      onTestDataChange={setTestData}
-    >
-      <FormRenderer
-        contract={activeContract}
-        schema={${zodExport}}
-        role="${role}"
-        defaultValues={testData}
-        permissionsPolicy={perms}${ann.prop}
-        onSubmit={logSubmit}
-      />
-    </ContractPreview>
-  );
-}
-
-export const ${pascalName}: StoryObj = {
-  name: '${title}',
-  render: () => <StoryWrapper />,
-};
-`;
-}
-
-// =============================================================================
 // Template: split-panel layout
 // =============================================================================
 
@@ -523,7 +425,7 @@ export const ${pascalName}: StoryObj = {
 
 function generateCustomStory(contract, manifest, customName, customDir, category) {
   const { id, title, role } = contract.form;
-  const layout = contract.form.layout || 'wizard';
+  const layout = contract.form.layout;
   const panels = contract.form.panels;
   const src = manifest.sources;
   const zodExport = src.zodExport;
@@ -539,12 +441,15 @@ function generateCustomStory(contract, manifest, customName, customDir, category
   const hasTestData = existsSync(join(customPath, 'test-data.yaml'));
   const hasPermissions = existsSync(join(customPath, 'permissions.yaml'));
 
-  if (layout === 'reference') {
+  const isSplitPanel = typeof layout === 'object' && layout.display === 'split-panel';
+  const isReference = layout === 'reference';
+
+  if (isReference) {
     return generateReferenceCustomStory({ id, role, src, layers, allPerms, metaTitle, customName, customDisplayName, category });
   }
 
-  // Form-based layouts: wizard, review, split-panel
-  const roleType = layout === 'wizard' ? ', Role' : '';
+  // Form-based layouts: all composable configs
+  const roleType = isSplitPanel ? '' : ', Role';
   const ann = annotationBlock(layers, '../../..');
   const annTab = annotationsTabEntry(layers);
 
@@ -565,7 +470,7 @@ function generateCustomStory(contract, manifest, customName, customDir, category
 
   // Renderer block depends on layout type
   let rendererImport, rendererJsx;
-  if (layout === 'split-panel') {
+  if (isSplitPanel) {
     const leftMode = panels?.left?.mode ?? 'editable';
     const rightMode = panels?.right?.mode ?? 'readonly';
     const leftLabel = panels?.left?.label ?? 'Left Panel';
@@ -587,7 +492,7 @@ function generateCustomStory(contract, manifest, customName, customDir, category
     rendererJsx = `      <FormRenderer
         contract={activeContract}
         schema={${zodExport}}
-        role="${role}"${layout === 'wizard' ? `
+        role="${role}"${!isSplitPanel ? `
         initialPage={initialPage}` : ''}
         defaultValues={testData}
         permissionsPolicy={perms}${ann.prop}
@@ -595,7 +500,7 @@ function generateCustomStory(contract, manifest, customName, customDir, category
       />`;
   }
 
-  const viewModeImport = layout === 'split-panel' ? ', ViewMode' : '';
+  const viewModeImport = isSplitPanel ? ', ViewMode' : '';
 
   return `// Auto-generated custom story. Run \`npm run generate:stories\` to regenerate.
 import React, { useState } from 'react';
@@ -634,7 +539,7 @@ const logSubmit = (data: Record<string, unknown>) => {
   alert('Submitted! Check console for data.');
 };
 
-function StoryWrapper(${layout === 'wizard' ? `{
+function StoryWrapper(${!isSplitPanel ? `{
   initialPage = 0,
   role = '${role}' as Role,
 }: {
@@ -986,23 +891,32 @@ function main() {
       continue;
     }
 
-    const layout = doc.form.layout || 'wizard';
+    const layout = doc.form.layout;
+    if (!layout) {
+      console.log(`  skip  ${sources.contract} (no form.layout)`);
+      continue;
+    }
+
     const contractId = doc.form.id;
     const pascalName = toPascalCase(contractId);
     const outPath = join(STORIES_DIR, `${pascalName}.stories.tsx`);
     const manifest = { sources };
 
-    const source =
-      layout === 'reference'
-        ? generateReferenceStory(doc, manifest, category)
-        : layout === 'split-panel'
-          ? generateSplitPanelStory(doc, manifest, category)
-          : layout === 'review'
-            ? generateReviewStory(doc, manifest, category)
-            : generateWizardStory(doc, manifest, category);
+    // Dispatch to the right story template.
+    // 'reference' and split-panel display use dedicated renderers;
+    // everything else uses FormRenderer (wizard template).
+    const isSplitPanel = typeof layout === 'object' && layout.display === 'split-panel';
+    const isReference = layout === 'reference';
 
+    const source = isReference
+      ? generateReferenceStory(doc, manifest, category)
+      : isSplitPanel
+        ? generateSplitPanelStory(doc, manifest, category)
+        : generateWizardStory(doc, manifest, category);
+
+    const layoutLabel = typeof layout === 'object' ? `${layout.navigation}+${layout.display}` : layout;
     if (writeIfChanged(outPath, source)) {
-      console.log(`  write  ${pascalName}.stories.tsx  (${layout})`);
+      console.log(`  write  ${pascalName}.stories.tsx  (${layoutLabel})`);
     } else {
       console.log(`  skip   ${pascalName}.stories.tsx  (unchanged)`);
     }

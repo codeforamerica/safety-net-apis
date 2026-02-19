@@ -2,6 +2,9 @@ form:
   id: application-intake
   title: Default
   schema: Application
+  layout:
+    navigation: step-indicator
+    display: paginated
   role: applicant
   pages:
     # ── Page 1: Programs ────────────────────────────────────

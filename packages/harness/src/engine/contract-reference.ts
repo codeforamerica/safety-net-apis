@@ -8,20 +8,126 @@ form:
   id: my-form                       # unique identifier (kebab-case)
   title: My Form                    # display title
   schema: Application               # data model object name
-  scope: california                 # state scope (resolves schema file)
-  layout: wizard                    # wizard | review | reference
-
-  # wizard  — multi-page stepper with Next/Back (uses Create schema)
-  # review  — single-page accordion (uses Update schema)
-  # reference — read-only table (requires columns)
-
-  role: caseworker                    # access role (applicant | caseworker | reviewer)
+  layout:                           # composable layout (see below)
+    navigation: step-indicator
+    display: paginated
+  role: caseworker                  # access role (applicant | caseworker | reviewer)
   annotations: [federal, california]  # annotation layers to load
   pages:
     - id: section-id
       title: Section Title
-      expanded: true                # review only: start open (default: true)
+      expanded: true                # accordion only: start open (default: true)
       fields: [...]
+
+# ══════════════════════════════════════════════════════════
+# Form Layout
+# ══════════════════════════════════════════════════════════
+# Layout is a two-property object that controls navigation
+# and content display independently.
+#
+#   layout:
+#     navigation: <type>    # how users move between pages
+#     display: <type>       # how page content is arranged
+#
+# ── navigation ───────────────────────────────────────────
+#
+#   step-indicator   USWDS StepIndicator with Next/Back buttons.
+#                    Shows numbered progress steps across the top.
+#                    Best for: applicant intake, sequential workflows.
+#
+#   side-nav         USWDS SideNav in a left sidebar (grid-col-3).
+#                    Click any section to jump directly to it.
+#                    Best for: caseworker review, long forms with
+#                    non-linear access.
+#
+#   in-page          USWDS InPageNavigation — sticky right-side TOC
+#                    that auto-highlights the current section on scroll.
+#                    Pair with display: scrollable.
+#                    Best for: read-through review, printing.
+#
+#   none             No navigation chrome. For accordion display,
+#                    sections expand/collapse in place. For paginated,
+#                    there are no page controls (single visible page).
+#                    Best for: simple short forms, embedded views.
+#
+# ── display ──────────────────────────────────────────────
+#
+#   paginated        One page visible at a time. Navigation controls
+#                    switch between pages.
+#
+#   scrollable       All pages rendered in sequence as <section>
+#                    elements. Users scroll through the full form.
+#
+#   accordion        Each page is a collapsible USWDS Accordion section.
+#                    All sections visible, individually expandable.
+#
+#   split-panel      Two form instances side by side (requires panels
+#                    config). Used for comparing working copy vs original.
+#                    Uses SplitPanelRenderer.
+#
+# ── Common Combinations ─────────────────────────────────
+#
+# Applicant wizard (step-by-step intake):
+#   layout:
+#     navigation: step-indicator
+#     display: paginated
+#
+# Caseworker side-nav (click to jump between sections):
+#   layout:
+#     navigation: side-nav
+#     display: paginated
+#
+# Scrollable with sticky TOC (review all at once):
+#   layout:
+#     navigation: in-page
+#     display: scrollable
+#
+# Accordion review (expand/collapse sections):
+#   layout:
+#     navigation: none
+#     display: accordion
+#
+# Simple scrollable (no nav, all sections visible):
+#   layout:
+#     navigation: none
+#     display: scrollable
+#
+# Minimal paginated (no progress indicator):
+#   layout:
+#     navigation: none
+#     display: paginated
+#
+# Side-by-side comparison:
+#   layout:
+#     navigation: step-indicator
+#     display: split-panel
+#   panels:
+#     left:
+#       label: Working Copy
+#       mode: editable
+#     right:
+#       label: Original Submission
+#       mode: readonly
+#
+# Side-by-side with side-nav:
+#   layout:
+#     navigation: side-nav
+#     display: split-panel
+#   panels:
+#     left:
+#       label: Working Copy
+#       mode: editable
+#     right:
+#       label: Original Submission
+#       mode: readonly
+#
+# ── Reference layout (string, not composable) ───────────
+# The reference layout is a read-only table view.
+# It uses a dedicated renderer and is specified as a string:
+#
+#   layout: reference
+#
+# Requires columns config (see Reference Layout section below).
 
 # ── Field Definition ──────────────────────────────────────
 
