@@ -17,6 +17,7 @@ import { resolveCondition } from './ConditionResolver';
 import { resolvePermission } from './PermissionsResolver';
 import { PageStepper } from './PageStepper';
 import { FormSideNav } from './FormSideNav';
+import { FormTopNav } from './FormTopNav';
 import { FormInPageNav } from './FormInPageNav';
 import { resolveLayout } from './layout-utils';
 
@@ -379,6 +380,24 @@ export function FormRenderer({
           {content}
         </Form>
       </div>
+    );
+  }
+
+  if (config.navigation === 'top-nav') {
+    return (
+      <>
+        <FormTopNav
+          pages={pages}
+          currentPage={currentPage}
+          onPageSelect={handlePageSelect}
+        />
+        <div className="grid-container">
+          <h1>{contract.form.title}</h1>
+          <Form onSubmit={handleFormSubmit} large>
+            {content}
+          </Form>
+        </div>
+      </>
     );
   }
 

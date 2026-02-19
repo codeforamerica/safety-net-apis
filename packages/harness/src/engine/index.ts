@@ -9,6 +9,7 @@ export { resolveCondition } from './ConditionResolver';
 export { resolvePermission } from './PermissionsResolver';
 export { PageStepper } from './PageStepper';
 export { FormSideNav } from './FormSideNav';
+export { FormTopNav } from './FormTopNav';
 export { FormInPageNav } from './FormInPageNav';
 export { resolveLayout } from './layout-utils';
 export { labelFromRef, stripIndices } from './field-utils';

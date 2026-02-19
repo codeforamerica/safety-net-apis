@@ -46,4 +46,9 @@ describe('resolveLayout', () => {
     const config = { navigation: 'side-nav' as const, display: 'data-table' as const };
     expect(resolveLayout(config)).toEqual(config);
   });
+
+  it('passes through top-nav + paginated', () => {
+    const config = { navigation: 'top-nav' as const, display: 'paginated' as const };
+    expect(resolveLayout(config)).toEqual(config);
+  });
 });

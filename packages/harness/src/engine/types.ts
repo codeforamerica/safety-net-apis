@@ -63,7 +63,7 @@ export interface Page {
   detail?: DetailConfig;
 }
 
-export type NavigationType = 'step-indicator' | 'side-nav' | 'in-page' | 'none';
+export type NavigationType = 'step-indicator' | 'side-nav' | 'in-page' | 'top-nav' | 'none';
 
 export type DisplayType = 'paginated' | 'scrollable' | 'accordion' | 'split-panel' | 'data-table';
 

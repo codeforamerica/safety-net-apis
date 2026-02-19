@@ -45,6 +45,10 @@ form:
 #                    Pair with display: scrollable.
 #                    Best for: read-through review, printing.
 #
+#   top-nav          USWDS Header with horizontal PrimaryNav links.
+#                    Pages appear as top navigation items.
+#                    Best for: dashboard-style layouts, shallow forms.
+#
 #   none             No navigation chrome. For accordion display,
 #                    sections expand/collapse in place. For paginated,
 #                    there are no page controls (single visible page).
@@ -112,6 +116,11 @@ form:
 #   layout:
 #     navigation: none
 #     display: scrollable
+#
+# Dashboard with top nav (horizontal page tabs):
+#   layout:
+#     navigation: top-nav
+#     display: paginated
 #
 # Minimal paginated (no progress indicator):
 #   layout:
