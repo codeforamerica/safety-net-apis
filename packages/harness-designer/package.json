@@ -1,7 +1,7 @@
 {
-  "name": "@safety-net/harness",
+  "name": "@safety-net/harness-designer",
   "version": "1.0.0",
-  "description": "Safety Harness - sandbox for exploring the contract-driven approach",
+  "description": "Harness Designer - Storybook sandbox for exploring the contract-driven approach",
   "type": "module",
   "private": true,
   "scripts": {

@@ -31,7 +31,11 @@
     "test:all": "npm run test:all -w @codeforamerica/safety-net-blueprint-mock-server",
     "preflight": "bash scripts/preflight.sh",
     "docs:slides": "marp docs/presentation/safety-net-openapi-overview.md -o docs/presentation/safety-net-openapi-overview.html",
-    "design:reference": "npm run design:reference -w @codeforamerica/safety-net-blueprint-contracts"
+    "design:reference": "npm run design:reference -w @codeforamerica/safety-net-blueprint-contracts",
+    "storybook": "npm run storybook -w @safety-net/harness-designer",
+    "harness:dev": "npm run dev -w @safety-net/harness-app",
+    "harness:generate": "npm run generate -w @safety-net/harness-designer",
+    "harness:generate:api": "npm run generate:api -w @safety-net/harness-app"
   },
   "devDependencies": {
     "@marp-team/marp-cli": "^4.2.3"
