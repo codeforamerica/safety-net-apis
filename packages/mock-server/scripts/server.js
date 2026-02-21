@@ -63,6 +63,11 @@ async function startMockServer() {
     app.get('/health', (req, res) => {
       res.json({ status: 'ok', apis: apiSpecs.map(a => a.name) });
     });
+
+    // Manifest endpoint — returns full API metadata for dynamic discovery
+    app.get('/_manifest', (req, res) => {
+      res.json({ apis: apiSpecs });
+    });
     
     // Register API routes dynamically
     const baseUrl = `http://${HOST}:${PORT}`;
@@ -193,7 +198,10 @@ async function isServerRunning(host = HOST, port = PORT) {
 export { startMockServer, stopServer, isServerRunning };
 
 // Only auto-start if run directly (not imported)
-if (import.meta.url === `file://${realpathSync(process.argv[1])}`) {
+// Note: On Windows, realpathSync returns backslashes while import.meta.url uses forward slashes,
+// so we normalize both to forward slashes for comparison.
+const entryPath = process.argv[1] ? `file:///${realpathSync(process.argv[1]).replace(/\\/g, '/')}` : '';
+if (import.meta.url === entryPath) {
   // Handle graceful shutdown
   process.on('SIGINT', () => stopServer(true));
   process.on('SIGTERM', () => stopServer(true));

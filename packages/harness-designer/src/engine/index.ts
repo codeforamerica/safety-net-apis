@@ -13,6 +13,7 @@ export { FormTopNav } from './FormTopNav';
 export { FormInPageNav } from './FormInPageNav';
 export { resolveLayout } from './layout-utils';
 export { labelFromRef, stripIndices } from './field-utils';
+export { ActionBar, isActionVisible } from './ActionBar';
 export {
   resolveSchemaProperty,
   resolveAnnotation,
@@ -49,4 +50,10 @@ export type {
   DataTableSource,
   AnnotationLayer,
   DetailConfig,
+  ResourceBinding,
+  ActionDefinition,
+  ActionCondition,
+  ActionStyle,
+  HttpMethod,
 } from './types';
+export type { ActionBarProps } from './ActionBar';

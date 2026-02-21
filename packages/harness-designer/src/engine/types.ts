@@ -12,7 +12,7 @@ export type PermissionLevel = 'editable' | 'read-only' | 'masked' | 'hidden';
 
 export type ViewMode = 'editable' | 'readonly';
 
-export type Role = 'applicant' | 'caseworker' | 'reviewer';
+export type Role = 'applicant' | 'caseworker' | 'reviewer' | 'admin';
 
 /** Simple single-field condition. */
 export interface SimpleCondition {
@@ -103,12 +103,56 @@ export interface StoryBookMeta {
   permissions: string;
 }
 
+export type ActionStyle = 'default' | 'secondary' | 'success' | 'warning' | 'outline';
+
+export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+
+/** Declares the REST resource this form operates on. */
+export interface ResourceBinding {
+  /** Base REST endpoint, e.g. '/persons'. */
+  endpoint: string;
+  /** URL parameter name for the record ID, e.g. 'personId'. */
+  identity?: string;
+}
+
+/** Visibility condition for an action — role-based, field-based, or both. */
+export interface ActionCondition {
+  /** Roles that can see this action. */
+  role?: Role[];
+  /** Field-value conditions that must be met. */
+  field?: Record<string, string | number | boolean>;
+}
+
+/** A declarative action button on a form. */
+export interface ActionDefinition {
+  /** Unique identifier for this action. */
+  id: string;
+  /** Button label. */
+  label: string;
+  /** HTTP method for the action. */
+  method: HttpMethod;
+  /** Override endpoint (defaults to resource.endpoint or resource.endpoint/{id}). */
+  endpoint?: string;
+  /** USWDS button style variant. */
+  style?: ActionStyle;
+  /** Path to navigate to after success. Supports {id} interpolation. */
+  navigate?: string;
+  /** Confirmation prompt — if set, user must confirm before the action executes. */
+  confirm?: string;
+  /** When to show this action. If omitted, always visible. */
+  show_when?: ActionCondition;
+}
+
 export interface FormContract {
   form: {
     id: string;
     title: string;
     schema: string;
     layout: FormLayout;
+    /** REST resource binding — where this form reads and writes data. */
+    resource?: ResourceBinding;
+    /** Declarative action buttons (submit, save, approve, etc.). */
+    actions?: ActionDefinition[];
     storybook?: StoryBookMeta;
     annotations?: string[];
     columns?: ReferenceColumn[];
