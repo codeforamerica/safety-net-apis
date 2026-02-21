@@ -99,22 +99,13 @@ export function DataTableRenderer({
 
   return (
     <div className="grid-container" style={{ maxWidth: '100%', padding: '1rem' }}>
-      {title && <h1 style={{ marginBottom: '0.5rem' }}>{title}</h1>}
-      <p style={{ color: '#71767a', marginTop: 0, marginBottom: '1.5rem' }}>
+      {title && <h1 className="margin-bottom-1">{title}</h1>}
+      <p className="text-base margin-top-0 margin-bottom-3">
         {source === 'api' ? `${fieldCount} records` : `${fieldCount} fields across ${pages.length} sections`}
         {sortCol && (
           <button
             onClick={clearSort}
-            style={{
-              marginLeft: '1rem',
-              background: 'transparent',
-              border: '1px solid #71767a',
-              borderRadius: '4px',
-              color: '#71767a',
-              fontSize: '12px',
-              padding: '2px 8px',
-              cursor: 'pointer',
-            }}
+            className="margin-left-2 bg-transparent border-1px border-base radius-sm text-base font-sans-3xs padding-y-2px padding-x-1 cursor-pointer"
           >
             Clear sort
           </button>
@@ -156,13 +147,7 @@ export function DataTableRenderer({
                   <tr>
                     <td
                       colSpan={columns.length}
-                      style={{
-                        background: '#1b1b1b',
-                        color: '#fff',
-                        fontWeight: 700,
-                        padding: '8px 10px',
-                        fontSize: '14px',
-                      }}
+                      className="bg-ink text-white text-bold padding-y-1 padding-x-105 font-sans-xs"
                     >
                       {page.title}
                     </td>
@@ -206,12 +191,14 @@ function FieldRow({
       }
     : undefined;
 
+  const rowClass = [
+    isFieldArray ? 'bg-base-lightest text-bold' : '',
+    clickable ? 'cursor-pointer' : '',
+  ].filter(Boolean).join(' ');
+
   return (
     <tr
-      style={{
-        ...(isFieldArray ? { background: '#f0f0f0', fontWeight: 600 } : undefined),
-        ...(clickable ? { cursor: 'pointer' } : undefined),
-      }}
+      className={rowClass || undefined}
       onClick={clickable ? () => onClick(row) : undefined}
       onKeyDown={handleKeyDown}
       tabIndex={clickable ? 0 : undefined}

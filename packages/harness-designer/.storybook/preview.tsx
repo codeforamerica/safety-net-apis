@@ -1,5 +1,6 @@
 import '@trussworks/react-uswds/lib/uswds.css';
 import '@trussworks/react-uswds/lib/index.css';
+import '../src/theme';
 
 import React, { useCallback } from 'react';
 import type { Preview } from '@storybook/react';

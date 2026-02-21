@@ -71,12 +71,7 @@ export function SplitPanelRenderer({
         return (
           <div key={side}>
             <h3
-              style={{
-                borderBottom: '2px solid #005ea2',
-                paddingBottom: '0.5rem',
-                marginBottom: '1rem',
-                color: '#1b1b1b',
-              }}
+              className="border-bottom-2px border-primary padding-bottom-1 margin-bottom-2 text-ink"
             >
               {panel.label}
             </h3>

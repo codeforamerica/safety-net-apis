@@ -16,6 +16,7 @@ import type { FieldDefinition, PermissionLevel } from './types';
 import type { UseFormRegister, FieldErrors } from 'react-hook-form';
 import { labelFromRef } from './field-utils';
 import { deepEqual } from './utils';
+import { ds } from '../theme';
 
 /** Resolve a dot-path from a nested object. */
 function get(obj: Record<string, unknown>, path: string): unknown {
@@ -156,23 +157,17 @@ export function ComponentMapper({
   const modifiedBadge = isChanged ? (
     <span style={{ marginLeft: '6px', verticalAlign: 'middle' }}>
       <Tag
-        className="font-sans-3xs"
-        style={{
-          fontSize: '10px',
-          padding: '1px 6px',
-          lineHeight: '1.4',
-          backgroundColor: '#005ea2',
-          color: '#ffffff',
-        }}
+        className="font-sans-3xs bg-primary text-white"
+        style={{ fontSize: '10px', padding: '1px 6px', lineHeight: '1.4' }}
       >
         Modified
       </Tag>
     </span>
   ) : null;
 
-  const changedStyle: React.CSSProperties = isChanged
-    ? { borderLeft: '4px solid #005ea2', paddingLeft: '8px', backgroundColor: '#e8f5ff' }
-    : {};
+  const changedClass = isChanged
+    ? 'border-left-05 border-primary padding-left-1 bg-primary-lighter'
+    : '';
 
   // Compute exception badge: only show when field's programs differ from the page baseline
   let badges: React.ReactNode = null;
@@ -194,14 +189,8 @@ export function ComponentMapper({
       badges = (
         <span style={{ marginLeft: '6px', verticalAlign: 'middle' }}>
           <Tag
-            className="font-sans-3xs"
-            style={{
-              fontSize: '10px',
-              padding: '1px 6px',
-              lineHeight: '1.4',
-              background: useOnly ? '#e1f3f8' : '#fce4ec',
-              color: useOnly ? '#0d47a1' : '#b71c1c',
-            }}
+            className={`font-sans-3xs ${useOnly ? 'bg-info-lighter text-primary-dark' : 'bg-error-lighter text-error-dark'}`}
+            style={{ fontSize: '10px', padding: '1px 6px', lineHeight: '1.4' }}
           >
             {badgeLabel}
           </Tag>
@@ -212,11 +201,12 @@ export function ComponentMapper({
 
   if (permission === 'masked') {
     return (
-      <div style={changedStyle}>
-        <FormGroup error={!!errorMsg}>
-          <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
+      <div className={changedClass}>
+        <FormGroup className={ds.formGroup} error={!!errorMsg}>
+          <Label className={ds.label} htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
           {field.hint && <span className="usa-hint">{field.hint}</span>}
           <TextInput
+            className={ds.input}
             id={inputId}
             name={field.ref}
             type="text"
@@ -232,12 +222,13 @@ export function ComponentMapper({
   switch (field.component) {
     case 'text-input': {
       return (
-        <div style={changedStyle}>
-          <FormGroup error={!!errorMsg}>
-            <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
+        <div className={changedClass}>
+          <FormGroup className={ds.formGroup} error={!!errorMsg}>
+            <Label className={ds.label} htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
             {field.hint && <span className="usa-hint">{field.hint}</span>}
             {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
             <TextInput
+              className={ds.input}
               id={inputId}
               type="text"
               disabled={isDisabled}
@@ -254,9 +245,9 @@ export function ComponentMapper({
       const dayId = `${inputId}-day`;
       const yearId = `${inputId}-year`;
       return (
-        <div style={changedStyle}>
-          <FormGroup error={!!errorMsg}>
-            <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
+        <div className={changedClass}>
+          <FormGroup className={ds.formGroup} error={!!errorMsg}>
+            <Fieldset className={ds.fieldset} legend={<>{label}{badges}{modifiedBadge}</>}>
               {field.hint && <span className="usa-hint">{field.hint}</span>}
               {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
               <DateInputGroup>
@@ -300,12 +291,13 @@ export function ComponentMapper({
         : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
 
       return (
-        <div style={changedStyle}>
-          <FormGroup error={!!errorMsg}>
-            <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
+        <div className={changedClass}>
+          <FormGroup className={ds.formGroup} error={!!errorMsg}>
+            <Fieldset className={ds.fieldset} legend={<>{label}{badges}{modifiedBadge}</>}>
               {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
               {options.map((opt) => (
                 <Radio
+                  className={ds.radio}
                   key={opt.value}
                   id={`${inputId}-${opt.value}`}
                   label={opt.label}
@@ -329,11 +321,12 @@ export function ComponentMapper({
           }))
         : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
       return (
-        <div style={changedStyle}>
-          <FormGroup error={!!errorMsg}>
-            <Label htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
+        <div className={changedClass}>
+          <FormGroup className={ds.formGroup} error={!!errorMsg}>
+            <Label className={ds.label} htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
             {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
             <Select
+              className={ds.select}
               id={inputId}
               disabled={isDisabled}
               {...register(field.ref)}
@@ -359,12 +352,13 @@ export function ComponentMapper({
           }))
         : ENUM_OPTIONS[field.ref] ?? ENUM_OPTIONS[field.ref.split('.').pop() ?? ''] ?? [];
       return (
-        <div style={changedStyle}>
-          <FormGroup error={!!errorMsg}>
-            <Fieldset legend={<>{label}{badges}{modifiedBadge}</>}>
+        <div className={changedClass}>
+          <FormGroup className={ds.formGroup} error={!!errorMsg}>
+            <Fieldset className={ds.fieldset} legend={<>{label}{badges}{modifiedBadge}</>}>
               {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
               {options.map((opt) => (
                 <Checkbox
+                  className={ds.checkbox}
                   key={opt.value}
                   id={`${inputId}-${opt.value}`}
                   label={opt.label}

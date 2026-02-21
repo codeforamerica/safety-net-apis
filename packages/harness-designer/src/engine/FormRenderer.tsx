@@ -11,6 +11,7 @@ import { ListDetailRenderer } from './ListDetailRenderer';
 function get(obj: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], obj);
 }
+import { ds } from '../theme';
 import { ComponentMapper } from './ComponentMapper';
 import { FieldArrayRenderer } from './FieldArrayRenderer';
 import { resolveCondition } from './ConditionResolver';
@@ -163,15 +164,7 @@ export function FormRenderer({
       <>
         {annotations && pagePrograms.length > 0 && (
           <div
-            style={{
-              background: '#f0f0f0',
-              border: '1px solid #dfe1e2',
-              borderRadius: '4px',
-              padding: '0.5rem 0.75rem',
-              marginBottom: '1rem',
-              fontSize: '0.8125rem',
-              lineHeight: '1.6',
-            }}
+            className="bg-base-lightest border-1px border-base-lighter radius-sm padding-y-05 padding-x-1 margin-bottom-2 font-sans-3xs line-height-sans-4"
           >
             <span style={{ fontWeight: 600, marginRight: '0.5rem' }}>Programs:</span>
             {pagePrograms.map((p) => (
@@ -267,7 +260,7 @@ export function FormRenderer({
 
   if (hideChrome) {
     return (
-      <Form onSubmit={handleFormSubmit} large>
+      <Form className={ds.form} onSubmit={handleFormSubmit} large>
         <h2>{page.title}</h2>
         {renderFields(page)}
       </Form>
@@ -317,9 +310,9 @@ export function FormRenderer({
     }));
     content = (
       <>
-        <Accordion bordered multiselectable items={accordionItems} />
+        <Accordion className={ds.accordion} bordered multiselectable items={accordionItems} />
         {!isReadonly && (
-          <Button type="submit" style={{ marginTop: '1.5rem' }}>
+          <Button className={ds.button} type="submit" style={{ marginTop: '1.5rem' }}>
             Save
           </Button>
         )}
@@ -356,7 +349,7 @@ export function FormRenderer({
             />
           </div>
           <div className="grid-col-9">
-            <Form onSubmit={handleFormSubmit} large>
+            <Form className={ds.form} onSubmit={handleFormSubmit} large>
               {content}
             </Form>
           </div>
@@ -376,7 +369,7 @@ export function FormRenderer({
           onBack={handleBack}
           onSubmit={() => void handleFormSubmit()}
         />
-        <Form onSubmit={handleFormSubmit} large>
+        <Form className={ds.form} onSubmit={handleFormSubmit} large>
           {content}
         </Form>
       </div>
@@ -393,7 +386,7 @@ export function FormRenderer({
         />
         <div className="grid-container">
           <h1>{contract.form.title}</h1>
-          <Form onSubmit={handleFormSubmit} large>
+          <Form className={ds.form} onSubmit={handleFormSubmit} large>
             {content}
           </Form>
         </div>
@@ -407,7 +400,7 @@ export function FormRenderer({
         <h1>{contract.form.title}</h1>
         <div className="grid-row grid-gap">
           <div className="grid-col-9">
-            <Form onSubmit={handleFormSubmit} large>
+            <Form className={ds.form} onSubmit={handleFormSubmit} large>
               {pages.map((p) => (
                 <section key={p.id} id={p.id}>
                   <h2>{p.title}</h2>
@@ -428,7 +421,7 @@ export function FormRenderer({
   return (
     <div className="grid-container">
       <h1>{contract.form.title}</h1>
-      <Form onSubmit={handleFormSubmit} large>
+      <Form className={ds.form} onSubmit={handleFormSubmit} large>
         {content}
       </Form>
     </div>

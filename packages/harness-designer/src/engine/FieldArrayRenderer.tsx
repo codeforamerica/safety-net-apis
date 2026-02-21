@@ -2,6 +2,7 @@ import React from 'react';
 import { useFieldArray, type Control, type UseFormRegister, type FieldErrors } from 'react-hook-form';
 import { Button } from '@trussworks/react-uswds';
 import type { FieldDefinition, Role, PermissionsPolicy, ShowWhen, SimpleCondition, ViewMode } from './types';
+import { ds } from '../theme';
 import { ComponentMapper } from './ComponentMapper';
 import { resolveCondition } from './ConditionResolver';
 import { resolvePermission } from './PermissionsResolver';
@@ -89,14 +90,14 @@ export function FieldArrayRenderer({
   };
 
   return (
-    <fieldset className="usa-fieldset" style={{ border: '1px solid #dfe1e2', padding: '1rem', marginBottom: '1rem' }}>
-      {field.hint && <span className="usa-hint" style={{ display: 'block', marginBottom: '0.5rem' }}>{field.hint}</span>}
+    <fieldset className={`usa-fieldset border-1px border-base-lighter padding-2 margin-bottom-2 ${ds.fieldset}`.trim()}>
+      {field.hint && <span className="usa-hint display-block margin-bottom-05">{field.hint}</span>}
 
       {rows.map((row, index) => {
         const rowPrefix = `${field.ref}.${index}`;
 
         return (
-          <div key={row.id} className="grid-row grid-gap" style={{ borderBottom: '1px solid #e6e6e6', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
+          <div key={row.id} className="grid-row grid-gap border-bottom-1px border-base-light padding-bottom-05 margin-bottom-05">
             {templateFields.map((subField) => {
               const qualifiedRef = `${rowPrefix}.${subField.ref}`;
               const qualifiedField: FieldDefinition = {
@@ -142,12 +143,12 @@ export function FieldArrayRenderer({
             })}
 
             {canRemove && (
-              <div className="grid-col-12" style={{ marginTop: '0.25rem' }}>
+              <div className="grid-col-12 margin-top-05">
                 <Button
+                  className={`${ds.button} text-error font-sans-xs`.trim()}
                   type="button"
                   unstyled
                   onClick={() => remove(index)}
-                  style={{ color: '#d83933', fontSize: '0.875rem' }}
                 >
                   Remove
                 </Button>
@@ -158,7 +159,7 @@ export function FieldArrayRenderer({
       })}
 
       {canAdd && (
-        <Button type="button" outline onClick={handleAdd} style={{ marginTop: '0.5rem' }}>
+        <Button className={`${ds.button} margin-top-1`.trim()} type="button" outline onClick={handleAdd}>
           + Add
         </Button>
       )}
