@@ -11,8 +11,8 @@ import type {
   DataTableSource,
   FormContract,
   Role,
-} from './types';
-import type { ResolvedRow } from './data-table-resolvers';
+} from '../core/types';
+import type { ResolvedRow } from '../core/data-table-resolvers';
 
 // ---------------------------------------------------------------------------
 // Props

@@ -1,6 +1,6 @@
 import React from 'react';
 import { SideNav } from '@trussworks/react-uswds';
-import type { Page } from './types';
+import type { Page } from '../core/types';
 
 interface FormSideNavProps {
   pages: Page[];

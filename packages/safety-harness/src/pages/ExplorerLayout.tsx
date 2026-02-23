@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useParams, Navigate } from 'react-router-dom';
 import { SideNav, Alert, Button } from '@trussworks/react-uswds';
 import { useState, useEffect, useCallback } from 'react';
-import type { Role } from '@safety-net/form-engine-react';
+import type { Role } from '@safety-net/form-engine';
 import { useManifest } from '../hooks/useManifest';
 import { useRole } from '../context/RoleContext';
 

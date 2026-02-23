@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Page } from './types';
+import type { Page } from '../core/types';
 
 interface FormInPageNavProps {
   pages: Page[];

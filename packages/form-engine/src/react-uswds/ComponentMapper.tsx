@@ -13,11 +13,11 @@ import {
   Fieldset,
   Tag,
 } from '@trussworks/react-uswds';
-import type { FieldDefinition, PermissionLevel, AnnotationEntry, ResolvedAnnotationDisplay } from './types';
+import type { FieldDefinition, PermissionLevel, AnnotationEntry, ResolvedAnnotationDisplay } from '../core/types';
 import type { UseFormRegister, FieldErrors } from 'react-hook-form';
-import { labelFromRef } from './field-utils';
-import { deepEqual } from './utils';
-import { ds } from './theme';
+import { labelFromRef } from '../core/field-utils';
+import { deepEqual } from '../core/utils';
+import { ds } from '../core/theme';
 
 /** Resolve a dot-path from a nested object. */
 function get(obj: Record<string, unknown>, path: string): unknown {

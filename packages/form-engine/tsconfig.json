@@ -11,5 +11,5 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["src"]
+  "include": ["src", "form-contract.schema.json"]
 }

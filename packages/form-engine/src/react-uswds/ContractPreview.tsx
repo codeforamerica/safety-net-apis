@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import yaml from 'js-yaml';
-import type { FormContract, PermissionsPolicy } from './types';
+import type { FormContract, PermissionsPolicy } from '../core/types';
 import {
   toKebabCase,
   customDisplayName as toDisplayName,
   customStoryId,
-} from './naming';
-import { REFERENCE_CONTENT } from './contract-reference';
+} from '../core/naming';
+import { REFERENCE_CONTENT } from '../core/contract-reference';
 import { useViewportAutoHide } from './useViewportAutoHide';
 import { useEditorVisibility } from './EditorVisibilityContext';
 

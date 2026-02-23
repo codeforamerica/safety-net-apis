@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import type { ZodSchema } from 'zod';
-import type { FormContract, Role, ViewMode, PermissionsPolicy, AnnotationEntry } from './types';
+import type { FormContract, Role, ViewMode, PermissionsPolicy, AnnotationEntry } from '../core/types';
 import { FormRenderer } from './FormRenderer';
 import { PageStepper } from './PageStepper';
 import { FormSideNav } from './FormSideNav';
-import { resolveLayout } from './layout-utils';
+import { resolveLayout } from '../core/layout-utils';
 
 interface SplitPanelRendererProps {
   contract: FormContract;

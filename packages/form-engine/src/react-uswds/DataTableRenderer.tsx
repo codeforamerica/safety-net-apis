@@ -6,13 +6,13 @@ import type {
   PermissionsPolicy,
   AnnotationLayer,
   DataTableSource,
-} from './types';
+} from '../core/types';
 import {
   resolveContractRows,
   sortRows,
   type ResolvedRow,
   type SortDirection,
-} from './data-table-resolvers';
+} from '../core/data-table-resolvers';
 
 // ---------------------------------------------------------------------------
 // Props

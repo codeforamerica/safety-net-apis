@@ -1,4 +1,4 @@
-import dsConfig from '../ds.config.json';
+import dsConfig from '../../ds.config.json';
 
 /**
  * Component roles that the design system can apply classes to.

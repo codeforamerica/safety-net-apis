@@ -3,8 +3,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, Button, Accordion, Tag } from '@trussworks/react-uswds';
 import type { ZodSchema } from 'zod';
-import type { FormContract, Role, Page, PermissionsPolicy, FieldDefinition, ViewMode, AnnotationLayer, DisplayType, LayoutConfig, AnnotationEntry } from './types';
-import { resolveAnnotationDisplay } from './types';
+import type { FormContract, Role, Page, PermissionsPolicy, FieldDefinition, ViewMode, AnnotationLayer, DisplayType, LayoutConfig, AnnotationEntry } from '../core/types';
+import { resolveAnnotationDisplay } from '../core/types';
 import { DataTableRenderer } from './DataTableRenderer';
 import { ListDetailRenderer } from './ListDetailRenderer';
 
@@ -12,16 +12,16 @@ import { ListDetailRenderer } from './ListDetailRenderer';
 function get(obj: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], obj);
 }
-import { ds } from './theme';
+import { ds } from '../core/theme';
 import { ComponentMapper } from './ComponentMapper';
 import { FieldArrayRenderer } from './FieldArrayRenderer';
-import { resolveCondition } from './ConditionResolver';
-import { resolvePermission } from './PermissionsResolver';
+import { resolveCondition } from '../core/ConditionResolver';
+import { resolvePermission } from '../core/PermissionsResolver';
 import { PageStepper } from './PageStepper';
 import { FormSideNav } from './FormSideNav';
 import { FormTopNav } from './FormTopNav';
 import { FormInPageNav } from './FormInPageNav';
-import { resolveLayout } from './layout-utils';
+import { resolveLayout } from '../core/layout-utils';
 
 /** Strip numeric indices from a qualified ref (e.g. household.members.0.ssn → household.members.ssn). */
 function stripIndices(ref: string): string {

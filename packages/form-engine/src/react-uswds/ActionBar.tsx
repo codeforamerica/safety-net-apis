@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button, ButtonGroup } from '@trussworks/react-uswds';
-import type { ActionDefinition, ActionStyle, Role } from './types';
+import type { ActionDefinition, ActionStyle, Role } from '../core/types';
 
 /** Map action style to USWDS Button variant props. */
 function styleProps(style?: ActionStyle): Record<string, boolean> {

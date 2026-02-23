@@ -5,7 +5,7 @@ import {
   ButtonGroup,
   Button,
 } from '@trussworks/react-uswds';
-import type { Page } from './types';
+import type { Page } from '../core/types';
 
 interface PageStepperProps {
   pages: Page[];

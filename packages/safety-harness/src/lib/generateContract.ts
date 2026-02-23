@@ -6,7 +6,7 @@ import type {
   ComponentType,
   ActionDefinition,
   Page,
-} from '@safety-net/form-engine-react';
+} from '@safety-net/form-engine';
 
 // ── Schema shape coming from the dereferenced OpenAPI spec ──────────────────
 
@@ -153,7 +153,7 @@ function generateFields(
 
 // ── Main entry point ────────────────────────────────────────────────────────
 
-import type { Role, NavigationType, DisplayType, ReferenceColumn } from '@safety-net/form-engine-react';
+import type { Role, NavigationType, DisplayType, ReferenceColumn } from '@safety-net/form-engine';
 
 interface GenerateContractResult {
   contract: FormContract;

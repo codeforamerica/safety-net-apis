@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { Role } from '@safety-net/form-engine-react';
+import type { Role } from '@safety-net/form-engine';
 
 interface RoleContextValue {
   role: Role;

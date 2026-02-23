@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { Alert, Button } from '@trussworks/react-uswds';
-import { DataTableRenderer } from '@safety-net/form-engine-react';
-import type { FormContract, ResolvedRow } from '@safety-net/form-engine-react';
+import { DataTableRenderer } from '@safety-net/form-engine';
+import type { FormContract, ResolvedRow } from '@safety-net/form-engine';
 import { useApiData } from '../hooks/useApiData';
 import { genericApi } from '../api/generic';
 import type { ListResponse } from '../api/generic';

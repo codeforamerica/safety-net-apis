@@ -1,5 +1,5 @@
 {
-  "name": "@safety-net/form-engine-react",
+  "name": "@safety-net/form-engine",
   "version": "1.0.0",
   "description": "Contract-driven form rendering engine for React + USWDS. Also supports custom design systems built on top of USWDS via ds.config.json theming.",
   "type": "module",

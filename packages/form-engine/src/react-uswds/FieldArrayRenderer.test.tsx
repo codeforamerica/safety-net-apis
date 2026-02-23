@@ -4,7 +4,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { useForm, FormProvider } from 'react-hook-form';
-import type { FieldDefinition, PermissionsPolicy } from './types';
+import type { FieldDefinition, PermissionsPolicy } from '../core/types';
 import { FieldArrayRenderer } from './FieldArrayRenderer';
 
 afterEach(cleanup);

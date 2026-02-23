@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useFieldArray, type Control, type UseFormRegister, type FieldErrors } from 'react-hook-form';
 import { Button, Table, Accordion, BreadcrumbBar, Breadcrumb, BreadcrumbLink } from '@trussworks/react-uswds';
-import type { FieldDefinition, Role, PermissionsPolicy, ShowWhen, SimpleCondition, ViewMode, AnnotationEntry, ResolvedAnnotationDisplay, FieldGroup } from './types';
-import { ds } from './theme';
+import type { FieldDefinition, Role, PermissionsPolicy, ShowWhen, SimpleCondition, ViewMode, AnnotationEntry, ResolvedAnnotationDisplay, FieldGroup } from '../core/types';
+import { ds } from '../core/theme';
 import { ComponentMapper } from './ComponentMapper';
-import { resolveCondition } from './ConditionResolver';
-import { resolvePermission } from './PermissionsResolver';
-import { labelFromRef } from './field-utils';
+import { resolveCondition } from '../core/ConditionResolver';
+import { resolvePermission } from '../core/PermissionsResolver';
+import { labelFromRef } from '../core/field-utils';
 
 /** Resolve a dot-path like 'name.firstName' from a nested object. */
 function get(obj: Record<string, unknown>, path: string): unknown {

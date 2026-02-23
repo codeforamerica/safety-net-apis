@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Header, PrimaryNav, NavMenuButton } from '@trussworks/react-uswds';
-import type { Page } from './types';
+import type { Page } from '../core/types';
 
 interface FormTopNavProps {
   pages: Page[];

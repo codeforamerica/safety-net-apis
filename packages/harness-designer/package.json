@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@safety-net/contracts": "*",
-    "@safety-net/form-engine-react": "*",
+    "@safety-net/form-engine": "*",
     "@trussworks/react-uswds": "^10.0.0",
     "js-yaml": "^4.1.0",
     "react": "^18.3.1",
