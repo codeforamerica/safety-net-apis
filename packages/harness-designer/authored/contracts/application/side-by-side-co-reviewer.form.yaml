@@ -13,6 +13,14 @@ form:
       label: Original Submission
       mode: readonly
   role: reviewer
+  labels: annotations
+  annotation_display:
+    field:
+      badge: [source, programs:exceptions]
+      tooltip: [statute]
+      hint: [notes]
+    page:
+      banner: [programs]
   pages:
     - id: programs
       title: Programs

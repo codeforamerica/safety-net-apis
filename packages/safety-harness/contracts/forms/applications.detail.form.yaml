@@ -5,13 +5,14 @@ form:
   layout:
     navigation: none
     display: accordion
+  labels: annotations
   annotation_display:
-    label: override
-    source: badge
-    statute: tooltip
-    programs:
-      page: banner
-      field: exception-badge
+    field:
+      badge: [ programs:exceptions]
+      tooltip: [statute]
+      hint: [notes]
+    page:
+      banner: [programs]
   pages:
     - id: general
       title: General

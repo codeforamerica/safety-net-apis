@@ -170,26 +170,38 @@ export interface AnnotationEntry {
   [key: string]: unknown;
 }
 
-export interface AnnotationProgramsDisplay {
-  page?: 'banner' | 'hidden';
-  field?: 'exception-badge' | 'badge' | 'hidden';
+export interface AnnotationFieldSlots {
+  badge?: string[];      // e.g. ["source", "programs:exceptions"]
+  tooltip?: string[];    // e.g. ["statute"]
+  hint?: string[];       // e.g. ["notes"]
+  alert?: string[];      // e.g. ["statute"] — usa-alert info box below the field
+}
+
+export interface AnnotationPageSlots {
+  banner?: string[];     // e.g. ["programs"]
 }
 
 export interface AnnotationDisplayConfig {
-  label?: 'override' | 'hint' | 'tooltip' | 'hidden';
-  source?: 'badge' | 'hint' | 'tooltip' | 'hidden';
-  statute?: 'tooltip' | 'hint' | 'hidden';
-  notes?: 'hint' | 'tooltip' | 'hidden';
-  programs?: AnnotationProgramsDisplay;
+  field?: AnnotationFieldSlots;
+  page?: AnnotationPageSlots;
 }
 
-export function resolveAnnotationDisplay(config?: AnnotationDisplayConfig): Required<AnnotationDisplayConfig> {
+export interface ResolvedAnnotationDisplay {
+  field: Required<AnnotationFieldSlots>;
+  page: Required<AnnotationPageSlots>;
+}
+
+export function resolveAnnotationDisplay(config?: AnnotationDisplayConfig): ResolvedAnnotationDisplay {
   return {
-    label: config?.label ?? 'hidden',
-    source: config?.source ?? 'hidden',
-    statute: config?.statute ?? 'hidden',
-    notes: config?.notes ?? 'hidden',
-    programs: { page: config?.programs?.page ?? 'banner', field: config?.programs?.field ?? 'exception-badge' },
+    field: {
+      badge: config?.field?.badge ?? [],
+      tooltip: config?.field?.tooltip ?? [],
+      hint: config?.field?.hint ?? [],
+      alert: config?.field?.alert ?? [],
+    },
+    page: {
+      banner: config?.page?.banner ?? ['programs'],
+    },
   };
 }
 
@@ -205,6 +217,8 @@ export interface FormContract {
     actions?: ActionDefinition[];
     storybook?: StoryBookMeta;
     annotations?: string[];
+    /** Label source: 'annotations' uses annotationEntries[ref].label, 'default' uses labelFromRef(). */
+    labels?: 'annotations' | 'default';
     /** How annotation properties are rendered on fields. */
     annotation_display?: AnnotationDisplayConfig;
     columns?: ReferenceColumn[];

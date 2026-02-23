@@ -197,9 +197,10 @@ function deriveAnnotationLookup(data: Record<string, unknown>): Record<string, s
 const mergedAnnotations = mergeAnnotationLayers([
 ${layerArrayEntries}
 ]);
-const annotationLookup = deriveAnnotationLookup(mergedAnnotations);`;
+const annotationLookup = deriveAnnotationLookup(mergedAnnotations);
+const annotationEntries = (mergedAnnotations as any).fields as Record<string, AnnotationEntry>;`;
 
-  const prop = `\n        annotations={annotationLookup}`;
+  const prop = `\n        annotations={annotationLookup}\n        annotationEntries={annotationEntries}`;
 
   return { imports: `// Annotations\n${imports}`, setup, prop };
 }
@@ -238,7 +239,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { FormRenderer } from '@safety-net/form-engine-react';
 import { ContractPreview, type EditorTab } from '@safety-net/form-engine-react';
 import { ${zodExport} } from '../../${schemaModule}';
-import type { FormContract, Role, PermissionsPolicy } from '@safety-net/form-engine-react';
+import type { FormContract, Role, PermissionsPolicy, AnnotationEntry } from '@safety-net/form-engine-react';
 
 // Layout
 import contract from '../../${contractPath}';
@@ -342,7 +343,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { SplitPanelRenderer } from '@safety-net/form-engine-react';
 import { ContractPreview, type EditorTab } from '@safety-net/form-engine-react';
 import { ${zodExport} } from '../../${schemaModule}';
-import type { FormContract, PermissionsPolicy, ViewMode } from '@safety-net/form-engine-react';
+import type { FormContract, PermissionsPolicy, ViewMode, AnnotationEntry } from '@safety-net/form-engine-react';
 
 // Layout
 import contract from '../../${contractPath}';
@@ -514,7 +515,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 ${rendererImport}
 import { ContractPreview, type EditorTab } from '@safety-net/form-engine-react';
 import { ${zodExport} } from '../../../${schemaModule}';
-import type { FormContract${roleType}, PermissionsPolicy${viewModeImport} } from '@safety-net/form-engine-react';
+import type { FormContract${roleType}, PermissionsPolicy${viewModeImport}, AnnotationEntry } from '@safety-net/form-engine-react';
 
 // Layout (from custom)
 import customLayout from './layout.yaml';

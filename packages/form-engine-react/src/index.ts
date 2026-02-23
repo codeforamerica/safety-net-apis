@@ -58,7 +58,9 @@ export type {
   HttpMethod,
   AnnotationEntry,
   AnnotationDisplayConfig,
-  AnnotationProgramsDisplay,
+  AnnotationFieldSlots,
+  AnnotationPageSlots,
+  ResolvedAnnotationDisplay,
   FieldArrayDisplay,
   FieldGroup,
 } from './types';

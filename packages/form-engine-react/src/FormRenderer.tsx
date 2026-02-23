@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, Button, Accordion, Tag } from '@trussworks/react-uswds';
 import type { ZodSchema } from 'zod';
-import type { FormContract, Role, Page, PermissionsPolicy, FieldDefinition, ViewMode, AnnotationLayer, DisplayType, LayoutConfig, AnnotationEntry, AnnotationDisplayConfig } from './types';
+import type { FormContract, Role, Page, PermissionsPolicy, FieldDefinition, ViewMode, AnnotationLayer, DisplayType, LayoutConfig, AnnotationEntry } from './types';
 import { resolveAnnotationDisplay } from './types';
 import { DataTableRenderer } from './DataTableRenderer';
 import { ListDetailRenderer } from './ListDetailRenderer';
@@ -133,6 +133,7 @@ export function FormRenderer({
   const isReadonly = viewMode === 'readonly';
   const { pages, layout } = contract.form;
   const annotationDisplay = resolveAnnotationDisplay(contract.form.annotation_display);
+  const labelsSource = contract.form.labels;
 
   // Derive legacy annotations lookup from annotationEntries when not explicitly provided
   const effectiveAnnotations = annotations ?? (annotationEntries
@@ -177,9 +178,13 @@ export function FormRenderer({
       : new Map<string, string[]>();
     const pagePrograms = programUnion(fieldMap);
 
+    // Render page-level banner for each property in page.banner
+    const showProgramBanner = annotationDisplay.page.banner.includes('programs')
+      && effectiveAnnotations && pagePrograms.length > 0;
+
     return (
       <>
-        {effectiveAnnotations && pagePrograms.length > 0 && annotationDisplay.programs.page !== 'hidden' && (
+        {showProgramBanner && (
           <div
             className="bg-base-lightest border-1px border-base-lighter radius-sm padding-y-05 padding-x-1 margin-bottom-2 font-sans-3xs line-height-sans-4"
           >
@@ -217,6 +222,7 @@ export function FormRenderer({
                     compareValues={compareValues}
                     annotationEntries={annotationEntries}
                     annotationDisplay={annotationDisplay}
+                    labelsSource={labelsSource}
                   />
                 </div>
               );
@@ -245,6 +251,7 @@ export function FormRenderer({
                   compareValues={compareValues}
                   annotationEntries={annotationEntries}
                   annotationDisplay={annotationDisplay}
+                  labelsSource={labelsSource}
                 />
               </div>
             );

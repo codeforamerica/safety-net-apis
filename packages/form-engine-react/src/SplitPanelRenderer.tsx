@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { ZodSchema } from 'zod';
-import type { FormContract, Role, ViewMode, PermissionsPolicy } from './types';
+import type { FormContract, Role, ViewMode, PermissionsPolicy, AnnotationEntry } from './types';
 import { FormRenderer } from './FormRenderer';
 import { PageStepper } from './PageStepper';
 import { FormSideNav } from './FormSideNav';
@@ -16,6 +16,7 @@ interface SplitPanelRendererProps {
   };
   permissionsPolicy?: PermissionsPolicy;
   annotations?: Record<string, string[]>;
+  annotationEntries?: Record<string, AnnotationEntry>;
   onSubmit?: (data: Record<string, unknown>) => void;
 }
 
@@ -26,6 +27,7 @@ export function SplitPanelRenderer({
   panels,
   permissionsPolicy,
   annotations,
+  annotationEntries,
   onSubmit,
 }: SplitPanelRendererProps) {
   const { pages, layout } = contract.form;
@@ -84,6 +86,7 @@ export function SplitPanelRenderer({
               defaultValues={panel.data}
               permissionsPolicy={permissionsPolicy}
               annotations={annotations}
+              annotationEntries={annotationEntries}
               onSubmit={onSubmit}
               hideChrome
               idPrefix={`${side}-`}

@@ -31,10 +31,16 @@
           "items": { "$ref": "#/$defs/ActionDefinition" }
         },
         "storybook": { "$ref": "#/$defs/StoryBookMeta" },
+        "labels": {
+          "type": "string",
+          "enum": ["annotations", "default"],
+          "description": "Label source: 'annotations' uses annotationEntries[ref].label, 'default' uses labelFromRef()."
+        },
         "annotations": {
           "type": "array",
           "items": { "type": "string" }
         },
+        "annotation_display": { "$ref": "#/$defs/AnnotationDisplayConfig" },
         "columns": {
           "type": "array",
           "items": { "$ref": "#/$defs/ReferenceColumn" }
@@ -159,6 +165,25 @@
           "type": "integer",
           "minimum": 0,
           "description": "Maximum number of rows (field-array)."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether this field is required."
+        },
+        "display": {
+          "type": "string",
+          "enum": ["inline", "accordion", "list-detail", "list-detail-page"],
+          "description": "Display mode for field-array component."
+        },
+        "columns": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ReferenceColumn" },
+          "description": "Summary columns for list-detail field-array display."
+        },
+        "groups": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/FieldGroup" },
+          "description": "Named groups of sub-fields for accordion display."
         }
       }
     },
@@ -270,6 +295,63 @@
       "properties": {
         "label": { "type": "string" },
         "mode": { "$ref": "#/$defs/ViewMode" }
+      }
+    },
+    "AnnotationFieldSlots": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "badge": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Properties rendered as inline Tag badges after the label."
+        },
+        "tooltip": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Properties rendered as info-icon hover text."
+        },
+        "hint": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Properties rendered as hint text below the label."
+        },
+        "alert": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Properties rendered as USWDS Alert (info) below the field."
+        }
+      }
+    },
+    "AnnotationPageSlots": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "banner": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Properties rendered as a banner bar at top of page section."
+        }
+      }
+    },
+    "AnnotationDisplayConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "field": { "$ref": "#/$defs/AnnotationFieldSlots" },
+        "page": { "$ref": "#/$defs/AnnotationPageSlots" }
+      }
+    },
+    "FieldGroup": {
+      "type": "object",
+      "required": ["title", "fields"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "fields": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     },
     "StoryBookMeta": {

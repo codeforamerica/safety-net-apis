@@ -13,7 +13,7 @@ import {
   Fieldset,
   Tag,
 } from '@trussworks/react-uswds';
-import type { FieldDefinition, PermissionLevel, AnnotationEntry, AnnotationDisplayConfig } from './types';
+import type { FieldDefinition, PermissionLevel, AnnotationEntry, ResolvedAnnotationDisplay } from './types';
 import type { UseFormRegister, FieldErrors } from 'react-hook-form';
 import { labelFromRef } from './field-utils';
 import { deepEqual } from './utils';
@@ -38,8 +38,10 @@ interface ComponentMapperProps {
   compareValues?: Record<string, unknown>;
   /** Full annotation entries keyed by field ref. */
   annotationEntries?: Record<string, AnnotationEntry>;
-  /** Resolved annotation display config. */
-  annotationDisplay?: Required<AnnotationDisplayConfig>;
+  /** Resolved annotation display config (slot-based). */
+  annotationDisplay?: ResolvedAnnotationDisplay;
+  /** Label source: 'annotations' uses annotationEntries label, 'default' uses labelFromRef(). */
+  labelsSource?: 'annotations' | 'default';
 }
 
 /** Get nested error message from FieldErrors. */
@@ -144,92 +146,141 @@ const SOURCE_COLORS: Record<string, string> = {
   manual: 'bg-warning-lighter text-warning-dark',
 };
 
+/** Parse a slot item like "programs:exceptions" into { property, modifier }. */
+function parseSlotItem(item: string): { property: string; modifier?: string } {
+  const colonIdx = item.indexOf(':');
+  if (colonIdx === -1) return { property: item };
+  return { property: item.slice(0, colonIdx), modifier: item.slice(colonIdx + 1) };
+}
+
 /**
- * Compute annotation decorations for a field based on the display config.
- * Returns effectiveLabel, inline badges, hint lines, and tooltip text.
+ * Render a badge for a string-valued annotation property.
+ * Uses SOURCE_COLORS for known "source" values, otherwise a neutral style.
+ */
+function renderStringBadge(key: string, value: string, property: string): React.ReactNode {
+  const colorClass = property === 'source'
+    ? (SOURCE_COLORS[value.toLowerCase()] ?? 'bg-base-lighter text-base-dark')
+    : 'bg-base-lighter text-base-dark';
+  return (
+    <Tag
+      key={key}
+      className={`font-sans-3xs ${colorClass}`}
+      style={{ fontSize: '10px', padding: '1px 6px', lineHeight: '1.4', marginLeft: '6px', verticalAlign: 'middle' }}
+    >
+      {value}
+    </Tag>
+  );
+}
+
+/**
+ * Compute annotation decorations for a field based on the slot-based display config.
+ * Returns inline badges, hint lines, tooltip text, and alert lines.
  */
 function renderAnnotationDecorations(
   entry: AnnotationEntry | undefined,
-  displayConfig: Required<AnnotationDisplayConfig> | undefined,
-  autoLabel: string,
+  displayConfig: ResolvedAnnotationDisplay | undefined,
+  fieldPrograms: string[] | undefined,
+  pagePrograms: string[] | undefined,
 ): {
-  effectiveLabel: string;
   inlineBadges: React.ReactNode[];
   hintLines: string[];
   tooltipText: string;
+  alertLines: string[];
 } {
   const result = {
-    effectiveLabel: autoLabel,
     inlineBadges: [] as React.ReactNode[],
     hintLines: [] as string[],
     tooltipText: '',
+    alertLines: [] as string[],
   };
 
-  if (!entry || !displayConfig) return result;
+  if (!displayConfig) return result;
 
   const tooltipParts: string[] = [];
 
-  // Label
-  if (entry.label) {
-    switch (displayConfig.label) {
-      case 'override':
-        result.effectiveLabel = entry.label;
-        break;
-      case 'hint':
-        result.hintLines.push(entry.label);
-        break;
-      case 'tooltip':
-        tooltipParts.push(`Label: ${entry.label}`);
-        break;
-    }
-  }
-
-  // Source
-  if (entry.source) {
-    switch (displayConfig.source) {
-      case 'badge': {
-        const colorClass = SOURCE_COLORS[entry.source.toLowerCase()] ?? 'bg-base-lighter text-base-dark';
-        result.inlineBadges.push(
-          <Tag
-            key="source"
-            className={`font-sans-3xs ${colorClass}`}
-            style={{ fontSize: '10px', padding: '1px 6px', lineHeight: '1.4', marginLeft: '6px', verticalAlign: 'middle' }}
-          >
-            {entry.source}
-          </Tag>
-        );
-        break;
+  // --- Badge slot ---
+  for (const item of displayConfig.field.badge) {
+    const { property, modifier } = parseSlotItem(item);
+    if (property === 'programs') {
+      // Program badges with optional :exceptions modifier
+      if (fieldPrograms?.length && pagePrograms?.length) {
+        if (modifier === 'exceptions') {
+          const fieldSet = new Set(fieldPrograms);
+          const pageSet = new Set(pagePrograms);
+          const missing = pagePrograms.filter((p) => !fieldSet.has(p));
+          const extra = fieldPrograms.filter((p) => !pageSet.has(p));
+          const isSame = missing.length === 0 && extra.length === 0;
+          if (!isSame) {
+            const useOnly = fieldPrograms.length <= pagePrograms.length / 2;
+            const badgeLabel = useOnly
+              ? `Only: ${fieldPrograms.map((p) => p.replace(/_/g, ' ')).join(', ')}`
+              : `Not: ${missing.map((p) => p.replace(/_/g, ' ')).join(', ')}`;
+            result.inlineBadges.push(
+              <span key="programs-exception" style={{ marginLeft: '6px', verticalAlign: 'middle' }}>
+                <Tag
+                  className={`font-sans-3xs ${useOnly ? 'bg-info-lighter text-primary-dark' : 'bg-error-lighter text-error-dark'}`}
+                  style={{ fontSize: '10px', padding: '1px 6px', lineHeight: '1.4' }}
+                >
+                  {badgeLabel}
+                </Tag>
+              </span>
+            );
+          }
+        } else {
+          // Show all programs as badges
+          result.inlineBadges.push(
+            <span key="programs-all" style={{ marginLeft: '6px', verticalAlign: 'middle' }}>
+              {fieldPrograms.map((p) => (
+                <Tag
+                  key={p}
+                  className="font-sans-3xs bg-info-lighter text-primary-dark"
+                  style={{ fontSize: '10px', padding: '1px 6px', lineHeight: '1.4', marginRight: '2px' }}
+                >
+                  {p.replace(/_/g, ' ')}
+                </Tag>
+              ))}
+            </span>
+          );
+        }
       }
-      case 'hint':
-        result.hintLines.push(`Source: ${entry.source}`);
-        break;
-      case 'tooltip':
-        tooltipParts.push(`Source: ${entry.source}`);
-        break;
+    } else if (entry) {
+      const val = entry[property];
+      if (typeof val === 'string' && val) {
+        result.inlineBadges.push(renderStringBadge(`badge-${property}`, val, property));
+      }
     }
   }
 
-  // Statute
-  if (entry.statute) {
-    switch (displayConfig.statute) {
-      case 'hint':
-        result.hintLines.push(`Statute: ${entry.statute}`);
-        break;
-      case 'tooltip':
-        tooltipParts.push(`Statute: ${entry.statute}`);
-        break;
+  // --- Tooltip slot ---
+  for (const item of displayConfig.field.tooltip) {
+    const { property } = parseSlotItem(item);
+    if (entry) {
+      const val = entry[property];
+      if (typeof val === 'string' && val) {
+        tooltipParts.push(`${property.charAt(0).toUpperCase() + property.slice(1)}: ${val}`);
+      }
     }
   }
 
-  // Notes
-  if (entry.notes) {
-    switch (displayConfig.notes) {
-      case 'hint':
-        result.hintLines.push(entry.notes);
-        break;
-      case 'tooltip':
-        tooltipParts.push(entry.notes);
-        break;
+  // --- Hint slot ---
+  for (const item of displayConfig.field.hint) {
+    const { property } = parseSlotItem(item);
+    if (entry) {
+      const val = entry[property];
+      if (typeof val === 'string' && val) {
+        result.hintLines.push(property === 'notes' ? val : `${property.charAt(0).toUpperCase() + property.slice(1)}: ${val}`);
+      }
+    }
+  }
+
+  // --- Alert slot ---
+  for (const item of displayConfig.field.alert) {
+    const { property } = parseSlotItem(item);
+    if (entry) {
+      const val = entry[property];
+      if (typeof val === 'string' && val) {
+        result.alertLines.push(property === 'notes' ? val : `${property.charAt(0).toUpperCase() + property.slice(1)}: ${val}`);
+      }
     }
   }
 
@@ -249,16 +300,24 @@ export function ComponentMapper({
   compareValues,
   annotationEntries,
   annotationDisplay,
+  labelsSource,
 }: ComponentMapperProps) {
   if (permission === 'hidden') return null;
 
   const errorMsg = getError(errors, field.ref);
   const isDisabled = permission === 'read-only' || permission === 'masked';
-  const autoLabel = labelFromRef(field.ref);
 
   // Look up annotation entry for this field
   const annotationEntry = annotationEntries?.[field.ref] ?? annotationEntries?.[stripIndices(field.ref)];
-  const decorations = renderAnnotationDecorations(annotationEntry, annotationDisplay, autoLabel);
+
+  // Resolve label: annotations source overrides with entry.label when available
+  const effectiveLabel = labelsSource === 'annotations' && annotationEntry?.label
+    ? annotationEntry.label
+    : labelFromRef(field.ref);
+
+  // Compute slot-based decorations
+  const fieldPrograms = annotations?.[field.ref] ?? annotations?.[stripIndices(field.ref)];
+  const decorations = renderAnnotationDecorations(annotationEntry, annotationDisplay, fieldPrograms, pagePrograms);
 
   const requiredMark = field.required && !isDisabled ? (
     <abbr title="required" className="usa-hint usa-hint--required">*</abbr>
@@ -275,9 +334,8 @@ export function ComponentMapper({
     </span>
   ) : null;
 
-  const label = <>{decorations.effectiveLabel}{requiredMark}{tooltipIcon}</>;
+  const label = <>{effectiveLabel}{requiredMark}{tooltipIcon}</>;
   const inputId = idPrefix + field.ref.replace(/\./g, '-');
-  const programs = annotations?.[field.ref] ?? annotations?.[stripIndices(field.ref)];
 
   // Diff highlighting: compare current value against original
   const originalValue = compareValues ? get(compareValues, field.ref) : undefined;
@@ -298,57 +356,8 @@ export function ComponentMapper({
     ? 'border-left-05 border-primary padding-left-1 bg-primary-lighter'
     : '';
 
-  // Determine program field display mode
-  const programFieldMode = annotationDisplay?.programs?.field ?? 'exception-badge';
-
-  // Compute program badges based on display mode
-  let badges: React.ReactNode = null;
-  if (programFieldMode !== 'hidden' && programs?.length && pagePrograms?.length) {
-    if (programFieldMode === 'badge') {
-      // Always show all programs as Tags
-      badges = (
-        <span style={{ marginLeft: '6px', verticalAlign: 'middle' }}>
-          {programs.map((p) => (
-            <Tag
-              key={p}
-              className="font-sans-3xs bg-info-lighter text-primary-dark"
-              style={{ fontSize: '10px', padding: '1px 6px', lineHeight: '1.4', marginRight: '2px' }}
-            >
-              {p.replace(/_/g, ' ')}
-            </Tag>
-          ))}
-        </span>
-      );
-    } else {
-      // exception-badge: only show when field's programs differ from the page baseline
-      const fieldSet = new Set(programs);
-      const pageSet = new Set(pagePrograms);
-      const missing = pagePrograms.filter((p) => !fieldSet.has(p));
-      const extra = programs.filter((p) => !pageSet.has(p));
-      const isSame = missing.length === 0 && extra.length === 0;
-
-      if (!isSame) {
-        const useOnly = programs.length <= pagePrograms.length / 2;
-        const badgeLabel = useOnly
-          ? `Only: ${programs.map((p) => p.replace(/_/g, ' ')).join(', ')}`
-          : `Not: ${missing.map((p) => p.replace(/_/g, ' ')).join(', ')}`;
-
-        badges = (
-          <span style={{ marginLeft: '6px', verticalAlign: 'middle' }}>
-            <Tag
-              className={`font-sans-3xs ${useOnly ? 'bg-info-lighter text-primary-dark' : 'bg-error-lighter text-error-dark'}`}
-              style={{ fontSize: '10px', padding: '1px 6px', lineHeight: '1.4' }}
-            >
-              {badgeLabel}
-            </Tag>
-          </span>
-        );
-      }
-    }
-  }
-
-  // Inline source badges from annotation decorations
-  const sourceBadges = decorations.inlineBadges.length > 0 ? <>{decorations.inlineBadges}</> : null;
+  // Inline badges from slot-based decorations (source badges + program badges)
+  const badges = decorations.inlineBadges.length > 0 ? <>{decorations.inlineBadges}</> : null;
 
   // Annotation hint lines (rendered between label and input, before field.hint)
   const annotationHints = decorations.hintLines.length > 0 ? (
@@ -359,11 +368,22 @@ export function ComponentMapper({
     </>
   ) : null;
 
+  // Alert node for alert-slot items (rendered below the form group)
+  const alertNode = decorations.alertLines.length > 0 ? (
+    <div className="usa-alert usa-alert--info usa-alert--slim margin-top-1" role="alert">
+      <div className="usa-alert__body">
+        {decorations.alertLines.map((line, i) => (
+          <p key={i} className="usa-alert__text">{line}</p>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
   if (permission === 'masked') {
     return (
       <div className={changedClass}>
         <FormGroup className={ds.formGroup} error={!!errorMsg}>
-          <Label className={ds.label} htmlFor={inputId}>{label}{sourceBadges}{badges}{modifiedBadge}</Label>
+          <Label className={ds.label} htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
           {annotationHints}
             {field.hint && <span className="usa-hint">{field.hint}</span>}
           <TextInput
@@ -376,6 +396,7 @@ export function ComponentMapper({
             inputRef={() => {}}
           />
         </FormGroup>
+        {alertNode}
       </div>
     );
   }
@@ -385,7 +406,7 @@ export function ComponentMapper({
       return (
         <div className={changedClass}>
           <FormGroup className={ds.formGroup} error={!!errorMsg}>
-            <Label className={ds.label} htmlFor={inputId}>{label}{sourceBadges}{badges}{modifiedBadge}</Label>
+            <Label className={ds.label} htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
             {annotationHints}
             {field.hint && <span className="usa-hint">{field.hint}</span>}
             {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
@@ -398,6 +419,7 @@ export function ComponentMapper({
               inputRef={register(field.ref).ref}
             />
           </FormGroup>
+          {alertNode}
         </div>
       );
     }
@@ -409,7 +431,7 @@ export function ComponentMapper({
       return (
         <div className={changedClass}>
           <FormGroup className={ds.formGroup} error={!!errorMsg}>
-            <Fieldset className={ds.fieldset} legend={<>{label}{sourceBadges}{badges}{modifiedBadge}</>}>
+            <Fieldset className={ds.fieldset} legend={<>{label}{badges}{modifiedBadge}</>}>
               {annotationHints}
             {field.hint && <span className="usa-hint">{field.hint}</span>}
               {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
@@ -441,6 +463,7 @@ export function ComponentMapper({
               </DateInputGroup>
             </Fieldset>
           </FormGroup>
+          {alertNode}
         </div>
       );
     }
@@ -456,7 +479,7 @@ export function ComponentMapper({
       return (
         <div className={changedClass}>
           <FormGroup className={ds.formGroup} error={!!errorMsg}>
-            <Fieldset className={ds.fieldset} legend={<>{label}{sourceBadges}{badges}{modifiedBadge}</>}>
+            <Fieldset className={ds.fieldset} legend={<>{label}{badges}{modifiedBadge}</>}>
               {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
               {options.map((opt) => (
                 <Radio
@@ -472,6 +495,7 @@ export function ComponentMapper({
               ))}
             </Fieldset>
           </FormGroup>
+          {alertNode}
         </div>
       );
     }
@@ -486,7 +510,7 @@ export function ComponentMapper({
       return (
         <div className={changedClass}>
           <FormGroup className={ds.formGroup} error={!!errorMsg}>
-            <Label className={ds.label} htmlFor={inputId}>{label}{sourceBadges}{badges}{modifiedBadge}</Label>
+            <Label className={ds.label} htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
             {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
             <Select
               className={ds.select}
@@ -503,6 +527,7 @@ export function ComponentMapper({
               ))}
             </Select>
           </FormGroup>
+          {alertNode}
         </div>
       );
     }
@@ -517,7 +542,7 @@ export function ComponentMapper({
       return (
         <div className={changedClass}>
           <FormGroup className={ds.formGroup} error={!!errorMsg}>
-            <Fieldset className={ds.fieldset} legend={<>{label}{sourceBadges}{badges}{modifiedBadge}</>}>
+            <Fieldset className={ds.fieldset} legend={<>{label}{badges}{modifiedBadge}</>}>
               {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
               {options.map((opt) => (
                 <Checkbox
@@ -533,6 +558,7 @@ export function ComponentMapper({
               ))}
             </Fieldset>
           </FormGroup>
+          {alertNode}
         </div>
       );
     }
@@ -541,7 +567,7 @@ export function ComponentMapper({
       return (
         <div className={changedClass}>
           <FormGroup className={ds.formGroup} error={!!errorMsg}>
-            <Label className={ds.label} htmlFor={inputId}>{label}{sourceBadges}{badges}{modifiedBadge}</Label>
+            <Label className={ds.label} htmlFor={inputId}>{label}{badges}{modifiedBadge}</Label>
             {annotationHints}
             {field.hint && <span className="usa-hint">{field.hint}</span>}
             {errorMsg && <ErrorMessage>{errorMsg}</ErrorMessage>}
@@ -553,6 +579,7 @@ export function ComponentMapper({
               inputRef={register(field.ref).ref}
             />
           </FormGroup>
+          {alertNode}
         </div>
       );
     }

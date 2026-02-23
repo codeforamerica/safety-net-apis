@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useFieldArray, type Control, type UseFormRegister, type FieldErrors } from 'react-hook-form';
 import { Button, Table, Accordion, BreadcrumbBar, Breadcrumb, BreadcrumbLink } from '@trussworks/react-uswds';
-import type { FieldDefinition, Role, PermissionsPolicy, ShowWhen, SimpleCondition, ViewMode, AnnotationEntry, AnnotationDisplayConfig, FieldGroup } from './types';
+import type { FieldDefinition, Role, PermissionsPolicy, ShowWhen, SimpleCondition, ViewMode, AnnotationEntry, ResolvedAnnotationDisplay, FieldGroup } from './types';
 import { ds } from './theme';
 import { ComponentMapper } from './ComponentMapper';
 import { resolveCondition } from './ConditionResolver';
@@ -69,8 +69,10 @@ interface FieldArrayRendererProps {
   compareValues?: Record<string, unknown>;
   /** Full annotation entries keyed by field ref. */
   annotationEntries?: Record<string, AnnotationEntry>;
-  /** Resolved annotation display config. */
-  annotationDisplay?: Required<AnnotationDisplayConfig>;
+  /** Resolved annotation display config (slot-based). */
+  annotationDisplay?: ResolvedAnnotationDisplay;
+  /** Label source: 'annotations' uses annotationEntries label, 'default' uses labelFromRef(). */
+  labelsSource?: 'annotations' | 'default';
 }
 
 export function FieldArrayRenderer({
@@ -88,6 +90,7 @@ export function FieldArrayRenderer({
   compareValues,
   annotationEntries,
   annotationDisplay,
+  labelsSource,
 }: FieldArrayRendererProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic path from contract
   const { fields: rows, append, remove } = useFieldArray({
@@ -159,6 +162,7 @@ export function FieldArrayRenderer({
             compareValues={compareValues}
             annotationEntries={annotationEntries}
             annotationDisplay={annotationDisplay}
+            labelsSource={labelsSource}
           />
         </div>
       );

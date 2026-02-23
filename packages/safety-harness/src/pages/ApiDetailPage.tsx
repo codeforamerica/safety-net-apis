@@ -135,31 +135,16 @@ interface AnnotationDoc {
   fields: Record<string, { programs?: Record<string, string>; [k: string]: unknown }>;
 }
 
-/**
- * Convert an annotation YAML document into the Record<string, string[]> format
- * expected by FormRenderer. Keys are field refs, values are program name arrays.
- */
-function deriveAnnotationLookup(doc: AnnotationDoc): Record<string, string[]> {
-  const lookup: Record<string, string[]> = {};
-  for (const [ref, meta] of Object.entries(doc.fields)) {
-    if (meta.programs) {
-      lookup[ref] = Object.keys(meta.programs);
-    }
-  }
-  return lookup;
-}
-
-/** Find annotation data for a given API name and derive both legacy lookup and full entries. */
-function findAnnotations(apiName: string): { lookup: Record<string, string[]>; entries: Record<string, AnnotationEntry> } | undefined {
+/** Find annotation entries for a given API name. */
+function findAnnotations(apiName: string): { entries: Record<string, AnnotationEntry> } | undefined {
   for (const [path, mod] of Object.entries(annotYamlModules)) {
     if (path.endsWith(`/${apiName}.yaml`)) {
       const doc = mod as unknown as AnnotationDoc;
-      const lookup = deriveAnnotationLookup(doc);
       const entries: Record<string, AnnotationEntry> = {};
       for (const [ref, meta] of Object.entries(doc.fields)) {
         entries[ref] = meta as AnnotationEntry;
       }
-      return { lookup, entries };
+      return { entries };
     }
   }
   return undefined;
@@ -459,7 +444,6 @@ export function ApiDetailPage() {
         contract={contract}
         schema={schema}
         permissionsPolicy={permissionsPolicy}
-        annotations={annotationResult?.lookup}
         annotationEntries={annotationResult?.entries}
         role={role}
         defaultValues={data as Record<string, unknown> | undefined}
