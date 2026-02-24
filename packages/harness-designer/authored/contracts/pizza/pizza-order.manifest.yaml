@@ -1,0 +1,8 @@
+sources:
+  contract: authored/contracts/pizza/pizza-order.form.yaml
+  schema: generated/schemas/pizza.ts
+  zodExport: pizzaCreateSchema
+  fixtures: authored/fixtures/pizza-order.yaml
+  permissions:
+    - authored/permissions/applicant.yaml
+category: Pizza Shop

@@ -2,16 +2,17 @@
 # Scenario: SNAP + Medicaid application, 2-person household (applicant + spouse).
 #
 # programsAppliedFor: SNAP | Medicaid_MAGI | Medicaid_NonMAGI | TANF | SSI | WIC | CHIP | Section_8_Housing | LIHEAP | Summer_EBT
-# gender: male | female | unknown
-# race (array): american_indian_alaskan_native | asian | black_african_american | native_hawaiian_pacific_islander | white
-# citizenshipStatus: citizen | permanent_resident | qualified_non_citizen | undocumented | other
-# maritalStatus: single | married | divorced | separated | widowed | civil_union | domestic_partnership
-# relationshipToApplicant: self | spouse | child | parent | sibling | other
-# livingArrangement: own | rent | homeless | living_with_others | other
-# incomeType: wages | self_employment | social_security | ssi | unemployment | child_support | alimony | pension | veterans_benefits | workers_comp | rental_income | interest_dividends | other
-# assetType: checking_account | savings_account | cash | stocks_bonds | vehicle | real_estate | retirement_account | life_insurance | burial_fund | other
-# frequency: weekly | biweekly | monthly | quarterly | annually
-# noticeDeliveryPreference: mail | email | both
+# gender: male | female | other
+# race (array): american_indian_alaska_native | asian | black | native_hawaiian_pacific_islander | white | other | multiracial
+# ethnicity: hispanic_latino | not_hispanic_latino
+# citizenshipStatus: us_citizen | us_national | lawful_permanent_resident | refugee | asylee | ... | undocumented | unknown
+# maritalStatus: single | married | separated | divorced | widowed
+# relationshipToApplicant: self | spouse | child | stepchild | parent | sibling | ... | unrelated_adult | unrelated_child
+# livingArrangement: own_home | rent | living_with_others | institutional | other
+# incomeType: employment | self_employment | social_security_oasdi | ssi | unemployment | ... | other
+# assetType: cash | checking | savings | money_market | cd | stocks_bonds | ... | other
+# frequency: hourly | daily | weekly | every_two_weeks | twice_monthly | monthly | quarterly | annually | one_time
+# noticeDeliveryPreference: mail | email | electronic_portal | text
 
 applicationDate: "2026-02-15"
 programsAppliedFor:
@@ -57,11 +58,11 @@ household:
       gender: female
       race:
         - white
-      ethnicity: hispanic_or_latino
+      ethnicity: hispanic_latino
       relationshipToApplicant: self
       maritalStatus: married
       isApplicant: true
-      citizenshipStatus: permanent_resident
+      citizenshipStatus: lawful_permanent_resident
       immigrationDocumentType: Green Card
       immigrationDocumentNumber: ABC-123456
       alienOrI94Number: I94-789012
@@ -85,11 +86,11 @@ household:
       gender: male
       race:
         - white
-      ethnicity: hispanic_or_latino
+      ethnicity: hispanic_latino
       relationshipToApplicant: spouse
       maritalStatus: married
       isApplicant: false
-      citizenshipStatus: citizen
+      citizenshipStatus: us_citizen
       isPregnant: false
       disabilityStatus: false
       employmentStatus: employed

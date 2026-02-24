@@ -48,7 +48,7 @@ household:
       gender: female
       race:
         - white
-      ethnicity: hispanic_or_latino
+      ethnicity: hispanic_latino
       relationshipToApplicant: self
       maritalStatus: single
       isApplicant: true
@@ -75,7 +75,7 @@ household:
       gender: male
       race:
         - white
-      ethnicity: hispanic_or_latino
+      ethnicity: hispanic_latino
       relationshipToApplicant: child
       maritalStatus: single
       isApplicant: false

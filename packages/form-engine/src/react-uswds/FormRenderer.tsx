@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, Button, Accordion, Tag } from '@trussworks/react-uswds';
-import type { ZodSchema } from 'zod';
+import { z, type ZodSchema } from 'zod';
 import type { FormContract, Role, Page, PermissionsPolicy, FieldDefinition, ViewMode, AnnotationLayer, DisplayType, LayoutConfig, AnnotationEntry } from '../core/types';
 import { resolveAnnotationDisplay } from '../core/types';
 import { DataTableRenderer } from './DataTableRenderer';
@@ -11,6 +11,22 @@ import { ListDetailRenderer } from './ListDetailRenderer';
 /** Resolve a dot-path like 'name.firstName' from a nested object. */
 function get(obj: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], obj);
+}
+
+/**
+ * Wrap a Zod schema with preprocessing that coerces string "true"/"false"
+ * to actual booleans. HTML radio/checkbox inputs always produce strings,
+ * but Zod boolean fields expect real booleans.
+ */
+function coerceBooleanStrings(schema: ZodSchema): ZodSchema {
+  return z.preprocess((data) => {
+    if (typeof data !== 'object' || !data) return data;
+    return JSON.parse(JSON.stringify(data), (_key, value) => {
+      if (value === 'true') return true;
+      if (value === 'false') return false;
+      return value;
+    });
+  }, schema);
 }
 import { ds } from '../core/theme';
 import { ComponentMapper } from './ComponentMapper';
@@ -152,7 +168,7 @@ export function FormRenderer({
     control,
     formState: { errors },
   } = useForm<Record<string, unknown>>({
-    ...(isReadonly ? {} : { resolver: zodResolver(schema) }),
+    ...(isReadonly ? {} : { resolver: zodResolver(coerceBooleanStrings(schema)) }),
     mode: 'onTouched',
     defaultValues,
   });

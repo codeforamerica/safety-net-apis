@@ -1,0 +1,10 @@
+# Test data for Pizza Order form.
+
+pizzaName: The Works
+description: Extra crispy please
+crustType: thin
+toppings:
+  - pepperoni
+  - mushrooms
+  - bell_peppers
+  - extra_cheese

@@ -1,0 +1,35 @@
+form:
+  id: pizza-order
+  title: Pizza Order
+  schema: Pizza
+  layout:
+    navigation: none
+    display: scrollable
+  role: customer
+  pages:
+    - id: order
+      title: Build Your Pizza
+      fields:
+        - ref: pizzaName
+          component: text-input
+          hint: Give your pizza a name
+        - ref: description
+          component: textarea
+          hint: Any special instructions?
+        - ref: crustType
+          component: radio
+          labels:
+            thin: Thin Crust
+            thick: Thick Crust
+            stuffed: Stuffed Crust
+        - ref: toppings
+          component: checkbox-group
+          labels:
+            pepperoni: Pepperoni
+            mushrooms: Mushrooms
+            onions: Onions
+            sausage: Sausage
+            bell_peppers: Bell Peppers
+            olives: Olives
+            pineapple: Pineapple
+            extra_cheese: Extra Cheese
