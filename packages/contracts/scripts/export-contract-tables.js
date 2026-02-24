@@ -25,7 +25,7 @@ function parseArgs() {
     console.log('Usage: node scripts/export-contract-tables.js [options]\n');
     console.log('Discovers behavioral contract YAML files and exports CSV tables.\n');
     console.log('Options:');
-    console.log('  --specs=<dir>  Path to specs directory (default: contracts package root)');
+    console.log('  --spec=<file|dir>  Path to spec file or directory (default: contracts package root)');
     console.log('  --out=<dir>    Output directory (default: ../../docs/contract-tables)');
     console.log('  --file=<name>  Export only this contract file');
     console.log('  -h, --help     Show this help message');
@@ -33,14 +33,16 @@ function parseArgs() {
   }
 
   const packageRoot = resolve(__dirname, '..');
-  const specsArg = args.find(a => a.startsWith('--specs='));
+  const specArg = args.find(a => a.startsWith('--spec='));
   const outArg = args.find(a => a.startsWith('--out='));
   const fileArg = args.find(a => a.startsWith('--file='));
+  const specPath = specArg ? resolve(specArg.split('=')[1]) : packageRoot;
+  const isSingleFile = statSync(specPath).isFile();
 
   return {
-    specsDir: specsArg ? resolve(specsArg.split('=')[1]) : packageRoot,
+    specDir: isSingleFile ? dirname(specPath) : specPath,
     outDir: outArg ? resolve(outArg.split('=')[1]) : resolve(packageRoot, '../../docs/contract-tables'),
-    singleFile: fileArg ? fileArg.split('=')[1] : null,
+    singleFile: isSingleFile ? basename(specPath) : (fileArg ? fileArg.split('=')[1] : null),
   };
 }
 
@@ -64,10 +66,10 @@ function findYamlFiles(dir) {
   return results;
 }
 
-function discoverContracts(specsDir, singleFile) {
+function discoverContracts(specDir, singleFile) {
   const yamlFiles = singleFile
-    ? [resolve(specsDir, singleFile)]
-    : findYamlFiles(specsDir);
+    ? [resolve(specDir, singleFile)]
+    : findYamlFiles(specDir);
 
   const contracts = [];
   for (const filePath of yamlFiles) {
@@ -265,8 +267,8 @@ function writeFiles(outDir, files) {
 // ---------------------------------------------------------------------------
 
 function main() {
-  const { specsDir, outDir, singleFile } = parseArgs();
-  const contracts = discoverContracts(specsDir, singleFile);
+  const { specDir, outDir, singleFile } = parseArgs();
+  const contracts = discoverContracts(specDir, singleFile);
 
   if (contracts.length === 0) {
     console.log('No behavioral contract files found.');

@@ -25,10 +25,10 @@ Mock API Server
 Dynamic Express server that discovers and serves OpenAPI specifications.
 
 Usage:
-  npm run mock:start [-- --specs=<dir> ...]
+  npm run mock:start [-- --spec=<dir> ...]
 
 Options:
-  --specs=<dir>   Directory containing *-openapi.yaml files (repeatable)
+  --spec=<dir>    File or directory containing *-openapi.yaml files (repeatable)
                   Default: packages/contracts
   --stop          Stop the running mock server
   -h, --help      Show this help message
@@ -39,12 +39,12 @@ Environment:
 
 Examples:
   npm run mock:start
-  npm run mock:start -- --specs=packages/contracts/resolved
-  npm run mock:start -- --specs=packages/contracts --specs=/tmp/my-specs
+  npm run mock:start -- --spec=packages/contracts/resolved
+  npm run mock:start -- --spec=packages/contracts --spec=/tmp/my-specs
 `);
 }
 
-function parseSpecsDirs() {
+function parseSpecDirs() {
   const args = process.argv.slice(2);
 
   if (args.includes('--help') || args.includes('-h')) {
@@ -52,14 +52,14 @@ function parseSpecsDirs() {
     process.exit(0);
   }
 
-  const specsDirs = args
-    .filter(a => a.startsWith('--specs='))
+  const specDirs = args
+    .filter(a => a.startsWith('--spec='))
     .map(a => resolve(a.split('=')[1]));
-  if (specsDirs.length === 0) {
+  if (specDirs.length === 0) {
     // Default: packages/contracts relative to this script
-    specsDirs.push(resolve(import.meta.dirname, '..', '..', 'contracts'));
+    specDirs.push(resolve(import.meta.dirname, '..', '..', 'contracts'));
   }
-  return specsDirs;
+  return specDirs;
 }
 
 let expressServer = null;
@@ -73,10 +73,10 @@ async function startMockServer() {
   console.log('='.repeat(70));
 
   try {
-    // Perform setup (load specs and seed databases) for each specs directory
-    const specsDirs = parseSpecsDirs();
+    // Perform setup (load specs and seed databases) for each spec directory
+    const specDirs = parseSpecDirs();
     let apiSpecs = [];
-    for (const specsDir of specsDirs) {
+    for (const specsDir of specDirs) {
       const result = await performSetup({ specsDir, verbose: true });
       apiSpecs = apiSpecs.concat(result.apiSpecs);
     }

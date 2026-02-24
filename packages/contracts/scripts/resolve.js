@@ -13,23 +13,24 @@
  *      - Target in 2+ files → require file/files property
  *
  * Usage:
- *   node scripts/resolve-overlay.js --base=./openapi --out=./resolved
- *   node scripts/resolve-overlay.js --base=./openapi --overlays=./overlays/california --out=./resolved
+ *   node scripts/resolve.js --spec=./openapi --out=./resolved
+ *   node scripts/resolve.js --spec=./openapi --overlay=./overlays/california --out=./resolved
+ *   node scripts/resolve.js --spec=./my-spec.yaml --overlay=./my-overlay.yaml --out=./resolved
  *
  * Flags:
- *   --base       Path to base specs directory (required)
- *   --overlays   Path to overlay directory (optional; omit to copy base specs unchanged)
+ *   --spec       Path to base spec file or directory (required)
+ *   --overlay    Path to overlay file or directory (optional; omit to copy base specs unchanged)
  *   --out        Output directory for resolved specs (required)
  *   --env        Target environment for x-environments filtering (optional)
  *   --env-file   Path to env file with key=value pairs for placeholder substitution (optional)
  */
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, cpSync, rmSync, realpathSync } from 'fs';
-import { join, dirname, relative, resolve } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, cpSync, rmSync, realpathSync, statSync } from 'fs';
+import { join, dirname, relative, resolve, basename } from 'path';
 import { fileURLToPath } from 'url';
 import yaml from 'js-yaml';
-import $RefParser from '@apidevtools/json-schema-ref-parser';
 import { applyOverlay, checkPathExists } from '../src/overlay/overlay-resolver.js';
+import { bundleSpec } from '../src/bundle.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -41,8 +42,8 @@ const __dirname = dirname(__filename);
 function parseArgs() {
   const args = process.argv.slice(2);
   const options = {
-    base: 'packages/contracts',
-    overlays: null,
+    spec: 'packages/contracts',
+    overlay: null,
     out: 'packages/resolved',
     env: null,
     envFile: null,
@@ -55,10 +56,10 @@ function parseArgs() {
       options.help = true;
     } else if (arg === '--bundle') {
       options.bundle = true;
-    } else if (arg.startsWith('--base=')) {
-      options.base = arg.split('=')[1];
-    } else if (arg.startsWith('--overlays=')) {
-      options.overlays = arg.split('=')[1];
+    } else if (arg.startsWith('--spec=')) {
+      options.spec = arg.split('=')[1];
+    } else if (arg.startsWith('--overlay=')) {
+      options.overlay = arg.split('=')[1];
     } else if (arg.startsWith('--out=')) {
       options.out = arg.split('=')[1];
     } else if (arg.startsWith('--env=')) {
@@ -81,15 +82,15 @@ Usage:
   npm run resolve [-- <flags>]
 
 Flags:
-  --base=<dir>       Path to base specs directory (default: packages/contracts)
-  --overlays=<dir>   Path to overlay directory (optional)
+  --spec=<path>      Path to base spec file or directory (default: packages/contracts)
+  --overlay=<path>   Path to overlay file or directory (optional)
   --out=<dir>        Output directory for resolved specs (default: packages/resolved)
   --bundle           Inline all external $refs to produce self-contained specs
   --env=<env>        Target environment for x-environments filtering (optional)
   --env-file=<file>  Path to env file for \${VAR} placeholder substitution (optional)
   -h, --help         Show this help message
 
-Without --overlays, base specs are copied to --out unchanged.
+Without --overlay, base specs are copied to --out unchanged.
 With --bundle, all external $ref references are dereferenced inline.
 With --env, nodes whose x-environments array doesn't include the target env are removed.
 With --env-file, \${VAR} placeholders in string values are substituted (process.env overrides file values).
@@ -97,8 +98,9 @@ With --env-file, \${VAR} placeholders in string values are substituted (process.
 Examples:
   npm run resolve
   npm run resolve -- --bundle --out=/tmp/demo
-  npm run resolve -- --overlays=packages/contracts/overlays/california --out=./resolved
-  npm run resolve -- --bundle --overlays=packages/contracts/overlays/california --out=./resolved
+  npm run resolve -- --overlay=packages/contracts/overlays/california --out=./resolved
+  npm run resolve -- --spec=eligibility-openapi.yaml --overlay=my-overlay.yaml --out=./resolved
+  npm run resolve -- --bundle --overlay=packages/contracts/overlays/california --out=./resolved
 `);
 }
 
@@ -491,13 +493,15 @@ async function main() {
     process.exit(0);
   }
 
-  const baseDir = resolve(options.base);
+  const specPath = resolve(options.spec);
   const outDir = resolve(options.out);
 
-  if (!existsSync(baseDir)) {
-    console.error(`Error: Base directory does not exist: ${baseDir}`);
+  if (!existsSync(specPath)) {
+    console.error(`Error: Spec path does not exist: ${specPath}`);
     process.exit(1);
   }
+
+  const specIsFile = statSync(specPath).isFile();
 
   // Clean and recreate output directory
   if (existsSync(outDir)) {
@@ -505,19 +509,30 @@ async function main() {
   }
   mkdirSync(outDir, { recursive: true });
 
-  if (!options.overlays && !options.env && !options.envFile && !options.bundle) {
+  if (!options.overlay && !options.env && !options.envFile && !options.bundle) {
     // No processing needed - copy base specs as-is
     console.log('No flags specified, copying base specs unchanged');
-    copyBaseSpecs(baseDir, outDir);
+    if (specIsFile) {
+      cpSync(specPath, join(outDir, basename(specPath)));
+    } else {
+      copyBaseSpecs(specPath, outDir);
+    }
     console.log(`Base specs copied to ${outDir}`);
     return;
   }
 
-  console.log(`Base specs: ${baseDir}`);
-  console.log(`Output:     ${outDir}`);
+  console.log(`Spec:   ${specPath}`);
+  console.log(`Output: ${outDir}`);
 
   // Collect base YAML files
-  let yamlFiles = collectYamlFiles(baseDir);
+  let yamlFiles;
+  if (specIsFile) {
+    const content = readFileSync(specPath, 'utf8');
+    const spec = yaml.load(content);
+    yamlFiles = [{ relativePath: basename(specPath), sourcePath: specPath, spec }];
+  } else {
+    yamlFiles = collectYamlFiles(specPath);
+  }
 
   // Bundle: dereference all external $refs to produce self-contained specs
   if (options.bundle) {
@@ -526,9 +541,7 @@ async function main() {
     for (const file of yamlFiles) {
       // Only bundle top-level OpenAPI specs, not shared component files
       if (file.spec?.openapi) {
-        const dereferenced = await $RefParser.dereference(file.sourcePath, {
-          dereference: { circular: 'ignore' }
-        });
+        const dereferenced = await bundleSpec(file.sourcePath);
         bundled.push({ ...file, spec: dereferenced });
         console.log(`  ✓ ${file.relativePath}`);
       } else {
@@ -541,26 +554,29 @@ async function main() {
   let currentResults = null;
 
   // Apply overlays if specified
-  if (options.overlays) {
-    const overlaysDir = resolve(options.overlays);
+  if (options.overlay) {
+    const overlayInput = resolve(options.overlay);
 
-    if (!existsSync(overlaysDir)) {
-      console.error(`Error: Overlays directory does not exist: ${overlaysDir}`);
+    if (!existsSync(overlayInput)) {
+      console.error(`Error: Overlay path does not exist: ${overlayInput}`);
       process.exit(1);
     }
 
-    const overlayFiles = discoverOverlayFiles(overlaysDir);
+    const overlayIsFile = statSync(overlayInput).isFile();
+    const overlayFiles = overlayIsFile ? [overlayInput] : discoverOverlayFiles(overlayInput);
+    const overlayDir = overlayIsFile ? dirname(overlayInput) : overlayInput;
+
     if (overlayFiles.length === 0) {
       console.log('No overlay files found');
     } else {
-      console.log(`Overlays:   ${overlaysDir}`);
+      console.log(`Overlay: ${overlayInput}`);
       console.log('');
 
       for (const overlayPath of overlayFiles) {
         const overlayContent = readFileSync(overlayPath, 'utf8');
         const overlay = yaml.load(overlayContent);
 
-        console.log(`Overlay: ${overlay.info?.title || relative(overlaysDir, overlayPath)}`);
+        console.log(`Overlay: ${overlay.info?.title || relative(overlayDir, overlayPath)}`);
         if (overlay.info?.version) {
           console.log(`Version: ${overlay.info.version}`);
         }
@@ -574,7 +590,7 @@ async function main() {
         const { actionTargets, warnings } = resolveActionTargets(actionFileMap);
         allWarnings = allWarnings.concat(warnings);
 
-        currentResults = applyOverlayWithTargets(inputFiles, overlay, actionTargets, overlaysDir);
+        currentResults = applyOverlayWithTargets(inputFiles, overlay, actionTargets, overlayDir);
       }
     }
   }

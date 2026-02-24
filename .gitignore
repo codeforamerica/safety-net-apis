@@ -5,6 +5,8 @@ package-lock.json
 .idea
 
 # Generated artifacts (state-specific, regenerate as needed)
+dist/
+data/
 packages/generated
 packages/clients/generated
 packages/clients/dist-packages
