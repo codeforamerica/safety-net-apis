@@ -22,7 +22,7 @@ const __dirname = dirname(__filename);
  */
 export async function performSetup({ specsDir, verbose = true, skipValidation = false } = {}) {
   if (!specsDir) {
-    throw new Error('specsDir is required — pass --specs <dir> to specify the specs directory');
+    throw new Error('specsDir is required — pass --spec <dir> to specify the spec file or directory');
   }
   // Check environment variable for skip validation
   if (process.env.SKIP_VALIDATION === 'true') {

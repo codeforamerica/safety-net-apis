@@ -14,8 +14,11 @@
  */
 
 import { writeFile } from 'fs/promises';
-import { existsSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, unlinkSync, realpathSync } from 'fs';
+import { join, resolve } from 'path';
+import { fileURLToPath } from 'url';
+import yaml from 'js-yaml';
+import { bundleSpec } from '../src/bundle.js';
 
 // =============================================================================
 // Argument Parsing
@@ -26,8 +29,12 @@ function parseArgs() {
   const options = {
     name: null,
     resource: null,
+    out: null,
+    bundle: false,
     help: false
   };
+
+  const positional = [];
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -39,12 +46,28 @@ function parseArgs() {
       case '-r':
         options.resource = args[++i];
         break;
+      case '--out':
+      case '-o':
+        options.out = args[++i];
+        break;
+      case '--bundle':
+        options.bundle = true;
+        break;
       case '--help':
       case '-h':
         options.help = true;
         break;
+      default:
+        if (!args[i].startsWith('-')) {
+          positional.push(args[i]);
+        }
+        break;
     }
   }
+
+  // Fall back to positional args: api:new -- pizza-shop Pizza
+  if (!options.name && positional.length >= 1) options.name = positional[0];
+  if (!options.resource && positional.length >= 2) options.resource = positional[1];
 
   return options;
 }
@@ -57,15 +80,20 @@ Generates a new OpenAPI spec with all established patterns pre-applied.
 
 Usage:
   npm run api:new -- --name <api-name> --resource <ResourceName>
+  npm run api:new -- <api-name> <ResourceName>
 
 Options:
   -n, --name <name>        API name in kebab-case (e.g., "benefits", "case-workers")
   -r, --resource <name>    Resource name in PascalCase (e.g., "Benefit", "CaseWorker")
+  -o, --out <dir>          Output directory (default: packages/contracts/)
+      --bundle             Inline all external $refs to produce a self-contained spec
   -h, --help               Show this help message
 
 Examples:
   npm run api:new -- --name benefits --resource Benefit
-  npm run api:new -- --name case-workers --resource CaseWorker
+  npm run api:new -- benefits Benefit
+  npm run api:new -- benefits Benefit --out /tmp
+  npm run api:new -- benefits Benefit --out /tmp --bundle
 
 Generated files:
   - {name}-openapi.yaml              Main API specification (schemas inline)
@@ -405,37 +433,86 @@ async function main() {
   console.log(`   Resource: ${resource}`);
   console.log('');
 
-  // Check if files already exist
-  const specPath = join(process.cwd(), `${name}-openapi.yaml`);
-  const examplesPath = join(process.cwd(), `${name}-openapi-examples.yaml`);
+  // Output to --out dir, or packages/contracts/ by default
+  const contractsDir = resolve(import.meta.dirname, '..');
+  const outDir = options.out || contractsDir;
+  const specFile = `${name}-openapi.yaml`;
+  const examplesFile = `${name}-openapi-examples.yaml`;
+  const specPath = join(outDir, specFile);
+  const examplesPath = join(outDir, examplesFile);
 
   if (existsSync(specPath)) {
     console.error(`Error: ${specPath} already exists.`);
     process.exit(1);
   }
 
+  // Ensure output directory exists
+  mkdirSync(outDir, { recursive: true });
+
   // Generate files
   console.log('📝 Generating files...\n');
 
-  await writeFile(specPath, generateApiSpec(name, resource));
-  console.log(`   ✅ ${specPath}`);
-
+  // Always write examples to outDir (no external $refs to resolve)
   await writeFile(examplesPath, generateExamples(name, resource));
   console.log(`   ✅ ${examplesPath}`);
+
+  if (options.bundle) {
+    // Write raw spec to a temp file inside the contracts directory so that
+    // relative $refs (e.g. ./components/parameters.yaml) resolve correctly.
+    const tempSpecPath = join(contractsDir, `.tmp-${name}-openapi.yaml`);
+    // The spec template references "./{name}-openapi-examples.yaml" so the temp
+    // examples file must use the real name (not a .tmp- prefix) for $ref resolution.
+    const tempExamplesPath = join(contractsDir, `${name}-openapi-examples.yaml`);
+    try {
+      await writeFile(tempSpecPath, generateApiSpec(name, resource));
+      // Write examples adjacent to the temp spec so the examples $ref resolves
+      await writeFile(tempExamplesPath, generateExamples(name, resource));
+
+      console.log('   📦 Bundling (inlining external $refs)...');
+      const bundled = await bundleSpec(tempSpecPath);
+
+      const output = yaml.dump(bundled, {
+        lineWidth: -1,
+        noRefs: true,
+        quotingType: '"',
+        forceQuotes: false
+      });
+      await writeFile(specPath, output);
+      console.log(`   ✅ ${specPath} (bundled)`);
+    } finally {
+      // Clean up temp files
+      try { unlinkSync(tempSpecPath); } catch { /* ignore */ }
+      // Only clean up the temp examples if outDir differs from contractsDir,
+      // otherwise the examples file IS the final output and must be kept.
+      if (resolve(outDir) !== resolve(contractsDir)) {
+        try { unlinkSync(tempExamplesPath); } catch { /* ignore */ }
+      }
+    }
+  } else {
+    await writeFile(specPath, generateApiSpec(name, resource));
+    console.log(`   ✅ ${specPath}`);
+  }
 
   console.log(`
 ✨ API generated successfully!
 
 Next steps:
-  1. Edit ${name}-openapi.yaml to customize your resource schema
-  2. Update ${name}-openapi-examples.yaml with realistic example data
+  1. Edit ${specFile} to customize your resource schema
+  2. Update ${examplesFile} with realistic example data
   3. Run validation: npm run validate
   4. Generate clients: npm run clients:generate
   5. Start mock server: npm run mock:start
 `);
 }
 
-main().catch(error => {
-  console.error('Error:', error.message);
-  process.exit(1);
-});
+// Export for testing
+export { parseArgs, toKebabCase, toCamelCase, toPascalCase, pluralize, generateApiSpec, generateExamples };
+
+// Run main when executed directly
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(resolve(process.argv[1]));
+if (isDirectRun) {
+  main().catch(error => {
+    console.error('Error:', error.message);
+    process.exit(1);
+  });
+}

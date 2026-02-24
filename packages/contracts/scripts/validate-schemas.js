@@ -35,31 +35,32 @@ async function main() {
 
   if (args.includes('--help') || args.includes('-h')) {
     console.log('Schema Validator\n');
-    console.log('Usage: node scripts/validate-schemas.js --specs=<dir>\n');
+    console.log('Usage: node scripts/validate-schemas.js --spec=<file|dir>\n');
     console.log('Discovers YAML files with a $schema field and validates them');
     console.log('against the declared JSON Schema.\n');
     console.log('Flags:');
-    console.log('  --specs=<dir>  Path to specs directory (required)');
+    console.log('  --spec=<file|dir>  Path to spec file or directory (required)');
     console.log('  -h, --help     Show this help message');
     process.exit(0);
   }
 
-  const specsArg = args.find(a => a.startsWith('--specs='));
-  if (!specsArg) {
-    console.error('Error: --specs=<dir> is required.\n');
-    console.error('Usage: node scripts/validate-schemas.js --specs=<dir>');
+  const specArg = args.find(a => a.startsWith('--spec='));
+  if (!specArg) {
+    console.error('Error: --spec=<file|dir> is required.\n');
+    console.error('Usage: node scripts/validate-schemas.js --spec=<file|dir>');
     process.exit(1);
   }
-  const specsDir = resolve(specsArg.split('=')[1]);
+  const specDir = resolve(specArg.split('=')[1]);
+  const isSingleFile = statSync(specDir).isFile();
 
   console.log('='.repeat(70));
   console.log('Schema Validator');
   console.log('='.repeat(70));
 
   console.log(`\nDiscovering YAML files with $schema declarations...`);
-  console.log(`  Directory: ${specsDir}`);
+  console.log(`  ${isSingleFile ? 'File' : 'Directory'}: ${specDir}`);
 
-  const yamlFiles = findYamlFiles(specsDir);
+  const yamlFiles = isSingleFile ? [specDir] : findYamlFiles(specDir);
   const filesToValidate = [];
 
   for (const filePath of yamlFiles) {
@@ -85,10 +86,11 @@ async function main() {
   const ajv = new Ajv2020({ strict: false, allErrors: true });
   let hasErrors = false;
   const results = [];
+  const baseDir = isSingleFile ? dirname(specDir) : specDir;
 
   for (const { filePath, schemaPath, doc } of filesToValidate) {
-    const relFile = relative(specsDir, filePath);
-    const relSchema = relative(specsDir, schemaPath);
+    const relFile = relative(baseDir, filePath);
+    const relSchema = relative(baseDir, schemaPath);
 
     try {
       const schemaContent = readFileSync(schemaPath, 'utf8');
