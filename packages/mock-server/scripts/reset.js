@@ -8,19 +8,19 @@ import { performSetup, displaySetupSummary } from '../src/setup.js';
 import { loadAllSpecs } from '@codeforamerica/safety-net-blueprint-contracts/loader';
 import { clearAll, closeAll } from '../src/database-manager.js';
 
-function parseSpecsDir() {
+function parseSpecDir() {
   const args = process.argv.slice(2);
-  const specsArg = args.find(a => a.startsWith('--specs='));
-  if (!specsArg) {
-    console.error('Error: --specs=<dir> is required.\n');
-    console.error('Usage: node scripts/reset.js --specs=<dir>');
+  const specArg = args.find(a => a.startsWith('--spec='));
+  if (!specArg) {
+    console.error('Error: --spec=<dir> is required.\n');
+    console.error('Usage: node scripts/reset.js --spec=<dir>');
     process.exit(1);
   }
-  return resolve(specsArg.split('=')[1]);
+  return resolve(specArg.split('=')[1]);
 }
 
 async function reset() {
-  const specsDir = parseSpecsDir();
+  const specsDir = parseSpecDir();
 
   console.log('='.repeat(70));
   console.log('Mock Server Reset');

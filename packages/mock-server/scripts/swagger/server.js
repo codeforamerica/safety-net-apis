@@ -11,15 +11,15 @@ import { dirname, join, resolve } from 'path';
 import $RefParser from '@apidevtools/json-schema-ref-parser';
 import { discoverApiSpecs } from '@codeforamerica/safety-net-blueprint-contracts/loader';
 
-function parseSpecsDir() {
+function parseSpecDir() {
   const args = process.argv.slice(2);
-  const specsArg = args.find(a => a.startsWith('--specs='));
-  if (!specsArg) {
-    console.error('Error: --specs=<dir> is required.\n');
-    console.error('Usage: node scripts/swagger/server.js --specs=<dir>');
+  const specArg = args.find(a => a.startsWith('--spec='));
+  if (!specArg) {
+    console.error('Error: --spec=<dir> is required.\n');
+    console.error('Usage: node scripts/swagger/server.js --spec=<dir>');
     process.exit(1);
   }
-  return resolve(specsArg.split('=')[1]);
+  return resolve(specArg.split('=')[1]);
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -157,7 +157,7 @@ async function startSwaggerServer() {
   
   try {
     // Discover all API specs
-    const specsDir = parseSpecsDir();
+    const specsDir = parseSpecDir();
     const apiSpecs = discoverApiSpecs({ specsDir });
     
     if (apiSpecs.length === 0) {

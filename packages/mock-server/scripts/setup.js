@@ -9,13 +9,13 @@ import { closeAll } from '../src/database-manager.js';
 
 async function setup() {
   const args = process.argv.slice(2);
-  const specsArg = args.find(a => a.startsWith('--specs='));
-  if (!specsArg) {
-    console.error('Error: --specs=<dir> is required.\n');
-    console.error('Usage: node scripts/setup.js --specs=<dir>');
+  const specArg = args.find(a => a.startsWith('--spec='));
+  if (!specArg) {
+    console.error('Error: --spec=<dir> is required.\n');
+    console.error('Usage: node scripts/setup.js --spec=<dir>');
     process.exit(1);
   }
-  const specsDir = resolve(specsArg.split('=')[1]);
+  const specsDir = resolve(specArg.split('=')[1]);
 
   console.log('='.repeat(70));
   console.log('Mock Server Setup');
