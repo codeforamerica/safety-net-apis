@@ -10,8 +10,9 @@ import http from 'http';
 import { execSync } from 'child_process';
 import { realpathSync } from 'fs';
 import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { performSetup } from '../src/setup.js';
-import { registerAllRoutes } from '../src/route-generator.js';
+import { registerAllRoutes, registerStateMachineRoutes } from '../src/route-generator.js';
 import { closeAll } from '../src/database-manager.js';
 import { validateJSON } from '../src/validator.js';
 
@@ -76,10 +77,13 @@ async function startMockServer() {
     // Perform setup (load specs and seed databases) for each spec directory
     const specDirs = parseSpecDirs();
     let apiSpecs = [];
+    let allStateMachines = [];
     for (const specsDir of specDirs) {
       const result = await performSetup({ specsDir, verbose: true });
       apiSpecs = apiSpecs.concat(result.apiSpecs);
+      allStateMachines = allStateMachines.concat(result.stateMachines);
     }
+
 
     // Create Express app
     const app = express();
@@ -88,7 +92,7 @@ async function startMockServer() {
     app.use(cors({
       origin: '*',
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Caller-Id'],
       credentials: true
     }));
 
@@ -105,6 +109,10 @@ async function startMockServer() {
     // Register API routes dynamically
     const baseUrl = `http://${HOST}:${PORT}`;
     const allEndpoints = registerAllRoutes(app, apiSpecs, baseUrl);
+
+    // Register state machine RPC routes
+    const rpcEndpoints = registerStateMachineRoutes(app, allStateMachines, apiSpecs);
+
 
     // 404 handler for undefined routes
     app.use((req, res) => {
@@ -157,6 +165,14 @@ async function startMockServer() {
             console.log(`  ${endpoint.method.padEnd(6)} http://${HOST}:${PORT}${endpoint.path}`);
           }
         }
+      }
+    }
+
+    // Display RPC endpoints (state machine transitions)
+    if (rpcEndpoints.length > 0) {
+      console.log(`\nState Machine RPC Endpoints:`);
+      for (const ep of rpcEndpoints) {
+        console.log(`  ${ep.method.padEnd(6)} http://${HOST}:${PORT}${ep.path} - ${ep.description}`);
       }
     }
 

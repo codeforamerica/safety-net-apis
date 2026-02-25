@@ -10,11 +10,11 @@ version: "1.0"
 # This project uses a contract-driven architecture with two API types:
 #
 # REST APIs: CRUD operations on domain resources
-#   - Example: GET /workflow/tasks/{id}, POST /intake/applications
+#   - Example: GET /tasks/{id}, POST /intake/applications
 #   - Defined by: OpenAPI specs
 #
 # RPC APIs: Behavioral operations that trigger state transitions
-#   - Example: POST /workflow/tasks/{id}/claim
+#   - Example: POST /tasks/{id}/claim
 #   - Generated from: state machine triggers in contract artifacts
 #
 # See docs/architecture/contract-driven-architecture.md for details.
@@ -25,7 +25,7 @@ version: "1.0"
 naming:
   # URL path segments: kebab-case (lowercase with hyphens)
   # REST example: /user-profiles, /order-items
-  # RPC example: /workflow/tasks/{id}/claim
+  # RPC example: /tasks/{id}/claim
   paths: kebab-case
 
   # Path parameters: camelCase inside braces
