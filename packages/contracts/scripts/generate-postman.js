@@ -1,20 +1,59 @@
+#!/usr/bin/env node
 /**
  * Postman Collection Generator
- * Generates a Postman collection from OpenAPI specifications and examples
+ * Generates a Postman collection from resolved OpenAPI specifications and examples.
+ *
+ * Usage:
+ *   node scripts/generate-postman.js [--spec=<dir>] [--out=<file>]
+ *   npm run postman
+ *
+ * Flags:
+ *   --spec=<dir>   Directory containing resolved OpenAPI specs (default: resolved/)
+ *   --out=<file>   Output file path (default: generated/postman-collection.json)
+ *   -h, --help     Show this help message
  */
 
-import { loadAllSpecs, discoverApiSpecs, getExamplesPath } from '@codeforamerica/safety-net-blueprint-contracts/loader';
-import { validateAll, getValidationStatus } from '@codeforamerica/safety-net-blueprint-contracts/validation';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { loadAllSpecs, getExamplesPath } from '../src/validation/openapi-loader.js';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 import yaml from 'js-yaml';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const specsDir = join(__dirname, '../../contracts');
 
 const BASE_URL = process.env.POSTMAN_BASE_URL || 'http://localhost:1080';
+
+let specsDir; // Set from parsed args in generatePostmanCollection
+
+// =============================================================================
+// Argument Parsing
+// =============================================================================
+
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const options = {
+    spec: join(__dirname, '../resolved'),
+    out: join(__dirname, '../generated/postman-collection.json'),
+    help: false
+  };
+
+  for (const arg of args) {
+    if (arg === '--help' || arg === '-h') {
+      options.help = true;
+    } else if (arg.startsWith('--spec=')) {
+      options.spec = arg.split('=')[1];
+    } else if (arg.startsWith('--out=')) {
+      options.out = arg.split('=')[1];
+    }
+  }
+
+  return options;
+}
+
+// =============================================================================
+// Examples
+// =============================================================================
 
 /**
  * Load examples from YAML file (uses state-specific if STATE env var set)
@@ -35,23 +74,23 @@ function loadExamples(resourceName) {
  */
 function extractIndividualResources(examples) {
   const resources = [];
-  
+
   for (const [key, value] of Object.entries(examples)) {
     if (!value || typeof value !== 'object') {
       continue;
     }
-    
+
     // Skip list examples
     if (value.items && Array.isArray(value.items)) {
       continue;
     }
-    
+
     // Skip payload examples
     const lowerKey = key.toLowerCase();
     if (lowerKey.includes('payload') || lowerKey.includes('create') || lowerKey.includes('update')) {
       continue;
     }
-    
+
     // Only include resources that have an 'id' field
     if (value.id) {
       resources.push({
@@ -61,16 +100,20 @@ function extractIndividualResources(examples) {
       });
     }
   }
-  
+
   return resources;
 }
 
+// =============================================================================
+// Test Script Generation
+// =============================================================================
+
 /**
- * Generate basic test script for a request
+ * Generate basic test script for a CRUD request
  */
 function generateTestScript(method, endpoint) {
   const tests = [];
-  
+
   // Status code test based on method
   if (method === 'GET') {
     tests.push(`pm.test("Status code is 200", function () {`);
@@ -80,7 +123,7 @@ function generateTestScript(method, endpoint) {
     tests.push(`pm.test("Response is JSON", function () {`);
     tests.push(`    pm.response.to.be.json;`);
     tests.push(`});`);
-    
+
     // List endpoint tests
     if (!endpoint.path.includes('{')) {
       tests.push(``);
@@ -129,9 +172,29 @@ function generateTestScript(method, endpoint) {
     tests.push(`    pm.response.to.have.status(204);`);
     tests.push(`});`);
   }
-  
+
   return tests.join('\n');
 }
+
+/**
+ * Generate test script for an RPC (state transition) request
+ */
+function generateRpcTestScript() {
+  const tests = [];
+  tests.push(`pm.test("Status code is 200", function () {`);
+  tests.push(`    pm.response.to.have.status(200);`);
+  tests.push(`});`);
+  tests.push(``);
+  tests.push(`pm.test("Response is JSON with id", function () {`);
+  tests.push(`    const jsonData = pm.response.json();`);
+  tests.push(`    pm.expect(jsonData).to.have.property('id');`);
+  tests.push(`});`);
+  return tests.join('\n');
+}
+
+// =============================================================================
+// Request Helpers
+// =============================================================================
 
 /**
  * Create a Postman request object
@@ -142,7 +205,7 @@ function createRequest(method, url, body = null, description = '') {
     header: [],
     url
   };
-  
+
   if (body) {
     request.header.push({
       key: 'Content-Type',
@@ -159,11 +222,11 @@ function createRequest(method, url, body = null, description = '') {
       }
     };
   }
-  
+
   if (description) {
     request.description = description;
   }
-  
+
   return request;
 }
 
@@ -174,7 +237,7 @@ function createPostmanUrl(path, baseUrl = '{{baseUrl}}') {
   const segments = path.split('/').filter(s => s);
   const pathSegments = [];
   const variables = [];
-  
+
   for (const segment of segments) {
     if (segment.startsWith('{') && segment.endsWith('}')) {
       const varName = segment.slice(1, -1);
@@ -184,7 +247,7 @@ function createPostmanUrl(path, baseUrl = '{{baseUrl}}') {
       pathSegments.push(segment);
     }
   }
-  
+
   return {
     raw: `${baseUrl}/${pathSegments.join('/')}`,
     host: [baseUrl],
@@ -194,12 +257,30 @@ function createPostmanUrl(path, baseUrl = '{{baseUrl}}') {
 }
 
 /**
+ * Capitalize first letter
+ */
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
+ * Convert plural to singular (simple)
+ */
+function singularize(str) {
+  return str.endsWith('s') ? str.slice(0, -1) : str;
+}
+
+// =============================================================================
+// CRUD Request Generators
+// =============================================================================
+
+/**
  * Generate requests for a GET list endpoint
  */
 function generateListRequests(apiMetadata, endpoint, examples) {
   const requests = [];
   const url = createPostmanUrl(endpoint.path);
-  
+
   // 1. List all (default pagination)
   requests.push({
     name: `List All ${capitalize(apiMetadata.name)}`,
@@ -217,7 +298,7 @@ function generateListRequests(apiMetadata, endpoint, examples) {
       }
     }]
   });
-  
+
   // 2. List with custom pagination
   requests.push({
     name: `List ${capitalize(apiMetadata.name)} (Paginated)`,
@@ -235,15 +316,15 @@ function generateListRequests(apiMetadata, endpoint, examples) {
       }
     }]
   });
-  
+
   // 3. Search examples (if search parameter exists)
   const hasSearch = endpoint.parameters.some(p => p.name === 'search');
   if (hasSearch && examples.length > 0) {
     // Get searchable field value from first example
-    const searchValue = examples[0].data.name?.firstName || 
+    const searchValue = examples[0].data.name?.firstName ||
                         examples[0].data.email?.split('@')[0] ||
                         'test';
-    
+
     requests.push({
       name: `Search ${capitalize(apiMetadata.name)}`,
       request: createRequest('GET', {
@@ -261,13 +342,13 @@ function generateListRequests(apiMetadata, endpoint, examples) {
       }]
     });
   }
-  
+
   // 4. Filter examples (if other query params exist)
   for (const param of endpoint.parameters) {
     if (['search', 'limit', 'offset'].includes(param.name)) {
       continue;
     }
-    
+
     // Add filter example
     const filterValue = param.schema?.enum?.[0] || 'example';
     requests.push({
@@ -286,7 +367,7 @@ function generateListRequests(apiMetadata, endpoint, examples) {
       }]
     });
   }
-  
+
   return requests;
 }
 
@@ -295,7 +376,7 @@ function generateListRequests(apiMetadata, endpoint, examples) {
  */
 function generateGetByIdRequests(apiMetadata, endpoint, examples) {
   const requests = [];
-  
+
   // Create one request per example
   for (const example of examples) {
     const url = createPostmanUrl(endpoint.path);
@@ -304,7 +385,7 @@ function generateGetByIdRequests(apiMetadata, endpoint, examples) {
       raw: url.raw.replace(/\{\{[^}]+\}\}/, example.data.id),
       path: url.path.map(seg => seg.includes('{{') ? example.data.id : seg)
     };
-    
+
     requests.push({
       name: `Get ${example.name}`,
       request: createRequest('GET', urlWithId),
@@ -316,7 +397,7 @@ function generateGetByIdRequests(apiMetadata, endpoint, examples) {
       }]
     });
   }
-  
+
   // Add 404 test example
   const url = createPostmanUrl(endpoint.path);
   const notFoundUrl = {
@@ -324,7 +405,7 @@ function generateGetByIdRequests(apiMetadata, endpoint, examples) {
     raw: url.raw.replace(/\{\{[^}]+\}\}/, '00000000-0000-0000-0000-000000000000'),
     path: url.path.map(seg => seg.includes('{{') ? '00000000-0000-0000-0000-000000000000' : seg)
   };
-  
+
   requests.push({
     name: `Get Non-Existent ${capitalize(singularize(apiMetadata.name))} (404)`,
     request: createRequest('GET', notFoundUrl),
@@ -345,7 +426,7 @@ function generateGetByIdRequests(apiMetadata, endpoint, examples) {
       }
     }]
   });
-  
+
   return requests;
 }
 
@@ -355,17 +436,17 @@ function generateGetByIdRequests(apiMetadata, endpoint, examples) {
 function generateCreateRequests(apiMetadata, endpoint, examples) {
   const requests = [];
   const url = createPostmanUrl(endpoint.path);
-  
+
   if (examples.length === 0) {
     return requests;
   }
-  
+
   // 1. Create with minimal required fields
   const minimalData = { ...examples[0].data };
   delete minimalData.id;
   delete minimalData.createdAt;
   delete minimalData.updatedAt;
-  
+
   requests.push({
     name: `Create ${capitalize(singularize(apiMetadata.name))}`,
     request: createRequest('POST', url, minimalData,
@@ -377,14 +458,14 @@ function generateCreateRequests(apiMetadata, endpoint, examples) {
       }
     }]
   });
-  
+
   // 2. Create with different data (if we have multiple examples)
   if (examples.length > 1) {
     const altData = { ...examples[1].data };
     delete altData.id;
     delete altData.createdAt;
     delete altData.updatedAt;
-    
+
     requests.push({
       name: `Create ${capitalize(singularize(apiMetadata.name))} (Alternative)`,
       request: createRequest('POST', url, altData,
@@ -397,7 +478,7 @@ function generateCreateRequests(apiMetadata, endpoint, examples) {
       }]
     });
   }
-  
+
   return requests;
 }
 
@@ -406,11 +487,11 @@ function generateCreateRequests(apiMetadata, endpoint, examples) {
  */
 function generateUpdateRequests(apiMetadata, endpoint, examples) {
   const requests = [];
-  
+
   if (examples.length === 0) {
     return requests;
   }
-  
+
   const example = examples[0];
   const url = createPostmanUrl(endpoint.path);
   const urlWithId = {
@@ -418,16 +499,16 @@ function generateUpdateRequests(apiMetadata, endpoint, examples) {
     raw: url.raw.replace(/\{\{[^}]+\}\}/, example.data.id),
     path: url.path.map(seg => seg.includes('{{') ? example.data.id : seg)
   };
-  
+
   // 1. Update single field
   const singleFieldUpdate = {};
-  const numericField = Object.keys(example.data).find(key => 
+  const numericField = Object.keys(example.data).find(key =>
     typeof example.data[key] === 'number' && !['id'].includes(key)
   );
   if (numericField) {
     singleFieldUpdate[numericField] = example.data[numericField] + 100;
   }
-  
+
   if (Object.keys(singleFieldUpdate).length > 0) {
     requests.push({
       name: `Update ${capitalize(singularize(apiMetadata.name))} - Single Field`,
@@ -441,14 +522,14 @@ function generateUpdateRequests(apiMetadata, endpoint, examples) {
       }]
     });
   }
-  
+
   // 2. Update nested object (if exists)
-  const nestedField = Object.keys(example.data).find(key => 
-    example.data[key] && typeof example.data[key] === 'object' && 
+  const nestedField = Object.keys(example.data).find(key =>
+    example.data[key] && typeof example.data[key] === 'object' &&
     !Array.isArray(example.data[key]) &&
     !['id', 'createdAt', 'updatedAt'].includes(key)
   );
-  
+
   if (nestedField) {
     const nestedUpdate = { [nestedField]: example.data[nestedField] };
     requests.push({
@@ -463,7 +544,7 @@ function generateUpdateRequests(apiMetadata, endpoint, examples) {
       }]
     });
   }
-  
+
   // 3. Update multiple fields
   const multiFieldUpdate = {};
   let fieldCount = 0;
@@ -476,7 +557,7 @@ function generateUpdateRequests(apiMetadata, endpoint, examples) {
       fieldCount++;
     }
   }
-  
+
   if (Object.keys(multiFieldUpdate).length > 1) {
     requests.push({
       name: `Update ${capitalize(singularize(apiMetadata.name))} - Multiple Fields`,
@@ -490,7 +571,7 @@ function generateUpdateRequests(apiMetadata, endpoint, examples) {
       }]
     });
   }
-  
+
   return requests;
 }
 
@@ -499,11 +580,11 @@ function generateUpdateRequests(apiMetadata, endpoint, examples) {
  */
 function generateDeleteRequests(apiMetadata, endpoint, examples) {
   const requests = [];
-  
+
   if (examples.length === 0) {
     return requests;
   }
-  
+
   const example = examples[examples.length - 1]; // Use last example for delete
   const url = createPostmanUrl(endpoint.path);
   const urlWithId = {
@@ -511,7 +592,7 @@ function generateDeleteRequests(apiMetadata, endpoint, examples) {
     raw: url.raw.replace(/\{\{[^}]+\}\}/, example.data.id),
     path: url.path.map(seg => seg.includes('{{') ? example.data.id : seg)
   };
-  
+
   requests.push({
     name: `Delete ${capitalize(singularize(apiMetadata.name))}`,
     request: createRequest('DELETE', urlWithId,
@@ -524,9 +605,89 @@ function generateDeleteRequests(apiMetadata, endpoint, examples) {
       }
     }]
   });
-  
+
   return requests;
 }
+
+// =============================================================================
+// RPC Request Generators
+// =============================================================================
+
+/**
+ * Generate example body data from an OpenAPI schema definition
+ */
+function generateExampleBody(schema) {
+  if (!schema || !schema.properties) return null;
+  const body = {};
+  for (const [key, prop] of Object.entries(schema.properties)) {
+    switch (prop.type) {
+      case 'number':
+      case 'integer':
+        body[key] = 0;
+        break;
+      case 'boolean':
+        body[key] = true;
+        break;
+      default:
+        body[key] = `example ${key}`;
+    }
+  }
+  return Object.keys(body).length > 0 ? body : null;
+}
+
+/**
+ * Generate requests for RPC (state transition) endpoints.
+ * RPC endpoints are POST on item sub-paths (e.g., /tasks/{taskId}/claim).
+ */
+function generateRpcRequests(apiMetadata, endpoint, examples) {
+  const requests = [];
+
+  // Extract trigger name from last path segment (/tasks/{taskId}/claim → claim)
+  const pathSegments = endpoint.path.split('/').filter(s => s);
+  const triggerName = pathSegments[pathSegments.length - 1];
+  const displayName = `${capitalize(triggerName)} ${capitalize(singularize(apiMetadata.name))}`;
+
+  const url = createPostmanUrl(endpoint.path);
+
+  // Substitute first example ID into URL
+  let urlWithId = url;
+  if (examples.length > 0) {
+    urlWithId = {
+      ...url,
+      raw: url.raw.replace(/\{\{[^}]+\}\}/, examples[0].data.id),
+      path: url.path.map(seg => seg.includes('{{') ? examples[0].data.id : seg)
+    };
+  }
+
+  const body = generateExampleBody(endpoint.requestSchema);
+
+  const request = createRequest('POST', urlWithId, body,
+    `Trigger the ${triggerName} transition`);
+
+  // Add X-Caller-Id header
+  request.header.push({
+    key: 'X-Caller-Id',
+    value: '{{callerId}}',
+    type: 'text'
+  });
+
+  requests.push({
+    name: displayName,
+    request,
+    event: [{
+      listen: 'test',
+      script: {
+        exec: generateRpcTestScript().split('\n')
+      }
+    }]
+  });
+
+  return requests;
+}
+
+// =============================================================================
+// API Request Generation
+// =============================================================================
 
 /**
  * Generate all requests for an API
@@ -534,106 +695,102 @@ function generateDeleteRequests(apiMetadata, endpoint, examples) {
 function generateApiRequests(apiMetadata) {
   const examples = extractIndividualResources(loadExamples(apiMetadata.name));
   const items = [];
-  
+
   // Sort endpoints: GET (list), GET (id), POST, PATCH, DELETE
   const sortedEndpoints = [...apiMetadata.endpoints].sort((a, b) => {
     const order = { GET: 0, POST: 1, PATCH: 2, DELETE: 3 };
     const aOrder = order[a.method] ?? 999;
     const bOrder = order[b.method] ?? 999;
     if (aOrder !== bOrder) return aOrder - bOrder;
-    
+
     // GET list before GET by ID
     if (a.method === 'GET' && b.method === 'GET') {
       return a.path.includes('{') ? 1 : -1;
     }
     return 0;
   });
-  
+
   for (const endpoint of sortedEndpoints) {
     const isCollection = !endpoint.path.includes('{');
     const isItem = endpoint.path.includes('{');
-    
+
     let requests = [];
-    
+
     if (endpoint.method === 'GET' && isCollection) {
       requests = generateListRequests(apiMetadata, endpoint, examples);
     } else if (endpoint.method === 'GET' && isItem) {
       requests = generateGetByIdRequests(apiMetadata, endpoint, examples);
     } else if (endpoint.method === 'POST' && isCollection) {
       requests = generateCreateRequests(apiMetadata, endpoint, examples);
+    } else if (endpoint.method === 'POST' && isItem) {
+      requests = generateRpcRequests(apiMetadata, endpoint, examples);
     } else if (endpoint.method === 'PATCH' && isItem) {
       requests = generateUpdateRequests(apiMetadata, endpoint, examples);
     } else if (endpoint.method === 'DELETE' && isItem) {
       requests = generateDeleteRequests(apiMetadata, endpoint, examples);
     }
-    
+
     items.push(...requests);
   }
-  
+
   return items;
 }
 
-/**
- * Capitalize first letter
- */
-function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
+// =============================================================================
+// Main
+// =============================================================================
 
 /**
- * Convert plural to singular (simple)
+ * Generate a simple UUID for Postman collection
  */
-function singularize(str) {
-  return str.endsWith('s') ? str.slice(0, -1) : str;
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 /**
  * Generate Postman collection
  */
 async function generatePostmanCollection() {
+  const options = parseArgs();
+
+  if (options.help) {
+    console.log(`
+Postman Collection Generator
+
+Generates a Postman collection from resolved OpenAPI specifications.
+
+Usage:
+  node scripts/generate-postman.js [--spec=<dir>] [--out=<file>]
+
+Flags:
+  --spec=<dir>   Directory containing resolved OpenAPI specs (default: resolved/)
+  --out=<file>   Output file path (default: generated/postman-collection.json)
+  -h, --help     Show this help message
+`);
+    process.exit(0);
+  }
+
+  specsDir = resolve(options.spec);
+  const outputPath = resolve(options.out);
+  const outputDir = dirname(outputPath);
+
   console.log('='.repeat(70));
   console.log('Postman Collection Generator');
   console.log('='.repeat(70));
-  
+
   // Load API specs
   console.log('\nLoading OpenAPI specifications...');
+  console.log(`  Specs directory: ${specsDir}`);
   const apiSpecs = await loadAllSpecs({ specsDir });
   console.log(`✓ Loaded ${apiSpecs.length} API(s)`);
-  
-  // Validate specs and examples
-  console.log('\nValidating specifications and examples...');
-  const discoveredSpecs = discoverApiSpecs({ specsDir });
-  const specsWithExamples = discoveredSpecs.map(spec => ({
-    ...spec,
-    examplesPath: getExamplesPath(spec.name, specsDir)
-  }));
-  
-  const validationResults = await validateAll(specsWithExamples);
-  
-  // Check for validation errors
-  const hasErrors = Object.values(validationResults).some(r => !r.valid);
-  
-  for (const [apiName, result] of Object.entries(validationResults)) {
-    const status = getValidationStatus(result.spec);
-    const examplesStatus = getValidationStatus(result.examples);
-    
-    console.log(`  ${status.emoji} ${apiName}: ${status.message}`);
-    if (result.examples.warnings.length > 0 || result.examples.errors.length > 0) {
-      console.log(`    Examples: ${examplesStatus.message}`);
-    }
-  }
-  
-  if (hasErrors) {
-    throw new Error('Validation failed. Run "npm run validate" for detailed errors.');
-  }
-  
-  console.log('✓ Validation passed');
-  
+
   // Check for existing collection to preserve _postman_id
-  const outputDir = join(__dirname, '../generated');
-  const outputPath = join(outputDir, 'postman-collection.json');
   let existingPostmanId = null;
-  
+
   if (existsSync(outputPath)) {
     try {
       const existingCollection = JSON.parse(readFileSync(outputPath, 'utf8'));
@@ -646,7 +803,7 @@ async function generatePostmanCollection() {
       console.log('⚠ Could not read existing collection, will generate new ID');
     }
   }
-  
+
   // Generate collection
   const collection = {
     info: {
@@ -664,20 +821,20 @@ async function generatePostmanCollection() {
       }
     ]
   };
-  
+
   // Add folder for each API
   console.log('\nGenerating requests...');
   for (const api of apiSpecs) {
     console.log(`  Processing ${api.title}...`);
     const requests = generateApiRequests(api);
     console.log(`    Generated ${requests.length} requests`);
-    
+
     collection.item.push({
       name: api.title,
       item: requests,
       description: api.title
     });
-    
+
     // Add resource ID variables
     const examples = extractIndividualResources(loadExamples(api.name));
     if (examples.length > 0) {
@@ -689,14 +846,14 @@ async function generatePostmanCollection() {
       });
     }
   }
-  
+
   // Write output
   if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true });
   }
-  
+
   writeFileSync(outputPath, JSON.stringify(collection, null, 2));
-  
+
   console.log('\n' + '='.repeat(70));
   console.log('✓ Postman collection generated successfully!');
   console.log('='.repeat(70));
@@ -712,21 +869,12 @@ async function generatePostmanCollection() {
   console.log('');
 }
 
-/**
- * Generate a simple UUID for Postman collection
- */
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
+// Run generator
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(resolve(process.argv[1]));
+if (isDirectRun) {
+  generatePostmanCollection().catch(error => {
+    console.error('\n❌ Generation failed:', error.message);
+    console.error(error.stack);
+    process.exit(1);
   });
 }
-
-// Run generator
-generatePostmanCollection().catch(error => {
-  console.error('\n❌ Generation failed:', error.message);
-  console.error(error.stack);
-  process.exit(1);
-});
-

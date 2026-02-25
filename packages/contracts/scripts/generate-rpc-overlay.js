@@ -218,6 +218,7 @@ export function generateOverlay(stateMachine, endpointInfo) {
     actions: [
       {
         target: '$.paths',
+        file: stateMachine.apiSpec,
         description: `Add state machine transition endpoints for ${stateMachine.domain} ${stateMachine.object.toLowerCase()}s`,
         update: pathsUpdate
       }
