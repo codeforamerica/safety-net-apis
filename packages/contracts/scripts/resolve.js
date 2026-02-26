@@ -48,6 +48,7 @@ function parseArgs() {
     env: null,
     envFile: null,
     bundle: false,
+    reconcileExamples: false,
     help: false
   };
 
@@ -66,6 +67,11 @@ function parseArgs() {
       options.env = arg.split('=')[1];
     } else if (arg.startsWith('--env-file=')) {
       options.envFile = arg.split('=')[1];
+    } else if (arg === '--reconcile-examples') {
+      options.reconcileExamples = true;
+    } else {
+      console.error(`Error: Unknown argument: ${arg}`);
+      process.exit(1);
     }
   }
 
@@ -88,12 +94,14 @@ Flags:
   --bundle           Inline all external $refs to produce self-contained specs
   --env=<env>        Target environment for x-environments filtering (optional)
   --env-file=<file>  Path to env file for \${VAR} placeholder substitution (optional)
+  --reconcile-examples  Reconcile examples against resolved schemas after output
   -h, --help         Show this help message
 
 Without --overlay, base specs are copied to --out unchanged.
 With --bundle, all external $ref references are dereferenced inline.
 With --env, nodes whose x-environments array doesn't include the target env are removed.
 With --env-file, \${VAR} placeholders in string values are substituted (process.env overrides file values).
+With --reconcile-examples, example data is reconciled against the resolved schemas after output.
 
 Examples:
   npm run resolve
@@ -465,7 +473,7 @@ function writeResolvedSpecs(results, targetDir) {
  * Copy base specs to output directory unchanged
  */
 function copyBaseSpecs(baseDir, outDir) {
-  const skip = new Set(['package.json', 'node_modules']);
+  const skip = new Set(['package.json', 'node_modules', 'overlays']);
   const files = readdirSync(baseDir, { withFileTypes: true });
   for (const file of files) {
     if (skip.has(file.name)) continue;
@@ -512,7 +520,7 @@ async function main() {
   }
   mkdirSync(outDir, { recursive: true });
 
-  if (!options.overlay && !options.env && !options.envFile && !options.bundle) {
+  if (!options.overlay && !options.env && !options.envFile && !options.bundle && !options.reconcileExamples) {
     // No processing needed - copy base specs as-is
     console.log('No flags specified, copying base specs unchanged');
     if (specIsFile) {
@@ -537,22 +545,6 @@ async function main() {
     yamlFiles = collectYamlFiles(specPath);
   }
 
-  // Bundle: dereference all external $refs to produce self-contained specs
-  if (options.bundle) {
-    console.log('\nBundling: inlining external $refs...');
-    const bundled = [];
-    for (const file of yamlFiles) {
-      // Only bundle top-level OpenAPI specs, not shared component files
-      if (file.spec?.openapi) {
-        const dereferenced = await bundleSpec(file.sourcePath);
-        bundled.push({ ...file, spec: dereferenced });
-        console.log(`  ✓ ${file.relativePath}`);
-      } else {
-        bundled.push(file);
-      }
-    }
-    yamlFiles = bundled;
-  }
   let allWarnings = [];
   let currentResults = null;
 
@@ -640,17 +632,62 @@ async function main() {
     }
   }
 
-  // When bundling, skip shared component files (they've been inlined)
-  if (options.bundle) {
-    for (const [relativePath] of currentResults) {
-      if (!relativePath.endsWith('-openapi.yaml') && !relativePath.endsWith('-openapi-examples.yaml')) {
-        currentResults.delete(relativePath);
-      }
+  // Remove overlay files from output (they've been applied)
+  for (const [relativePath] of currentResults) {
+    if (relativePath.startsWith('overlays/') || relativePath.startsWith('overlays\\')) {
+      currentResults.delete(relativePath);
     }
   }
 
   // Write resolved specs
   writeResolvedSpecs(currentResults, outDir);
+
+  // Bundle: dereference all external $refs to produce self-contained specs
+  // Done after overlays so that $ref targets reflect overlay changes
+  if (options.bundle) {
+    console.log('\nBundling: inlining external $refs...');
+    for (const [relativePath] of currentResults) {
+      if (!relativePath.endsWith('-openapi.yaml')) continue;
+      const filePath = join(outDir, relativePath);
+      const dereferenced = await bundleSpec(filePath);
+      const output = yaml.dump(dereferenced, {
+        lineWidth: -1,
+        noRefs: true,
+        quotingType: '"',
+        forceQuotes: false
+      });
+      writeFileSync(filePath, output);
+      console.log(`  ✓ ${relativePath}`);
+    }
+
+    // Remove shared component files (they've been inlined)
+    for (const [relativePath] of currentResults) {
+      if (!relativePath.endsWith('-openapi.yaml') && !relativePath.endsWith('-openapi-examples.yaml')) {
+        const filePath = join(outDir, relativePath);
+        if (existsSync(filePath)) {
+          rmSync(filePath, { recursive: true });
+        }
+      }
+    }
+    // Remove empty component directories
+    const outEntries = readdirSync(outDir, { withFileTypes: true });
+    for (const entry of outEntries) {
+      if (entry.isDirectory()) {
+        const dirPath = join(outDir, entry.name);
+        const contents = readdirSync(dirPath);
+        if (contents.length === 0) {
+          rmSync(dirPath, { recursive: true });
+        }
+      }
+    }
+  }
+
+  // Reconcile examples against resolved schemas
+  if (options.reconcileExamples) {
+    console.log('\nReconciling examples against resolved schemas...');
+    const { reconcileAllExamples } = await import('./reconcile-examples.js');
+    await reconcileAllExamples({ specsDir: outDir });
+  }
 
   // Display warnings if any
   if (allWarnings.length > 0) {
