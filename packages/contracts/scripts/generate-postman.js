@@ -9,12 +9,12 @@
  *
  * Flags:
  *   --spec=<dir>   Directory containing resolved OpenAPI specs (default: resolved/)
- *   --out=<file>   Output file path (default: generated/postman-collection.json)
+ *   --out=<path>   Output file or directory (default: generated/postman-collection.json)
  *   -h, --help     Show this help message
  */
 
 import { loadAllSpecs, getExamplesPath } from '../src/validation/openapi-loader.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync, statSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
 import yaml from 'js-yaml';
@@ -45,6 +45,9 @@ function parseArgs() {
       options.spec = arg.split('=')[1];
     } else if (arg.startsWith('--out=')) {
       options.out = arg.split('=')[1];
+    } else {
+      console.error(`Error: Unknown argument: ${arg}`);
+      process.exit(1);
     }
   }
 
@@ -102,6 +105,162 @@ function extractIndividualResources(examples) {
   }
 
   return resources;
+}
+
+// =============================================================================
+// State Machine Support
+// =============================================================================
+
+/**
+ * Load a state machine definition for an API (if one exists).
+ */
+function loadStateMachine(apiName) {
+  const smPath = join(specsDir, `${apiName}-state-machine.yaml`);
+  if (!existsSync(smPath)) return null;
+  try {
+    return yaml.load(readFileSync(smPath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Compute a valid ordering of transition triggers given an initial state.
+ * Uses BFS to find a path that covers every trigger at least once.
+ *
+ * Returns an array of trigger names in execution order, or null if no
+ * valid ordering exists.
+ */
+function computeTransitionOrder(stateMachine) {
+  const transitions = stateMachine.transitions || [];
+  if (transitions.length === 0) return [];
+
+  const allTriggers = new Set(transitions.map(t => t.trigger));
+  const initialState = stateMachine.initialState;
+
+  // BFS: state = { currentState, path: [trigger, ...], covered: Set }
+  const queue = [{ currentState: initialState, path: [], covered: new Set() }];
+  const visited = new Map(); // "state|coveredKey" → true
+
+  while (queue.length > 0) {
+    const { currentState, path, covered } = queue.shift();
+
+    if (covered.size === allTriggers.size) {
+      return path;
+    }
+
+    // Try each transition from current state
+    for (const t of transitions) {
+      if (t.from !== currentState) continue;
+
+      const newCovered = new Set(covered);
+      newCovered.add(t.trigger);
+
+      const key = `${t.to}|${[...newCovered].sort().join(',')}`;
+      if (visited.has(key)) continue;
+      visited.set(key, true);
+
+      queue.push({
+        currentState: t.to,
+        path: [...path, t.trigger],
+        covered: newCovered
+      });
+    }
+  }
+
+  // Fallback: return triggers in definition order (won't all pass, but won't crash)
+  return [...allTriggers];
+}
+
+/**
+ * Pick the best example for RPC transitions and determine the caller ID.
+ *
+ * If the state machine's initial state matches an example's status, prefer
+ * that example (the transition ordering starts from initialState). Otherwise
+ * we need to find an example whose current state can reach all triggers via
+ * a modified ordering.
+ *
+ * Returns { example, callerId, transitionOrder }.
+ */
+function planRpcExecution(stateMachine, examples) {
+  const transitions = stateMachine.transitions || [];
+  const initialState = stateMachine.initialState;
+
+  // Standard ordering assumes we start from initialState
+  const standardOrder = computeTransitionOrder(stateMachine);
+
+  // Try to find an example in the initial state
+  const initialExample = examples.find(e => e.data.status === initialState);
+  if (initialExample) {
+    // For the initial state, there's usually no assignedToId yet. The first
+    // transition (e.g. claim) will set it. Use a fixed caller ID.
+    const callerId = initialExample.data.assignedToId || 'postman-test-user';
+    return { example: initialExample, callerId, transitionOrder: standardOrder };
+  }
+
+  // No example in initial state. Find one whose state appears as a "from" in
+  // some transition, and compute an ordering from that state.
+  for (const example of examples) {
+    const exState = example.data.status;
+    if (!exState) continue;
+
+    // Check if any transition starts from this state
+    const hasTransition = transitions.some(t => t.from === exState);
+    if (!hasTransition) continue;
+
+    // Compute ordering starting from example's current state
+    const order = computeTransitionOrderFrom(stateMachine, exState);
+    if (order && order.length > 0) {
+      const callerId = example.data.assignedToId || 'postman-test-user';
+      return { example, callerId, transitionOrder: order };
+    }
+  }
+
+  // Last resort: use first example with standard ordering
+  const callerId = examples[0]?.data?.assignedToId || 'postman-test-user';
+  return { example: examples[0], callerId, transitionOrder: standardOrder };
+}
+
+/**
+ * Compute transition order starting from an arbitrary state (not necessarily
+ * the initial state). Same BFS as computeTransitionOrder but with a custom
+ * start state.
+ */
+function computeTransitionOrderFrom(stateMachine, startState) {
+  const transitions = stateMachine.transitions || [];
+  if (transitions.length === 0) return [];
+
+  const allTriggers = new Set(transitions.map(t => t.trigger));
+
+  const queue = [{ currentState: startState, path: [], covered: new Set() }];
+  const visited = new Map();
+
+  while (queue.length > 0) {
+    const { currentState, path, covered } = queue.shift();
+
+    if (covered.size === allTriggers.size) {
+      return path;
+    }
+
+    for (const t of transitions) {
+      if (t.from !== currentState) continue;
+
+      const newCovered = new Set(covered);
+      newCovered.add(t.trigger);
+
+      const key = `${t.to}|${[...newCovered].sort().join(',')}`;
+      if (visited.has(key)) continue;
+      visited.set(key, true);
+
+      queue.push({
+        currentState: t.to,
+        path: [...path, t.trigger],
+        covered: newCovered
+      });
+    }
+  }
+
+  return null; // Can't cover all triggers from this state
 }
 
 // =============================================================================
@@ -257,6 +416,18 @@ function createPostmanUrl(path, baseUrl = '{{baseUrl}}') {
 }
 
 /**
+ * Substitute a concrete ID into a Postman URL's path parameter placeholder.
+ */
+function substituteId(url, id) {
+  const paramName = url.variables[0];
+  return {
+    ...url,
+    raw: url.raw.replace(`{{${paramName}}}`, id),
+    path: url.path.map(seg => seg === `{{${paramName}}}` ? id : seg)
+  };
+}
+
+/**
  * Capitalize first letter
  */
 function capitalize(str) {
@@ -379,12 +550,7 @@ function generateGetByIdRequests(apiMetadata, endpoint, examples) {
 
   // Create one request per example
   for (const example of examples) {
-    const url = createPostmanUrl(endpoint.path);
-    const urlWithId = {
-      ...url,
-      raw: url.raw.replace(/\{\{[^}]+\}\}/, example.data.id),
-      path: url.path.map(seg => seg.includes('{{') ? example.data.id : seg)
-    };
+    const urlWithId = substituteId(createPostmanUrl(endpoint.path), example.data.id);
 
     requests.push({
       name: `Get ${example.name}`,
@@ -399,12 +565,7 @@ function generateGetByIdRequests(apiMetadata, endpoint, examples) {
   }
 
   // Add 404 test example
-  const url = createPostmanUrl(endpoint.path);
-  const notFoundUrl = {
-    ...url,
-    raw: url.raw.replace(/\{\{[^}]+\}\}/, '00000000-0000-0000-0000-000000000000'),
-    path: url.path.map(seg => seg.includes('{{') ? '00000000-0000-0000-0000-000000000000' : seg)
-  };
+  const notFoundUrl = substituteId(createPostmanUrl(endpoint.path), '00000000-0000-0000-0000-000000000000');
 
   requests.push({
     name: `Get Non-Existent ${capitalize(singularize(apiMetadata.name))} (404)`,
@@ -493,12 +654,7 @@ function generateUpdateRequests(apiMetadata, endpoint, examples) {
   }
 
   const example = examples[0];
-  const url = createPostmanUrl(endpoint.path);
-  const urlWithId = {
-    ...url,
-    raw: url.raw.replace(/\{\{[^}]+\}\}/, example.data.id),
-    path: url.path.map(seg => seg.includes('{{') ? example.data.id : seg)
-  };
+  const urlWithId = substituteId(createPostmanUrl(endpoint.path), example.data.id);
 
   // 1. Update single field
   const singleFieldUpdate = {};
@@ -586,12 +742,7 @@ function generateDeleteRequests(apiMetadata, endpoint, examples) {
   }
 
   const example = examples[examples.length - 1]; // Use last example for delete
-  const url = createPostmanUrl(endpoint.path);
-  const urlWithId = {
-    ...url,
-    raw: url.raw.replace(/\{\{[^}]+\}\}/, example.data.id),
-    path: url.path.map(seg => seg.includes('{{') ? example.data.id : seg)
-  };
+  const urlWithId = substituteId(createPostmanUrl(endpoint.path), example.data.id);
 
   requests.push({
     name: `Delete ${capitalize(singularize(apiMetadata.name))}`,
@@ -636,12 +787,12 @@ function generateExampleBody(schema) {
 }
 
 /**
- * Generate requests for RPC (state transition) endpoints.
- * RPC endpoints are POST on item sub-paths (e.g., /tasks/{taskId}/claim).
+ * Generate a single RPC request for a state transition endpoint.
+ * @param {Object} apiMetadata - API metadata
+ * @param {Object} endpoint - The RPC endpoint
+ * @param {Object} rpcContext - { example, callerId } from planRpcExecution
  */
-function generateRpcRequests(apiMetadata, endpoint, examples) {
-  const requests = [];
-
+function generateRpcRequest(apiMetadata, endpoint, rpcContext) {
   // Extract trigger name from last path segment (/tasks/{taskId}/claim → claim)
   const pathSegments = endpoint.path.split('/').filter(s => s);
   const triggerName = pathSegments[pathSegments.length - 1];
@@ -649,14 +800,10 @@ function generateRpcRequests(apiMetadata, endpoint, examples) {
 
   const url = createPostmanUrl(endpoint.path);
 
-  // Substitute first example ID into URL
+  // Substitute the chosen example's ID into the path parameter
   let urlWithId = url;
-  if (examples.length > 0) {
-    urlWithId = {
-      ...url,
-      raw: url.raw.replace(/\{\{[^}]+\}\}/, examples[0].data.id),
-      path: url.path.map(seg => seg.includes('{{') ? examples[0].data.id : seg)
-    };
+  if (rpcContext.example && url.variables.length > 0) {
+    urlWithId = substituteId(url, rpcContext.example.data.id);
   }
 
   const body = generateExampleBody(endpoint.requestSchema);
@@ -664,14 +811,14 @@ function generateRpcRequests(apiMetadata, endpoint, examples) {
   const request = createRequest('POST', urlWithId, body,
     `Trigger the ${triggerName} transition`);
 
-  // Add X-Caller-Id header
+  // Add X-Caller-Id header with the planned caller ID
   request.header.push({
     key: 'X-Caller-Id',
     value: '{{callerId}}',
     type: 'text'
   });
 
-  requests.push({
+  return {
     name: displayName,
     request,
     event: [{
@@ -680,9 +827,43 @@ function generateRpcRequests(apiMetadata, endpoint, examples) {
         exec: generateRpcTestScript().split('\n')
       }
     }]
-  });
+  };
+}
 
-  return requests;
+/**
+ * Generate all RPC requests for an API, ordered by valid state machine
+ * transition sequence so tests pass when run in order.
+ */
+function generateOrderedRpcRequests(apiMetadata, rpcEndpoints, examples, stateMachine) {
+  if (rpcEndpoints.length === 0) return { requests: [], callerId: null };
+
+  // Build a map of trigger name → endpoint
+  const endpointByTrigger = new Map();
+  for (const ep of rpcEndpoints) {
+    const segments = ep.path.split('/').filter(s => s);
+    const trigger = segments[segments.length - 1];
+    endpointByTrigger.set(trigger, ep);
+  }
+
+  // Plan execution: pick example, caller ID, and transition order
+  const rpcContext = planRpcExecution(stateMachine, examples);
+
+  // Order endpoints by the computed transition sequence
+  const ordered = [];
+  for (const trigger of rpcContext.transitionOrder) {
+    const ep = endpointByTrigger.get(trigger);
+    if (ep) {
+      ordered.push(generateRpcRequest(apiMetadata, ep, rpcContext));
+      endpointByTrigger.delete(trigger);
+    }
+  }
+
+  // Append any RPC endpoints not in the state machine (shouldn't happen, but safe)
+  for (const [, ep] of endpointByTrigger) {
+    ordered.push(generateRpcRequest(apiMetadata, ep, rpcContext));
+  }
+
+  return { requests: ordered, callerId: rpcContext.callerId };
 }
 
 // =============================================================================
@@ -704,8 +885,10 @@ function generateApiRequests(apiMetadata) {
   const displayMeta = { ...apiMetadata, name: resourceName };
 
   const items = [];
+  const rpcEndpoints = [];
 
-  // Sort endpoints: GET (list), GET (id), POST, PATCH, DELETE
+  // Sort endpoints: GET (list), GET (id), POST (create), PATCH, DELETE
+  // RPC endpoints (POST on item sub-paths) are collected separately for ordering.
   const sortedEndpoints = [...apiMetadata.endpoints].sort((a, b) => {
     const order = { GET: 0, POST: 1, PATCH: 2, DELETE: 3 };
     const aOrder = order[a.method] ?? 999;
@@ -722,6 +905,8 @@ function generateApiRequests(apiMetadata) {
   for (const endpoint of sortedEndpoints) {
     const isCollection = !endpoint.path.includes('{');
     const isItem = endpoint.path.includes('{');
+    // RPC = POST on a sub-path like /tasks/{taskId}/claim (more than one '{' segment's worth)
+    const isRpc = endpoint.method === 'POST' && isItem;
 
     let requests = [];
 
@@ -731,8 +916,9 @@ function generateApiRequests(apiMetadata) {
       requests = generateGetByIdRequests(displayMeta, endpoint, examples);
     } else if (endpoint.method === 'POST' && isCollection) {
       requests = generateCreateRequests(displayMeta, endpoint, examples);
-    } else if (endpoint.method === 'POST' && isItem) {
-      requests = generateRpcRequests(displayMeta, endpoint, examples);
+    } else if (isRpc) {
+      rpcEndpoints.push(endpoint);
+      continue; // handled below
     } else if (endpoint.method === 'PATCH' && isItem) {
       requests = generateUpdateRequests(displayMeta, endpoint, examples);
     } else if (endpoint.method === 'DELETE' && isItem) {
@@ -742,7 +928,24 @@ function generateApiRequests(apiMetadata) {
     items.push(...requests);
   }
 
-  return { resourceName, items };
+  // Generate RPC requests ordered by valid state machine transitions
+  let callerId = null;
+  if (rpcEndpoints.length > 0) {
+    const stateMachine = loadStateMachine(apiMetadata.name);
+    if (stateMachine) {
+      const result = generateOrderedRpcRequests(displayMeta, rpcEndpoints, examples, stateMachine);
+      items.push(...result.requests);
+      callerId = result.callerId;
+    } else {
+      // No state machine — generate RPC requests in definition order with basic context
+      const rpcContext = { example: examples[0], callerId: 'postman-test-user' };
+      for (const ep of rpcEndpoints) {
+        items.push(generateRpcRequest(displayMeta, ep, rpcContext));
+      }
+    }
+  }
+
+  return { resourceName, items, callerId };
 }
 
 // =============================================================================
@@ -777,14 +980,17 @@ Usage:
 
 Flags:
   --spec=<dir>   Directory containing resolved OpenAPI specs (default: resolved/)
-  --out=<file>   Output file path (default: generated/postman-collection.json)
+  --out=<path>   Output file or directory (default: generated/postman-collection.json)
   -h, --help     Show this help message
 `);
     process.exit(0);
   }
 
   specsDir = resolve(options.spec);
-  const outputPath = resolve(options.out);
+  const outResolved = resolve(options.out);
+  const outputPath = (existsSync(outResolved) && statSync(outResolved).isDirectory())
+    ? join(outResolved, 'postman-collection.json')
+    : outResolved;
   const outputDir = dirname(outputPath);
 
   console.log('='.repeat(70));
@@ -835,7 +1041,7 @@ Flags:
   console.log('\nGenerating requests...');
   for (const api of apiSpecs) {
     console.log(`  Processing ${api.title}...`);
-    const { resourceName, items: requests } = generateApiRequests(api);
+    const { resourceName, items: requests, callerId } = generateApiRequests(api);
     const folderName = capitalize(resourceName);
     console.log(`    Generated ${requests.length} requests → ${folderName}`);
 
@@ -852,6 +1058,15 @@ Flags:
       collection.variable.push({
         key: varName,
         value: examples[0].data.id,
+        type: 'string'
+      });
+    }
+
+    // Add callerId variable if this API has state machine transitions
+    if (callerId) {
+      collection.variable.push({
+        key: 'callerId',
+        value: callerId,
         type: 'string'
       });
     }
