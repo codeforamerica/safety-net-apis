@@ -14,11 +14,13 @@
  */
 
 import { writeFile } from 'fs/promises';
-import { existsSync, mkdirSync, unlinkSync, realpathSync } from 'fs';
+import { existsSync, mkdirSync, realpathSync } from 'fs';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import yaml from 'js-yaml';
-import { bundleSpec } from '../src/bundle.js';
+
+// NOTE: Do NOT add a --bundle flag to this generator. Source specs must use
+// $ref so that overlays propagate changes to Create/Update/List schemas.
+// Bundling (inlining $refs) is only for output — use resolve.js --bundle.
 
 // =============================================================================
 // Argument Parsing
@@ -30,7 +32,6 @@ function parseArgs() {
     name: null,
     resource: null,
     out: null,
-    bundle: false,
     help: false
   };
 
@@ -50,9 +51,6 @@ function parseArgs() {
       case '-o':
         options.out = args[++i];
         break;
-      case '--bundle':
-        options.bundle = true;
-        break;
       case '--help':
       case '-h':
         options.help = true;
@@ -60,6 +58,9 @@ function parseArgs() {
       default:
         if (!args[i].startsWith('-')) {
           positional.push(args[i]);
+        } else {
+          console.error(`Error: Unknown argument: ${args[i]}`);
+          process.exit(1);
         }
         break;
     }
@@ -86,14 +87,12 @@ Options:
   -n, --name <name>        API name in kebab-case (e.g., "benefits", "case-workers")
   -r, --resource <name>    Resource name in PascalCase (e.g., "Benefit", "CaseWorker")
   -o, --out <dir>          Output directory (default: packages/contracts/)
-      --bundle             Inline all external $refs to produce a self-contained spec
   -h, --help               Show this help message
 
 Examples:
   npm run api:new -- --name benefits --resource Benefit
   npm run api:new -- benefits Benefit
   npm run api:new -- benefits Benefit --out /tmp
-  npm run api:new -- benefits Benefit --out /tmp --bundle
 
 Generated files:
   - {name}-openapi.yaml              Main API specification (schemas inline)
@@ -456,42 +455,8 @@ async function main() {
   await writeFile(examplesPath, generateExamples(name, resource));
   console.log(`   ✅ ${examplesPath}`);
 
-  if (options.bundle) {
-    // Write raw spec to a temp file inside the contracts directory so that
-    // relative $refs (e.g. ./components/parameters.yaml) resolve correctly.
-    const tempSpecPath = join(contractsDir, `.tmp-${name}-openapi.yaml`);
-    // The spec template references "./{name}-openapi-examples.yaml" so the temp
-    // examples file must use the real name (not a .tmp- prefix) for $ref resolution.
-    const tempExamplesPath = join(contractsDir, `${name}-openapi-examples.yaml`);
-    try {
-      await writeFile(tempSpecPath, generateApiSpec(name, resource));
-      // Write examples adjacent to the temp spec so the examples $ref resolves
-      await writeFile(tempExamplesPath, generateExamples(name, resource));
-
-      console.log('   📦 Bundling (inlining external $refs)...');
-      const bundled = await bundleSpec(tempSpecPath);
-
-      const output = yaml.dump(bundled, {
-        lineWidth: -1,
-        noRefs: true,
-        quotingType: '"',
-        forceQuotes: false
-      });
-      await writeFile(specPath, output);
-      console.log(`   ✅ ${specPath} (bundled)`);
-    } finally {
-      // Clean up temp files
-      try { unlinkSync(tempSpecPath); } catch { /* ignore */ }
-      // Only clean up the temp examples if outDir differs from contractsDir,
-      // otherwise the examples file IS the final output and must be kept.
-      if (resolve(outDir) !== resolve(contractsDir)) {
-        try { unlinkSync(tempExamplesPath); } catch { /* ignore */ }
-      }
-    }
-  } else {
-    await writeFile(specPath, generateApiSpec(name, resource));
-    console.log(`   ✅ ${specPath}`);
-  }
+  await writeFile(specPath, generateApiSpec(name, resource));
+  console.log(`   ✅ ${specPath}`);
 
   console.log(`
 ✨ API generated successfully!

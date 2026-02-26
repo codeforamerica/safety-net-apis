@@ -112,7 +112,6 @@ test('generate-api tests', async (t) => {
       const opts = parseArgs();
       assert.strictEqual(opts.name, 'benefits');
       assert.strictEqual(opts.resource, 'Benefit');
-      assert.strictEqual(opts.bundle, false);
       assert.strictEqual(opts.help, false);
     } finally {
       process.argv = original;
@@ -131,13 +130,12 @@ test('generate-api tests', async (t) => {
     }
   });
 
-  await t.test('parseArgs - parses --out and --bundle', () => {
+  await t.test('parseArgs - parses --out', () => {
     const original = process.argv;
     try {
-      process.argv = ['node', 'generate-api.js', '--name', 'x', '--resource', 'X', '--out', '/tmp', '--bundle'];
+      process.argv = ['node', 'generate-api.js', '--name', 'x', '--resource', 'X', '--out', '/tmp'];
       const opts = parseArgs();
       assert.strictEqual(opts.out, '/tmp');
-      assert.strictEqual(opts.bundle, true);
     } finally {
       process.argv = original;
     }
@@ -174,7 +172,6 @@ test('generate-api tests', async (t) => {
       assert.strictEqual(opts.name, null);
       assert.strictEqual(opts.resource, null);
       assert.strictEqual(opts.out, null);
-      assert.strictEqual(opts.bundle, false);
       assert.strictEqual(opts.help, false);
     } finally {
       process.argv = original;
