@@ -11,7 +11,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Forward --spec flag to child servers
-const specArg = process.argv.slice(2).find(a => a.startsWith('--spec='));
+const args = process.argv.slice(2);
+
+if (args.includes('--help') || args.includes('-h')) {
+  console.log(`
+Start Mock Server & Swagger UI
+
+Starts both the mock server (port 1080) and Swagger UI (port 3000) simultaneously.
+
+Usage:
+  node scripts/start-all.js --spec=<dir>
+
+Flags:
+  --spec=<dir>  Directory containing OpenAPI specs (required)
+  -h, --help    Show this help message
+`);
+  process.exit(0);
+}
+
+// Check for unknown arguments
+const unknown = args.filter(a => a !== '--help' && a !== '-h' && !a.startsWith('--spec='));
+if (unknown.length > 0) {
+  console.error(`Error: Unknown argument(s): ${unknown.join(', ')}`);
+  process.exit(1);
+}
+
+const specArg = args.find(a => a.startsWith('--spec='));
 if (!specArg) {
   console.error('Error: --spec=<dir> is required.\n');
   console.error('Usage: node scripts/start-all.js --spec=<dir>');

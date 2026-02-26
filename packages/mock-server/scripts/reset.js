@@ -10,6 +10,30 @@ import { clearAll, closeAll } from '../src/database-manager.js';
 
 function parseSpecDir() {
   const args = process.argv.slice(2);
+
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log(`
+Reset Mock Server
+
+Clears all data and reseeds databases from example files.
+
+Usage:
+  node scripts/reset.js --spec=<dir>
+
+Flags:
+  --spec=<dir>  Directory containing OpenAPI specs (required)
+  -h, --help    Show this help message
+`);
+    process.exit(0);
+  }
+
+  // Check for unknown arguments
+  const unknown = args.filter(a => a !== '--help' && a !== '-h' && !a.startsWith('--spec='));
+  if (unknown.length > 0) {
+    console.error(`Error: Unknown argument(s): ${unknown.join(', ')}`);
+    process.exit(1);
+  }
+
   const specArg = args.find(a => a.startsWith('--spec='));
   if (!specArg) {
     console.error('Error: --spec=<dir> is required.\n');
