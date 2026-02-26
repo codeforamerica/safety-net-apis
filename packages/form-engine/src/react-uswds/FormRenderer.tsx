@@ -218,7 +218,7 @@ export function FormRenderer({
 
             const basePermission = resolvePermission(field, role, permissionsPolicy);
             if (basePermission === 'hidden') return null;
-            const permission = isReadonly ? 'read-only' as const : basePermission;
+            const permission = isReadonly && basePermission === 'editable' ? 'read-only' as const : basePermission;
 
             if (field.component === 'field-array') {
               return (

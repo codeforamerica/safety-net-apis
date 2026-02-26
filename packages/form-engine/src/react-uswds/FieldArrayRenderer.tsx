@@ -137,7 +137,7 @@ export function FieldArrayRenderer({
 
       const baseSubPermission = resolvePermission(subField, role, permissionsPolicy);
       if (baseSubPermission === 'hidden') return null;
-      const subPermission = isViewReadonly ? 'read-only' as const : baseSubPermission;
+      const subPermission = isViewReadonly && baseSubPermission === 'editable' ? 'read-only' as const : baseSubPermission;
 
       const widthClass =
         subField.width === 'half'
