@@ -3256,6 +3256,14 @@ ${contentHtml}
 async function main() {
   // Parse flags
   const args = process.argv.slice(2);
+
+  // Check for unknown arguments
+  const unknown = args.filter(a => !a.startsWith('--spec=') && !a.startsWith('--out='));
+  if (unknown.length > 0) {
+    console.error(`Error: Unknown argument(s): ${unknown.join(', ')}`);
+    process.exit(1);
+  }
+
   const specArg = args.find(a => a.startsWith('--spec='));
   const outArg = args.find(a => a.startsWith('--out='));
   if (!specArg || !outArg) {

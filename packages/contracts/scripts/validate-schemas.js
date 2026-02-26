@@ -44,6 +44,13 @@ async function main() {
     process.exit(0);
   }
 
+  // Check for unknown arguments
+  const unknown = args.filter(a => a !== '--help' && a !== '-h' && !a.startsWith('--spec='));
+  if (unknown.length > 0) {
+    console.error(`Error: Unknown argument(s): ${unknown.join(', ')}`);
+    process.exit(1);
+  }
+
   const specArg = args.find(a => a.startsWith('--spec='));
   if (!specArg) {
     console.error('Error: --spec=<file|dir> is required.\n');

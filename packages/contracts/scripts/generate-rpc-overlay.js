@@ -31,6 +31,9 @@ function parseArgs() {
       options.specsDir = args[++i];
     } else if (args[i] === '--help' || args[i] === '-h') {
       options.help = true;
+    } else {
+      console.error(`Error: Unknown argument: ${args[i]}`);
+      process.exit(1);
     }
   }
 

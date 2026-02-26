@@ -37,6 +37,17 @@ function parseArgs() {
     process.exit(0);
   }
 
+  // Check for unknown arguments
+  const unknown = args.filter(a =>
+    a !== '--help' && a !== '-h' &&
+    !a.startsWith('--tables=') && !a.startsWith('--out=') && !a.startsWith('--file=') &&
+    !a.startsWith('--name=') && !a.startsWith('--resource=')
+  );
+  if (unknown.length > 0) {
+    console.error(`Error: Unknown argument(s): ${unknown.join(', ')}`);
+    process.exit(1);
+  }
+
   const packageRoot = resolve(__dirname, '..');
   const tablesArg = args.find(a => a.startsWith('--tables='));
   const outArg = args.find(a => a.startsWith('--out='));
