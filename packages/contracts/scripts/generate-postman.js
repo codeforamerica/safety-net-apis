@@ -488,20 +488,23 @@ function generateListRequests(apiMetadata, endpoint, examples) {
     }]
   });
 
-  // 3. Search examples (if search parameter exists)
-  const hasSearch = endpoint.parameters.some(p => p.name === 'search');
-  if (hasSearch && examples.length > 0) {
-    // Get searchable field value from first example
-    const searchValue = examples[0].data.name?.firstName ||
-                        examples[0].data.email?.split('@')[0] ||
-                        'test';
+  // 3. Search examples (if q or search parameter exists)
+  const searchParam = endpoint.parameters.find(p => p.name === 'q' || p.name === 'search');
+  if (searchParam && examples.length > 0) {
+    // Get a searchable value from the first example using contains syntax
+    const rawValue = examples[0].data.name?.firstName ||
+                     examples[0].data.name ||
+                     examples[0].data.email?.split('@')[0] ||
+                     'test';
+    // Use wildcard contains syntax so the mock server's q parser matches
+    const searchValue = searchParam.name === 'q' ? `*${rawValue}*` : rawValue;
 
     requests.push({
       name: `Search ${capitalize(apiMetadata.name)}`,
       request: createRequest('GET', {
         ...url,
         query: [
-          { key: 'search', value: searchValue, description: 'Search query' },
+          { key: searchParam.name, value: searchValue, description: 'Search query (contains match)' },
           { key: 'limit', value: '10', description: 'Maximum results' }
         ]
       }),
@@ -516,7 +519,7 @@ function generateListRequests(apiMetadata, endpoint, examples) {
 
   // 4. Filter examples (if other query params exist)
   for (const param of endpoint.parameters) {
-    if (['search', 'limit', 'offset'].includes(param.name)) {
+    if (['q', 'search', 'limit', 'offset'].includes(param.name)) {
       continue;
     }
 

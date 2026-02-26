@@ -64,7 +64,9 @@ async function main() {
   console.log('Schema Validator');
   console.log('='.repeat(70));
 
-  console.log(`\nDiscovering YAML files with $schema declarations...`);
+  console.log(`\nValidating YAML files against their declared JSON Schemas...`);
+  console.log(`  Looks for YAML files with a $schema field (e.g., state machines)`);
+  console.log(`  and validates each file against its referenced JSON Schema.`);
   console.log(`  ${isSingleFile ? 'File' : 'Directory'}: ${specDir}`);
 
   const yamlFiles = isSingleFile ? [specDir] : findYamlFiles(specDir);
