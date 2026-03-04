@@ -4,7 +4,7 @@
 
 Development mock server that serves REST APIs from OpenAPI specs and will interpret behavioral contracts (state machines, rules, metrics) to serve RPC APIs.
 
-> **Note:** REST API generation (CRUD endpoints from OpenAPI specs) and the core behavioral engine (state machine transitions, guards, `set` and `create` effects) work today. Additional behavioral capabilities — rule evaluation, metrics tracking, `lookup`/`event` effects — are being built as part of the [steel thread prototypes](../prototypes/workflow-prototype.md).
+> **Note:** REST API generation (CRUD endpoints from OpenAPI specs) works today. The behavioral engine described below — RPC endpoint generation from state machine triggers, guard evaluation, effect execution, rule evaluation, and metrics tracking — is being built as part of the [steel thread prototypes](../prototypes/workflow-prototype.md). This guide describes both the current and target capabilities.
 
 ## Quick Start
 
@@ -30,22 +30,15 @@ curl http://localhost:1080/persons
 3. Generates CRUD endpoints automatically
 4. Validates requests against schemas
 
-### Behavioral Engine
+### Behavioral Engine (planned)
 
-For behavior-shaped domains (workflow, application review), the mock server also interprets behavioral contracts:
+For behavior-shaped domains (workflow, application review), the mock server will also:
 
-**Works today:**
-1. Load state machine YAML and auto-generate RPC endpoints from triggers (e.g., `POST /workflow/tasks/:id/claim`)
-2. Enforce state transitions — reject invalid transitions with 409
-3. Evaluate guards (null checks, caller identity)
-4. Execute `set` effects (update fields on the resource)
-5. Execute `create` effects (write records to other collections, e.g., audit events)
-
-**Planned:**
-6. `lookup` effects (retrieve config from other entities)
-7. `evaluate-rules` effects (invoke decision rules for routing and priority)
-8. `event` effects (emit domain events)
-9. Track metrics linked to states and transitions
+1. Load state machine YAML, rules YAML, and metrics YAML
+2. Auto-generate RPC endpoints from state machine triggers (e.g., `POST /workflow/tasks/:id/claim`)
+3. Enforce state transitions, evaluate guards, and execute effects
+4. Evaluate decision rules for routing, assignment, and priority
+5. Track metrics linked to states and transitions
 
 Adding a transition is a table row, not endpoint code.
 
@@ -63,7 +56,7 @@ For each spec (e.g., `persons.yaml`):
 | PATCH | `/persons/{id}` | Update |
 | DELETE | `/persons/{id}` | Delete |
 
-### RPC endpoints (works today)
+### RPC endpoints (planned)
 
 For behavior-shaped domains, RPC endpoints are auto-generated from state machine triggers:
 

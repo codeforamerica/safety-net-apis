@@ -17,7 +17,6 @@ safety-net-blueprint/
 │   │   ├── package.json
 │   │   ├── *-openapi.yaml          # Main API specs (persons-openapi.yaml, etc.)
 │   │   ├── *-openapi-examples.yaml # Example data for seeding
-│   │   ├── *-state-machine.yaml    # State machine definitions (transitions, guards, effects)
 │   │   ├── components/             # Shared schemas and parameters
 │   │   │   ├── common.yaml         # Reusable schemas (Address, Name)
 │   │   │   ├── parameters.yaml     # Query params (limit, offset)
@@ -39,9 +38,8 @@ safety-net-blueprint/
 │   ├── mock-server/                # Development mock server
 │   │   ├── package.json
 │   │   ├── src/                    # Server implementation
-│   │   │   ├── handlers/           # CRUD + transition handlers
+│   │   │   ├── handlers/           # CRUD handlers
 │   │   │   ├── database-manager.js
-│   │   │   ├── state-machine-engine.js  # Transitions, guards, set/create effects
 │   │   │   ├── seeder.js
 │   │   │   └── ...
 │   │   ├── scripts/                # Server startup scripts
