@@ -5,6 +5,7 @@
 import { findById, findAll, update, create } from '../database-manager.js';
 import { findTransition, evaluateGuards, applyEffects } from '../state-machine-engine.js';
 import { processRuleEvaluations } from './rule-evaluation.js';
+import { eventBus } from '../event-bus.js';
 
 /**
  * Create a transition handler for an RPC endpoint.
@@ -101,7 +102,7 @@ export function createTransitionHandler(resourceName, stateMachine, trigger, par
       // Emit pending domain events
       for (const event of pendingEvents) {
         try {
-          create('events', {
+          const stored = create('events', {
             domain: stateMachine.domain,
             resource: stateMachine.object.toLowerCase(),
             action: event.action,
@@ -110,6 +111,7 @@ export function createTransitionHandler(resourceName, stateMachine, trigger, par
             occurredAt: now,
             data: event.data
           });
+          eventBus.emit('domain-event', stored);
         } catch (eventError) {
           console.error(`Failed to emit event "${event.action}":`, eventError.message);
         }

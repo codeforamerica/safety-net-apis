@@ -300,6 +300,29 @@ paths:
         "500":
           $ref: "./components/responses.yaml#/InternalError"
 
+  "/events/stream":
+    get:
+      summary: Stream domain events (SSE)
+      description: |
+        Real-time stream of domain events delivered as Server-Sent Events (SSE).
+
+        Connect with `Accept: text/event-stream`. Each event is delivered as a
+        `data:` line containing a JSON-encoded `DomainEvent` object.
+
+        The stream stays open until the client disconnects. A `: heartbeat` comment
+        is sent every 30 seconds to prevent proxy timeouts.
+      operationId: streamEvents
+      tags:
+        - Events
+      responses:
+        "200":
+          description: SSE stream of domain events.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Newline-delimited SSE frames, each containing a JSON DomainEvent.
+
   "/events/{eventId}":
     parameters:
       - $ref: "#/components/parameters/EventIdParam"

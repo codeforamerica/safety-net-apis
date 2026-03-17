@@ -6,6 +6,7 @@ import { create, update } from '../database-manager.js';
 import { validate, createErrorResponse } from '../validator.js';
 import { applyEffects } from '../state-machine-engine.js';
 import { processRuleEvaluations } from './rule-evaluation.js';
+import { eventBus } from '../event-bus.js';
 
 /**
  * Create create handler for a resource
@@ -91,7 +92,7 @@ export function createCreateHandler(apiMetadata, endpoint, baseUrl, stateMachine
         // Emit pending domain events
         for (const event of pendingEvents) {
           try {
-            create('events', {
+            const stored = create('events', {
               domain: stateMachine.domain,
               resource: stateMachine.object.toLowerCase(),
               action: event.action,
@@ -100,6 +101,7 @@ export function createCreateHandler(apiMetadata, endpoint, baseUrl, stateMachine
               occurredAt: now,
               data: event.data
             });
+            eventBus.emit('domain-event', stored);
           } catch (eventError) {
             console.error(`Failed to emit event "${event.action}":`, eventError.message);
           }
