@@ -97,6 +97,12 @@ Visit `http://localhost:3000` for interactive API docs.
 - [Multi-State Overlays](./docs/decisions/multi-state-overlays.md)
 - [Search Patterns](./docs/decisions/search-patterns.md)
 
+## Changelogs
+
+- [Contracts](./packages/contracts/CHANGELOG.md)
+- [Mock Server](./packages/mock-server/CHANGELOG.md)
+- [Clients](./packages/clients/CHANGELOG.md)
+
 ## Requirements
 
 Node.js >= 20.19.0
