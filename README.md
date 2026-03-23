@@ -33,6 +33,7 @@ Choose your path based on your role:
 | **UX Designer** | Explore the data model and design reference | [UX Designer Guide](./docs/getting-started/ux-designers.md) |
 | **Backend Developer** | Author contracts, validate specs, build production adapters | [Backend Developer Guide](./docs/getting-started/backend-developers.md) |
 | **Frontend Developer** | Build UIs against REST and RPC APIs, use generated clients | [Frontend Developer Guide](./docs/getting-started/frontend-developers.md) |
+| **Tester** | Run tests, write integration tests, test against the mock | [Tester Guide](./docs/getting-started/testers.md) |
 
 ## Quick Start
 

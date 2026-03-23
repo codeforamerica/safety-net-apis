@@ -3,8 +3,6 @@
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import yaml from 'js-yaml';
 import { insertResource, count, clearAll } from './database-manager.js';
 import { getExamplesPath, collectionToSchemaPrefix, extractIndividualResources } from '@codeforamerica/safety-net-blueprint-contracts/loader';
@@ -141,7 +139,7 @@ function extractResourcesForCollection(examples, collectionName) {
   return extractIndividualResources(filtered);
 }
 
-export function seedAllDatabases(apiSpecs, specsDir) {
+export function seedAllDatabases(apiSpecs, specsDir, seedDir = specsDir) {
   console.log('\nSeeding databases from example files...');
 
   const summary = {};
@@ -156,7 +154,7 @@ export function seedAllDatabases(apiSpecs, specsDir) {
       }
 
       // Load examples once for the API
-      const examplesPath = getExamplesPath(api.name, specsDir);
+      const examplesPath = getExamplesPath(api.name, seedDir);
       if (!existsSync(examplesPath)) {
         console.log(`  No examples file found for ${api.name}, databases will be empty`);
         for (const name of allCollections) {

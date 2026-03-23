@@ -22,10 +22,11 @@ const __dirname = dirname(__filename);
  * @param {boolean} options.skipValidation - Skip validation step
  * @returns {Promise<Object>} Setup result with apiSpecs and summary
  */
-export async function performSetup({ specsDir, verbose = true, skipValidation = false } = {}) {
+export async function performSetup({ specsDir, seedDir, verbose = true, skipValidation = false } = {}) {
   if (!specsDir) {
     throw new Error('specsDir is required — pass --spec <dir> to specify the spec file or directory');
   }
+  seedDir = seedDir || specsDir;
   // Check environment variable for skip validation
   if (process.env.SKIP_VALIDATION === 'true') {
     skipValidation = true;
@@ -33,6 +34,7 @@ export async function performSetup({ specsDir, verbose = true, skipValidation = 
   if (verbose) {
     console.log('\nDiscovering OpenAPI specifications...');
     console.log(`  Specs: ${specsDir}`);
+    if (seedDir !== specsDir) console.log(`  Seed:  ${seedDir}`);
   }
 
   const apiSpecs = await loadAllSpecs({ specsDir });
@@ -99,7 +101,7 @@ export async function performSetup({ specsDir, verbose = true, skipValidation = 
   }
 
   // Seed databases from example files
-  const summary = seedAllDatabases(apiSpecs, specsDir);
+  const summary = seedAllDatabases(apiSpecs, specsDir, seedDir);
 
   return { apiSpecs, stateMachines, rules, summary };
 }

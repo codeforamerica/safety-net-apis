@@ -32,6 +32,7 @@ Usage:
 Options:
   --spec=<dir>    File or directory containing *-openapi.yaml files (repeatable)
                   Default: packages/contracts
+  --seed=<dir>    Directory containing seed data files (default: same as --spec)
   --detach        Start server in the background (logs to mock-server.log)
   --log=<path>    Log file or directory for --detach output (default: spec dir)
   --stop          Stop the running mock server
@@ -60,7 +61,7 @@ function parseSpecDirs() {
   const unknown = args.filter(a =>
     a !== '--help' && a !== '-h' &&
     a !== '--detach' && a !== '--stop' &&
-    !a.startsWith('--spec=') && !a.startsWith('--log=')
+    !a.startsWith('--spec=') && !a.startsWith('--seed=') && !a.startsWith('--log=')
   );
   if (unknown.length > 0) {
     console.error(`Error: Unknown argument(s): ${unknown.join(', ')}`);
@@ -71,30 +72,39 @@ function parseSpecDirs() {
     .filter(a => a.startsWith('--spec='))
     .map(a => resolve(a.split('=')[1]));
   if (specDirs.length === 0) {
-    // Default: packages/contracts relative to this script
     specDirs.push(resolve(import.meta.dirname, '..', '..', 'contracts'));
   }
-  return specDirs;
+
+  const seedArg = args.find(a => a.startsWith('--seed='));
+  const seedDir = seedArg ? resolve(seedArg.split('=')[1]) : null;
+
+  return { specDirs, seedDir };
 }
 
 let expressServer = null;
 
 /**
  * Start the mock server
+ * @param {string[]|null} specDirs - Spec directories to load. Defaults to parseSpecDirs() (from process.argv).
+ * @param {string|null} seedDir - Directory containing seed data files. Defaults to each specDir.
  */
-async function startMockServer() {
+async function startMockServer(specDirs = null, seedDir = null) {
   console.log('='.repeat(70));
   console.log('🚀 Starting Mock API Server');
   console.log('='.repeat(70));
 
   try {
     // Perform setup (load specs and seed databases) for each spec directory
-    const specDirs = parseSpecDirs();
+    if (specDirs === null) {
+      const parsed = parseSpecDirs();
+      specDirs = parsed.specDirs;
+      seedDir = seedDir ?? parsed.seedDir;
+    }
     let apiSpecs = [];
     let allStateMachines = [];
     let allRules = [];
     for (const specsDir of specDirs) {
-      const result = await performSetup({ specsDir, verbose: true });
+      const result = await performSetup({ specsDir, seedDir, verbose: true });
       apiSpecs = apiSpecs.concat(result.apiSpecs);
       allStateMachines = allStateMachines.concat(result.stateMachines);
       allRules = allRules.concat(result.rules);

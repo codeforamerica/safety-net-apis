@@ -82,47 +82,40 @@ else
 fi
 rm -rf /tmp/contract-tables-before
 
-step "Running integration tests (starting mock server)"
-MOCK_PID=""
-cleanup() {
-  if [ -n "$MOCK_PID" ]; then
-    kill "$MOCK_PID" 2>/dev/null || true
-    wait "$MOCK_PID" 2>/dev/null || true
+step "Checking YAML contracts reflect current CSV tables"
+tmpYamlBefore=$(mktemp -d)
+cp packages/contracts/*-state-machine.yaml "$tmpYamlBefore/" 2>/dev/null || true
+cp packages/contracts/*-rules.yaml "$tmpYamlBefore/" 2>/dev/null || true
+cp packages/contracts/*-metrics.yaml "$tmpYamlBefore/" 2>/dev/null || true
+if npm run contract-tables:import 2>&1; then
+  yamlChanged=0
+  for f in packages/contracts/*-state-machine.yaml packages/contracts/*-rules.yaml packages/contracts/*-metrics.yaml; do
+    [ -f "$f" ] || continue
+    base=$(basename "$f")
+    if [ -f "$tmpYamlBefore/$base" ] && ! diff -q "$f" "$tmpYamlBefore/$base" >/dev/null 2>&1; then
+      yamlChanged=1
+      break
+    fi
+  done
+  if [ "$yamlChanged" -eq 0 ]; then
+    pass "YAML contracts are up to date with CSV tables"
+  else
+    fail "CSV tables have unimported changes — YAML contracts have been updated. Stage the updated files and re-run preflight."
   fi
-}
-trap cleanup EXIT
+else
+  fail "Contract table import failed"
+fi
+rm -rf "$tmpYamlBefore"
 
+step "Running integration tests"
 # Kill any orphaned mock server from a previous run
 lsof -ti :1080 | xargs kill -9 2>/dev/null || true
-sleep 1
 
-npm run mock:start 2>&1 &
-MOCK_PID=$!
-
-# Wait for server to be ready
-retries=0
-max_retries=15
-while ! curl -sf http://localhost:1080/persons > /dev/null 2>&1; do
-  retries=$((retries + 1))
-  if [ "$retries" -ge "$max_retries" ]; then
-    fail "Mock server failed to start"
-    MOCK_PID=""
-    break
-  fi
-  sleep 1
-done
-
-if [ "$retries" -lt "$max_retries" ]; then
-  if npm run test:integration 2>&1; then
-    pass "Integration tests passed"
-  else
-    fail "Integration tests failed"
-  fi
+if npm run test:integration 2>&1; then
+  pass "Integration tests passed"
+else
+  fail "Integration tests failed"
 fi
-
-# Stop mock server
-cleanup
-MOCK_PID=""
 
 # Summary
 printf "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
