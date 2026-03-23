@@ -1,0 +1,47 @@
+# Fixture workflow records for integration tests.
+# IDs use the namespaces:
+#   00000008-*  queues
+#   00000009-*  tasks
+# Domain events are not pre-seeded; they are created during test execution.
+# Key names match spec $ref expectations (QueueExample1 etc.).
+# Naming decoupling tracked in issue #167.
+
+# Queue fixtures — names must match what rule tests expect.
+QueueExample1:
+  id: "00000008-0000-4000-8000-000000000001"
+  name: snap-intake
+  description: Queue for SNAP program intake tasks.
+  createdAt: "2024-01-01T00:00:00Z"
+  updatedAt: "2024-01-01T00:00:00Z"
+
+QueueExample2:
+  id: "00000008-0000-4000-8000-000000000002"
+  name: general-intake
+  description: General intake queue for non-program-specific tasks.
+  createdAt: "2024-01-01T00:00:00Z"
+  updatedAt: "2024-01-01T00:00:00Z"
+
+# Task fixtures
+TaskExample1:
+  id: "00000009-0000-4000-8000-000000000001"
+  name: Review SNAP application - fixture household
+  status: pending
+  programType: snap
+  isExpedited: false
+  queueId: "00000008-0000-4000-8000-000000000001"
+  priority: normal
+  createdAt: "2024-01-01T00:00:00Z"
+  updatedAt: "2024-01-01T00:00:00Z"
+
+# DomainEvent fixtures
+DomainEventExample1:
+  id: "0000000a-0000-4000-8000-000000000001"
+  domain: workflow
+  resource: task
+  action: created
+  resourceId: "00000009-0000-4000-8000-000000000001"
+  performedById: "00000002-0000-4000-8000-000000000001"
+  occurredAt: "2024-01-01T00:00:00Z"
+  data: {}
+  createdAt: "2024-01-01T00:00:00Z"
+  updatedAt: "2024-01-01T00:00:00Z"

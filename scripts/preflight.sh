@@ -82,47 +82,15 @@ else
 fi
 rm -rf /tmp/contract-tables-before
 
-step "Running integration tests (starting mock server)"
-MOCK_PID=""
-cleanup() {
-  if [ -n "$MOCK_PID" ]; then
-    kill "$MOCK_PID" 2>/dev/null || true
-    wait "$MOCK_PID" 2>/dev/null || true
-  fi
-}
-trap cleanup EXIT
-
+step "Running integration tests"
 # Kill any orphaned mock server from a previous run
 lsof -ti :1080 | xargs kill -9 2>/dev/null || true
-sleep 1
 
-npm run mock:start 2>&1 &
-MOCK_PID=$!
-
-# Wait for server to be ready
-retries=0
-max_retries=15
-while ! curl -sf http://localhost:1080/persons > /dev/null 2>&1; do
-  retries=$((retries + 1))
-  if [ "$retries" -ge "$max_retries" ]; then
-    fail "Mock server failed to start"
-    MOCK_PID=""
-    break
-  fi
-  sleep 1
-done
-
-if [ "$retries" -lt "$max_retries" ]; then
-  if npm run test:integration 2>&1; then
-    pass "Integration tests passed"
-  else
-    fail "Integration tests failed"
-  fi
+if npm run test:integration 2>&1; then
+  pass "Integration tests passed"
+else
+  fail "Integration tests failed"
 fi
-
-# Stop mock server
-cleanup
-MOCK_PID=""
 
 # Summary
 printf "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"

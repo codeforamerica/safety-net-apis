@@ -1,27 +1,38 @@
 /**
- * Dynamic Integration Tests for Mock Server
- * 
- * Auto-discovers all APIs and runs generic CRUD tests against each.
- * Tests adapt to each API's schema and examples automatically.
- * 
+ * Integration Tests for Mock Server
+ *
+ * Tests the full stack: fixture data → mock server → HTTP → assertions.
+ *
+ * Setup:
+ *   1. A temp directory is created with base specs + fixture examples overlaid.
+ *   2. The mock server is started against that temp directory.
+ *   3. A Postman collection is generated from the same temp directory.
+ *   4. All tests run against the mock seeded with fixture data.
+ *
+ * Fixture IDs are stable and namespaced by resource type. See
+ * packages/mock-server/tests/fixtures/setup.js for the ID namespace map.
+ *
  * Run with: npm run test:integration
  */
 
 import http from 'http';
 import { URL } from 'url';
-import { startMockServer, stopServer, isServerRunning } from '../../scripts/server.js';
-import { loadAllSpecs, getExamplesPath } from '@codeforamerica/safety-net-blueprint-contracts/loader';
-import { readFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { execSync } from 'child_process';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync, existsSync, mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import yaml from 'js-yaml';
 import newman from 'newman';
+import { setupFixtureDir, teardownFixtureDir } from '../fixtures/setup.js';
+import { startMockServer, stopServer, isServerRunning } from '../../scripts/server.js';
+import { loadAllSpecs, getExamplesPath } from '@codeforamerica/safety-net-blueprint-contracts/loader';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const specsDir = join(__dirname, '../../../contracts');
 
 const BASE_URL = 'http://localhost:1080';
+let fixtureDir = null;
 let serverStartedByTests = false;
 
 // Simple fetch polyfill using Node.js http module
@@ -46,25 +57,20 @@ async function fetch(url, options = {}) {
 
     const req = http.request(requestOptions, (res) => {
       let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
+      res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
-        const response = {
+        resolve({
           ok: res.statusCode >= 200 && res.statusCode < 300,
           status: res.statusCode,
           statusText: res.statusMessage,
           headers: res.headers,
           json: async () => JSON.parse(data),
           text: async () => data
-        };
-        resolve(response);
+        });
       });
     });
 
-    req.on('error', (error) => {
-      reject(error);
-    });
+    req.on('error', reject);
 
     if (options.body) {
       const bodyString = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
@@ -76,21 +82,20 @@ async function fetch(url, options = {}) {
 }
 
 /**
- * Load examples for an API
+ * Load examples for an API from the fixture directory
  */
 function loadExamples(apiName) {
   try {
-    const examplesPath = getExamplesPath(apiName, specsDir);
+    const examplesPath = getExamplesPath(apiName, fixtureDir);
     const content = readFileSync(examplesPath, 'utf8');
     const examples = yaml.load(content) || {};
-    
-    // Extract individual resource examples (skip list examples)
+
     return Object.entries(examples)
       .filter(([key, value]) => {
         if (!value || typeof value !== 'object') return false;
-        if (value.items && Array.isArray(value.items)) return false; // Skip list examples
+        if (value.items && Array.isArray(value.items)) return false;
         if (key.toLowerCase().includes('payload') || key.toLowerCase().includes('list')) return false;
-        return value.id; // Only resources with IDs
+        return value.id;
       })
       .map(([key, value]) => ({ key, data: value }));
   } catch (error) {
@@ -127,27 +132,23 @@ async function testApi(api, examples) {
   const apiName = api.name;
   const apiPath = api.baseResource || `/${apiName}`;
   const singularName = singularize(apiPath.slice(1));
-  const idParam = `${singularName}Id`;
-  
+
   console.log(`\n${'='.repeat(70)}`);
   console.log(`Testing API: ${apiName}`);
   console.log(`${'='.repeat(70)}`);
-  
+
   let passed = 0;
   let failed = 0;
   let createdResourceId = null;
-  
+
   // Test 1: LIST - Get all resources
   try {
     console.log(`\n  1. GET ${apiPath} (list all)`);
     const response = await fetch(`${BASE_URL}${apiPath}`);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
     const data = await response.json();
-    
     if (data.items && Array.isArray(data.items) && typeof data.total === 'number') {
       console.log(`     ✓ PASS: Returns list with pagination`);
       console.log(`       Items: ${data.items.length}, Total: ${data.total}`);
@@ -160,13 +161,13 @@ async function testApi(api, examples) {
     console.log(`     ✗ FAIL: ${error.message}`);
     failed++;
   }
-  
+
   // Test 2: LIST with pagination
   try {
     console.log(`\n  2. GET ${apiPath}?limit=1&offset=0 (pagination)`);
     const response = await fetch(`${BASE_URL}${apiPath}?limit=1&offset=0`);
     const data = await response.json();
-    
+
     if (data.limit === 1 && data.items.length <= 1) {
       console.log(`     ✓ PASS: Pagination works correctly`);
       passed++;
@@ -178,14 +179,14 @@ async function testApi(api, examples) {
     console.log(`     ✗ FAIL: ${error.message}`);
     failed++;
   }
-  
+
   // Test 3: GET by ID (if examples exist)
   if (examples.length > 0) {
     try {
       console.log(`\n  3. GET ${apiPath}/{id} (get by ID)`);
       const exampleId = examples[0].data.id;
       const response = await fetch(`${BASE_URL}${apiPath}/${exampleId}`);
-      
+
       if (response.status === 200) {
         const data = await response.json();
         if (data.id === exampleId) {
@@ -207,13 +208,13 @@ async function testApi(api, examples) {
   } else {
     console.log(`\n  3. GET ${apiPath}/{id} - SKIPPED (no examples)`);
   }
-  
+
   // Test 4: GET by ID - 404 for unknown ID
   try {
     console.log(`\n  4. GET ${apiPath}/{id} - 404 for unknown ID`);
     const unknownId = '00000000-0000-0000-0000-000000000000';
     const response = await fetch(`${BASE_URL}${apiPath}/${unknownId}`);
-    
+
     if (response.status === 404) {
       const data = await response.json();
       if (data.code === 'NOT_FOUND') {
@@ -231,19 +232,19 @@ async function testApi(api, examples) {
     console.log(`     ✗ FAIL: ${error.message}`);
     failed++;
   }
-  
+
   // Test 5: POST - Create resource (if examples exist)
   if (examples.length > 0) {
     try {
       console.log(`\n  5. POST ${apiPath} (create)`);
       const payload = createPostPayload(examples[0].data);
-      
+
       const response = await fetch(`${BASE_URL}${apiPath}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      
+
       if (response.status === 201) {
         const data = await response.json();
         if (data.id && data.createdAt && data.updatedAt) {
@@ -273,9 +274,8 @@ async function testApi(api, examples) {
   } else {
     console.log(`\n  5. POST ${apiPath} - SKIPPED (no examples)`);
   }
-  
+
   // Test 6: POST - Validation error (422)
-  // Skip if the API has no POST endpoint (e.g., search is GET-only)
   const hasPostEndpoint = api.endpoints.some(e => e.method === 'POST');
   if (hasPostEndpoint) {
     try {
@@ -307,32 +307,31 @@ async function testApi(api, examples) {
   } else {
     console.log(`\n  6. POST ${apiPath} - SKIPPED (no POST endpoint)`);
   }
-  
-  // Test 7: PATCH - Update resource (use existing example or created resource)
+
+  // Test 7: PATCH - Update resource
   const updateTargetId = createdResourceId || (examples.length > 0 ? examples[0].data.id : null);
   if (updateTargetId) {
     try {
       console.log(`\n  7. PATCH ${apiPath}/{id} (update)`);
-      
-      // Find a numeric field to update
-      const exampleData = createdResourceId 
+
+      const exampleData = createdResourceId
         ? createPostPayload(examples[0].data)
         : examples[0].data;
-      
-      const numericField = Object.keys(exampleData).find(key => 
+
+      const numericField = Object.keys(exampleData).find(key =>
         typeof exampleData[key] === 'number' && !['id'].includes(key)
       );
-      
-      const updatePayload = numericField 
+
+      const updatePayload = numericField
         ? { [numericField]: exampleData[numericField] + 100 }
-        : { updatedAt: new Date().toISOString() }; // Fallback update
-      
+        : { updatedAt: new Date().toISOString() };
+
       const response = await fetch(`${BASE_URL}${apiPath}/${updateTargetId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatePayload)
       });
-      
+
       if (response.status === 200) {
         const data = await response.json();
         if (data.id === updateTargetId && data.updatedAt) {
@@ -354,7 +353,7 @@ async function testApi(api, examples) {
   } else {
     console.log(`\n  7. PATCH ${apiPath}/{id} - SKIPPED (no resource to update)`);
   }
-  
+
   // Test 8: DELETE - Remove resource (use created resource if available)
   if (createdResourceId) {
     try {
@@ -362,7 +361,7 @@ async function testApi(api, examples) {
       const response = await fetch(`${BASE_URL}${apiPath}/${createdResourceId}`, {
         method: 'DELETE'
       });
-      
+
       if (response.status === 204) {
         console.log(`     ✓ PASS: Deletes resource (returns 204)`);
         passed++;
@@ -377,17 +376,15 @@ async function testApi(api, examples) {
   } else {
     console.log(`\n  8. DELETE ${apiPath}/{id} - SKIPPED (no resource created)`);
   }
-  
-  // Test 9: Search (if examples exist and have searchable fields)
+
+  // Test 9: Search
   if (examples.length > 0) {
     try {
       console.log(`\n  9. GET ${apiPath}?search=... (search)`);
-      
-      // Try to find a searchable string field
+
       const exampleData = examples[0].data;
       let searchValue = null;
-      
-      // Look for common searchable fields
+
       if (exampleData.name?.firstName) {
         searchValue = exampleData.name.firstName;
       } else if (exampleData.email) {
@@ -395,11 +392,11 @@ async function testApi(api, examples) {
       } else if (typeof exampleData.name === 'string') {
         searchValue = exampleData.name.split(' ')[0];
       }
-      
+
       if (searchValue) {
         const response = await fetch(`${BASE_URL}${apiPath}?search=${searchValue}`);
         const data = await response.json();
-        
+
         if (response.ok && data.items) {
           console.log(`     ✓ PASS: Search returns results`);
           console.log(`       Query: "${searchValue}", Results: ${data.items.length}`);
@@ -418,24 +415,35 @@ async function testApi(api, examples) {
   } else {
     console.log(`\n  9. GET ${apiPath}?search=... - SKIPPED (no examples)`);
   }
-  
+
   return { passed, failed, total: passed + failed };
 }
 
 /**
- * Run Postman collection tests using Newman
+ * Run Postman collection tests using Newman.
+ * Generates a fresh collection from the fixture directory before running.
  */
 async function runPostmanTests() {
-  const collectionPath = join(__dirname, '../../../contracts/generated/postman-collection.json');
-
   console.log(`\n${'='.repeat(70)}`);
   console.log('Postman Collection Tests (Newman)');
   console.log('='.repeat(70));
 
-  if (!existsSync(collectionPath)) {
-    console.log('\n  ⚠️  Postman collection not found. Run "npm run postman:generate" first.');
-    console.log(`     Expected: ${collectionPath}`);
-    return { passed: 0, failed: 0, total: 0, skipped: true };
+  // Generate a fresh Postman collection from the fixture directory
+  const tmpCollectionDir = mkdtempSync(join(tmpdir(), 'snb-postman-'));
+  const collectionPath = join(tmpCollectionDir, 'postman-collection.json');
+
+  try {
+    const generateScript = resolve(__dirname, '../../../contracts/scripts/generate-postman.js');
+    console.log('\n  Generating Postman collection from fixture specs...');
+    execSync(
+      `node "${generateScript}" --spec="${fixtureDir}" --out="${collectionPath}"`,
+      { stdio: 'pipe' }
+    );
+    console.log(`  ✓ Collection generated`);
+  } catch (err) {
+    console.log(`  ✗ Failed to generate collection: ${err.message}`);
+    rmSync(tmpCollectionDir, { recursive: true, force: true });
+    return { passed: 0, failed: 1, total: 1, skipped: false };
   }
 
   console.log(`\n  Collection: ${collectionPath}`);
@@ -455,6 +463,8 @@ async function runPostmanTests() {
         }
       }
     }, (err, summary) => {
+      rmSync(tmpCollectionDir, { recursive: true, force: true });
+
       if (err) {
         console.log(`  ✗ Newman execution error: ${err.message}`);
         resolve({ passed: 0, failed: 1, total: 1, skipped: false });
@@ -473,15 +483,15 @@ async function runPostmanTests() {
       console.log(`    Requests: ${passed}/${requests.total} passed`);
       console.log(`    Assertions: ${assertions.total - assertions.failed}/${assertions.total} passed`);
 
-      if (failed === 0) {
-        console.log(`  ✓ PASS: All Postman requests succeeded`);
+      if (assertions.failed === 0) {
+        console.log(`  ✓ PASS: All Postman assertions passed`);
       } else {
-        console.log(`  ✗ FAIL: ${failed} request(s) failed`);
+        console.log(`  ✗ FAIL: ${assertions.failed} assertion(s) failed`);
       }
 
       resolve({
-        passed: failed === 0 ? 1 : 0,
-        failed: failed > 0 ? 1 : 0,
+        passed: assertions.failed === 0 ? 1 : 0,
+        failed: assertions.failed > 0 ? 1 : 0,
         total: 1,
         skipped: false
       });
@@ -493,55 +503,67 @@ async function runPostmanTests() {
  * Main test runner
  */
 async function runTests() {
-  console.log('Dynamic Integration Tests - Auto-Discovery\n');
+  console.log('Integration Tests — Fixture-Based\n');
   console.log('='.repeat(70));
-  
+
   let totalPassed = 0;
   let totalFailed = 0;
   let totalTests = 0;
-  
-  // Start server if needed
+
+  // =========================================================================
+  // Setup: create fixture dir and start mock server
+  // =========================================================================
+  console.log('\n📦 Setting up fixture directory...');
+  fixtureDir = setupFixtureDir();
+  console.log(`  ✓ Fixture dir: ${fixtureDir}`);
+
   try {
-    console.log('\n🔍 Checking if mock server is running...');
     const isRunning = await isServerRunning();
-    
     if (isRunning) {
-      console.log('  ✓ Mock server already running');
+      console.log('\n  ⚠️  Mock server already running on port 1080.');
+      console.log('      Integration tests require a fixture-seeded server.');
+      console.log('      Stop the existing server and re-run, or the tests may');
+      console.log('      fail if the server is not seeded with fixture data.');
     } else {
-      console.log('  ⚠️  Mock server not running, starting it now...\n');
-      await startMockServer();
+      console.log('\n  Starting mock server with fixture data...');
+      await startMockServer([fixtureDir]);
       serverStartedByTests = true;
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('  ✓ Mock server started successfully');
+      await new Promise(res => setTimeout(res, 1000));
+      console.log('  ✓ Mock server started');
     }
   } catch (error) {
-    console.log(`  ✗ FAIL: Cannot start server`);
-    console.log(`    Error: ${error.message}`);
+    console.log(`  ✗ FAIL: Cannot start server: ${error.message}`);
+    teardownFixtureDir(fixtureDir);
     process.exit(1);
   }
-  
-  // Discover all APIs
+
+  // =========================================================================
+  // Discover APIs from fixture dir
+  // =========================================================================
   console.log('\n🔍 Discovering APIs...');
-  const apis = await loadAllSpecs({ specsDir });
-  
+  const apis = await loadAllSpecs({ specsDir: fixtureDir });
+
   if (apis.length === 0) {
     console.log('  ⚠️  No APIs found');
+    await cleanup();
     process.exit(0);
   }
-  
+
   console.log(`  ✓ Found ${apis.length} API(s):`);
   apis.forEach(api => console.log(`    - ${api.name}`));
-  
-  // Test each API
+
+  // =========================================================================
+  // CRUD tests for each API
+  // =========================================================================
   for (const api of apis) {
     const examples = loadExamples(api.name);
     const results = await testApi(api, examples);
-    
+
     totalPassed += results.passed;
     totalFailed += results.failed;
     totalTests += results.total;
   }
-  
+
   // =========================================================================
   // State Machine RPC Tests
   // =========================================================================
@@ -554,17 +576,13 @@ async function runTests() {
 
     let rpcTaskId = null;
 
-    // RPC Test 1: Create a pending task for RPC testing
+    // RPC-1: Create a pending task
     try {
       console.log('\n  RPC-1. Create a pending task for transition tests');
       const response = await fetch(`${BASE_URL}${taskPath}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'RPC test task',
-          description: 'Task for state machine transition tests',
-          status: 'pending'
-        })
+        body: JSON.stringify({ name: 'RPC test task', status: 'pending' })
       });
 
       if (response.status === 201) {
@@ -588,16 +606,13 @@ async function runTests() {
       totalTests++;
     }
 
-    // RPC Test 2: Claim the task (pending → in_progress)
+    // RPC-2: Claim (pending → in_progress)
     if (rpcTaskId) {
       try {
         console.log(`\n  RPC-2. POST ${taskPath}/{id}/claim (pending → in_progress)`);
         const response = await fetch(`${BASE_URL}${taskPath}/${rpcTaskId}/claim`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Caller-Id': 'worker-aaa'
-          }
+          headers: { 'Content-Type': 'application/json', 'X-Caller-Id': 'worker-aaa' }
         });
 
         if (response.status === 200) {
@@ -621,16 +636,13 @@ async function runTests() {
       }
     }
 
-    // RPC Test 3: Claim again with different worker → 409 (wrong status)
+    // RPC-3: Claim again → 409 (wrong status)
     if (rpcTaskId) {
       try {
         console.log(`\n  RPC-3. POST ${taskPath}/{id}/claim again → 409`);
         const response = await fetch(`${BASE_URL}${taskPath}/${rpcTaskId}/claim`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Caller-Id': 'worker-bbb'
-          }
+          headers: { 'Content-Type': 'application/json', 'X-Caller-Id': 'worker-bbb' }
         });
 
         if (response.status === 409) {
@@ -654,16 +666,13 @@ async function runTests() {
       }
     }
 
-    // RPC Test 4: Complete with wrong worker → 409 (guard fails)
+    // RPC-4: Complete with wrong worker → 409 (guard fails)
     if (rpcTaskId) {
       try {
         console.log(`\n  RPC-4. POST ${taskPath}/{id}/complete with wrong worker → 409`);
         const response = await fetch(`${BASE_URL}${taskPath}/${rpcTaskId}/complete`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Caller-Id': 'worker-bbb'
-          },
+          headers: { 'Content-Type': 'application/json', 'X-Caller-Id': 'worker-bbb' },
           body: JSON.stringify({ outcome: 'approved' })
         });
 
@@ -688,16 +697,13 @@ async function runTests() {
       }
     }
 
-    // RPC Test 5: Release the task (in_progress → pending)
+    // RPC-5: Release (in_progress → pending)
     if (rpcTaskId) {
       try {
         console.log(`\n  RPC-5. POST ${taskPath}/{id}/release (in_progress → pending)`);
         const response = await fetch(`${BASE_URL}${taskPath}/${rpcTaskId}/release`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Caller-Id': 'worker-aaa'
-          },
+          headers: { 'Content-Type': 'application/json', 'X-Caller-Id': 'worker-aaa' },
           body: JSON.stringify({ reason: 'Integration test release' })
         });
 
@@ -722,7 +728,7 @@ async function runTests() {
       }
     }
 
-    // RPC Test 6: Missing X-Caller-Id → 400
+    // RPC-6: Missing X-Caller-Id → 400
     if (rpcTaskId) {
       try {
         console.log(`\n  RPC-6. POST ${taskPath}/{id}/claim without X-Caller-Id → 400`);
@@ -761,17 +767,13 @@ async function runTests() {
 
     let auditTaskId = null;
 
-    // Event Test 1: Create a fresh task for event testing
+    // EVENT-1: Create a fresh task for event testing
     try {
       console.log('\n  EVENT-1. Create a fresh task for domain event tests');
       const response = await fetch(`${BASE_URL}${taskPath}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'Audit test task',
-          description: 'Task for audit event integration tests',
-          status: 'pending'
-        })
+        body: JSON.stringify({ name: 'Audit test task', status: 'pending' })
       });
       if (response.status === 201) {
         const data = await response.json();
@@ -789,7 +791,7 @@ async function runTests() {
       totalTests++;
     }
 
-    // Event Test 2: Claim → verify "claimed" domain event
+    // EVENT-2: Claim → verify "claimed" domain event
     if (auditTaskId) {
       try {
         console.log(`\n  EVENT-2. Claim task → verify "claimed" domain event`);
@@ -803,9 +805,7 @@ async function runTests() {
 
         if (listData.items && listData.items.length === 2) {
           const event = listData.items.find(e => e.action === 'claimed');
-          if (event &&
-              event.resourceId === auditTaskId &&
-              event.performedById === 'worker-audit-1') {
+          if (event && event.resourceId === auditTaskId && event.performedById === 'worker-audit-1') {
             console.log('     ✓ PASS: "claimed" domain event created with correct fields');
             totalPassed++;
           } else {
@@ -824,7 +824,7 @@ async function runTests() {
       }
     }
 
-    // Event Test 3: Release → verify 3 domain events (created + claimed + released)
+    // EVENT-3: Release → verify 3 domain events
     if (auditTaskId) {
       try {
         console.log(`\n  EVENT-3. Release task → verify 3 domain events`);
@@ -858,7 +858,7 @@ async function runTests() {
       }
     }
 
-    // Event Test 4: Claim again + complete → verify 5 total domain events
+    // EVENT-4: Claim again + complete → verify 5 total domain events
     if (auditTaskId) {
       try {
         console.log(`\n  EVENT-4. Claim + complete → verify 5 total domain events`);
@@ -877,7 +877,7 @@ async function runTests() {
 
         if (listData.items && listData.items.length === 5) {
           const actions = listData.items.map(e => e.action).sort();
-          if (actions.includes('claimed') && actions.includes('completed') && actions.includes('created') && actions.includes('released')) {
+          if (['claimed', 'completed', 'created', 'released'].every(a => actions.includes(a))) {
             console.log('     ✓ PASS: 5 domain events total');
             totalPassed++;
           } else {
@@ -896,7 +896,7 @@ async function runTests() {
       }
     }
 
-    // Event Test 5: GET single domain event by ID
+    // EVENT-5: GET single domain event by ID
     if (auditTaskId) {
       try {
         console.log(`\n  EVENT-5. GET single domain event by ID`);
@@ -942,12 +942,11 @@ async function runTests() {
     console.log('Rule Evaluation Tests');
     console.log('='.repeat(70));
 
-    // RULE-1: Create SNAP task with isExpedited=true → verify queueId and priority
     let snapTaskId = null;
     let snapIntakeQueueId = null;
     let generalIntakeQueueId = null;
 
-    // Look up queue IDs first
+    // Look up fixture queue IDs by name
     try {
       const queuesRes = await fetch(`${BASE_URL}/queues`);
       const queuesData = await queuesRes.json();
@@ -955,39 +954,32 @@ async function runTests() {
         if (q.name === 'snap-intake') snapIntakeQueueId = q.id;
         if (q.name === 'general-intake') generalIntakeQueueId = q.id;
       }
+      if (snapIntakeQueueId && generalIntakeQueueId) {
+        console.log(`\n  Queues: snap-intake=${snapIntakeQueueId}, general-intake=${generalIntakeQueueId}`);
+      } else {
+        console.log(`  ⚠️  Could not find required queues. Rule tests may fail.`);
+      }
     } catch (error) {
-      console.log(`     Could not load queues: ${error.message}`);
+      console.log(`  Could not load queues: ${error.message}`);
     }
 
+    // RULE-1: SNAP + expedited → snap-intake queue, expedited priority
     try {
-      console.log('\n  RULE-1. Create SNAP+expedited task → assigned to snap-intake, priority=expedited');
+      console.log('\n  RULE-1. Create SNAP+expedited task → snap-intake, priority=expedited');
       const response = await fetch(`${BASE_URL}${taskPath}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Caller-Id': 'worker-rule-1' },
-        body: JSON.stringify({
-          name: 'SNAP expedited task',
-          status: 'pending',
-          programType: 'snap',
-          isExpedited: true
-        })
+        body: JSON.stringify({ name: 'SNAP expedited task', status: 'pending', programType: 'snap', isExpedited: true })
       });
 
       if (response.status === 201) {
         const data = await response.json();
         snapTaskId = data.id;
-        let pass = true;
         const issues = [];
+        if (data.queueId !== snapIntakeQueueId) issues.push(`queueId=${data.queueId}, expected=${snapIntakeQueueId}`);
+        if (data.priority !== 'expedited') issues.push(`priority=${data.priority}, expected=expedited`);
 
-        if (data.queueId !== snapIntakeQueueId) {
-          issues.push(`queueId=${data.queueId}, expected=${snapIntakeQueueId}`);
-          pass = false;
-        }
-        if (data.priority !== 'expedited') {
-          issues.push(`priority=${data.priority}, expected=expedited`);
-          pass = false;
-        }
-
-        if (pass) {
+        if (issues.length === 0) {
           console.log('     ✓ PASS: SNAP task → snap-intake queue, expedited priority');
           totalPassed++;
         } else {
@@ -1006,35 +998,22 @@ async function runTests() {
       totalTests++;
     }
 
-    // RULE-2: Create non-SNAP task → assigned to general-intake, priority=normal
+    // RULE-2: Non-SNAP → general-intake, priority=normal
     try {
-      console.log('\n  RULE-2. Create non-SNAP task → assigned to general-intake, priority=normal');
+      console.log('\n  RULE-2. Create non-SNAP task → general-intake, priority=normal');
       const response = await fetch(`${BASE_URL}${taskPath}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Caller-Id': 'worker-rule-2' },
-        body: JSON.stringify({
-          name: 'Medical Assistance task',
-          status: 'pending',
-          programType: 'medical_assistance',
-          isExpedited: false
-        })
+        body: JSON.stringify({ name: 'Medical Assistance task', status: 'pending', programType: 'medical_assistance', isExpedited: false })
       });
 
       if (response.status === 201) {
         const data = await response.json();
-        let pass = true;
         const issues = [];
+        if (data.queueId !== generalIntakeQueueId) issues.push(`queueId=${data.queueId}, expected=${generalIntakeQueueId}`);
+        if (data.priority !== 'normal') issues.push(`priority=${data.priority}, expected=normal`);
 
-        if (data.queueId !== generalIntakeQueueId) {
-          issues.push(`queueId=${data.queueId}, expected=${generalIntakeQueueId}`);
-          pass = false;
-        }
-        if (data.priority !== 'normal') {
-          issues.push(`priority=${data.priority}, expected=normal`);
-          pass = false;
-        }
-
-        if (pass) {
+        if (issues.length === 0) {
           console.log('     ✓ PASS: Non-SNAP task → general-intake queue, normal priority');
           totalPassed++;
         } else {
@@ -1052,18 +1031,14 @@ async function runTests() {
       totalTests++;
     }
 
-    // RULE-3: Claim + release → verify rules re-evaluated (queueId still correct)
+    // RULE-3: Claim + release SNAP task → rules re-evaluated
     if (snapTaskId) {
       try {
         console.log('\n  RULE-3. Claim + release SNAP task → rules re-evaluated');
-
-        // Claim
         await fetch(`${BASE_URL}${taskPath}/${snapTaskId}/claim`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Caller-Id': 'worker-rule-1' }
         });
-
-        // Release
         const releaseRes = await fetch(`${BASE_URL}${taskPath}/${snapTaskId}/release`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Caller-Id': 'worker-rule-1' },
@@ -1072,23 +1047,12 @@ async function runTests() {
 
         if (releaseRes.status === 200) {
           const data = await releaseRes.json();
-          let pass = true;
           const issues = [];
+          if (data.queueId !== snapIntakeQueueId) issues.push(`queueId=${data.queueId}, expected=${snapIntakeQueueId}`);
+          if (data.priority !== 'expedited') issues.push(`priority=${data.priority}, expected=expedited`);
+          if (data.status !== 'pending') issues.push(`status=${data.status}, expected=pending`);
 
-          if (data.queueId !== snapIntakeQueueId) {
-            issues.push(`queueId=${data.queueId}, expected=${snapIntakeQueueId}`);
-            pass = false;
-          }
-          if (data.priority !== 'expedited') {
-            issues.push(`priority=${data.priority}, expected=expedited`);
-            pass = false;
-          }
-          if (data.status !== 'pending') {
-            issues.push(`status=${data.status}, expected=pending`);
-            pass = false;
-          }
-
-          if (pass) {
+          if (issues.length === 0) {
             console.log('     ✓ PASS: After release, queueId and priority re-evaluated correctly');
             totalPassed++;
           } else {
@@ -1114,7 +1078,6 @@ async function runTests() {
         const listResponse = await fetch(`${BASE_URL}/events?q=resourceId:${snapTaskId}`);
         const listData = await listResponse.json();
 
-        // Should have at least a "created" event from onCreate
         const createdEvents = listData.items?.filter(e => e.action === 'created') || [];
         if (createdEvents.length >= 1) {
           const event = createdEvents[0];
@@ -1138,7 +1101,9 @@ async function runTests() {
     }
   }
 
-  // Multi-API test: Verify all APIs are accessible
+  // =========================================================================
+  // Cross-API accessibility test
+  // =========================================================================
   console.log(`\n${'='.repeat(70)}`);
   console.log(`Cross-API Test: All APIs Accessible`);
   console.log('='.repeat(70));
@@ -1167,7 +1132,9 @@ async function runTests() {
     totalTests++;
   }
 
-  // Postman collection tests
+  // =========================================================================
+  // Postman/Newman tests
+  // =========================================================================
   const postmanResults = await runPostmanTests();
   if (!postmanResults.skipped) {
     totalPassed += postmanResults.passed;
@@ -1175,7 +1142,9 @@ async function runTests() {
     totalTests += postmanResults.total;
   }
 
-  // Summary
+  // =========================================================================
+  // Summary and cleanup
+  // =========================================================================
   console.log('\n' + '='.repeat(70));
   console.log('Integration Test Summary');
   console.log('='.repeat(70));
@@ -1183,13 +1152,9 @@ async function runTests() {
   console.log(`Total tests: ${totalTests}`);
   console.log(`Passed: ${totalPassed}`);
   console.log(`Failed: ${totalFailed}`);
-  
-  // Cleanup
-  if (serverStartedByTests) {
-    console.log('\n🧹 Cleaning up (stopping server started by tests)...\n');
-    await stopServer(false);
-  }
-  
+
+  await cleanup();
+
   if (totalFailed > 0) {
     console.log('\n❌ Some tests failed\n');
     process.exit(1);
@@ -1198,13 +1163,19 @@ async function runTests() {
   }
 }
 
-runTests().catch(async (error) => {
-  console.error('Test runner error:', error);
-  
+async function cleanup() {
   if (serverStartedByTests) {
-    console.log('\n🧹 Cleaning up (stopping server started by tests)...\n');
+    console.log('\n🧹 Stopping server...');
     await stopServer(false);
   }
-  
+  if (fixtureDir) {
+    teardownFixtureDir(fixtureDir);
+    fixtureDir = null;
+  }
+}
+
+runTests().catch(async (error) => {
+  console.error('Test runner error:', error);
+  await cleanup();
   process.exit(1);
 });
