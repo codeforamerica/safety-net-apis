@@ -3,7 +3,6 @@ version: "1.0"
 object: Task
 domain: workflow
 apiSpec: workflow-openapi.yaml
-
 states:
   pending:
     slaClock: running
@@ -21,9 +20,7 @@ states:
     slaClock: paused
   pending_review:
     slaClock: running
-
 initialState: pending
-
 guards:
   taskIsUnassigned:
     field: assignedToId
@@ -40,7 +37,6 @@ guards:
     field: $caller.type
     operator: equals
     value: system
-
 transitions:
   - trigger: claim
     from: pending
@@ -56,7 +52,6 @@ transitions:
       - type: event
         action: claimed
         description: Emit a domain event recording the claim
-
   - trigger: complete
     from: in_progress
     to: completed
@@ -95,7 +90,6 @@ transitions:
           isExpedited: $object.isExpedited
           caseId: $object.caseId
           status: pending
-
   - trigger: release
     from: in_progress
     to: pending
@@ -118,10 +112,10 @@ transitions:
       - type: evaluate-rules
         ruleType: priority
         description: Re-evaluate priority rules after release
-
   - trigger: escalate
     from: in_progress
     to: escalated
+    actors: []
     guards:
       - any:
           - callerIsAssignedWorker
@@ -139,10 +133,10 @@ transitions:
         data:
           reason: $request.reason
         description: Emit a domain event recording the escalation
-
   - trigger: escalate
     from: pending
     to: escalated
+    actors: []
     guards:
       - callerIsSupervisor
     effects:
@@ -158,10 +152,10 @@ transitions:
         data:
           reason: $request.reason
         description: Emit a domain event recording the escalation
-
   - trigger: de-escalate
     from: escalated
     to: pending
+    actors: []
     guards:
       - callerIsSupervisor
     effects:
@@ -174,13 +168,13 @@ transitions:
       - type: event
         action: de-escalated
         description: Emit a domain event recording the de-escalation
-
   - trigger: cancel
     from:
       - pending
       - in_progress
       - escalated
     to: cancelled
+    actors: []
     guards:
       - callerIsSupervisor
     effects:
@@ -193,10 +187,10 @@ transitions:
         data:
           reason: $request.reason
         description: Emit a domain event recording the cancellation
-
   - trigger: reopen
     from: cancelled
     to: pending
+    actors: []
     guards:
       - callerIsSupervisor
     effects:
@@ -215,10 +209,10 @@ transitions:
         data:
           reason: $request.reason
         description: Emit a domain event recording the reopen
-
   - trigger: await-client
     from: in_progress
     to: awaiting_client
+    actors: []
     guards:
       - callerIsAssignedWorker
     effects:
@@ -229,10 +223,10 @@ transitions:
       - type: event
         action: awaiting_client
         description: Emit a domain event recording the block
-
   - trigger: await-verification
     from: in_progress
     to: awaiting_verification
+    actors: []
     guards:
       - callerIsAssignedWorker
     effects:
@@ -243,12 +237,12 @@ transitions:
       - type: event
         action: awaiting_verification
         description: Emit a domain event recording the block
-
   - trigger: resume
     from:
       - awaiting_client
       - awaiting_verification
     to: in_progress
+    actors: []
     guards:
       - any:
           - callerIsAssignedWorker
@@ -261,10 +255,10 @@ transitions:
       - type: event
         action: resumed
         description: Emit a domain event recording the resumption
-
   - trigger: system-resume
     from: awaiting_verification
     to: in_progress
+    actors: []
     guards:
       - callerIsSystem
     effects:
@@ -278,22 +272,22 @@ transitions:
           source: $request.source
           result: $request.result
         description: Emit a domain event recording the automated resumption and its result
-
   - trigger: submit-for-review
     from:
       - in_progress
       - escalated
     to: pending_review
+    actors: []
     guards:
       - callerIsAssignedWorker
     effects:
       - type: event
         action: submitted_for_review
         description: Emit a domain event recording the submission for review
-
   - trigger: approve
     from: pending_review
     to: completed
+    actors: []
     guards:
       - callerIsSupervisor
     effects:
@@ -314,10 +308,10 @@ transitions:
         data:
           outcome: $request.outcome
         description: Emit a domain event recording the approval
-
   - trigger: return-to-worker
     from: pending_review
     to: in_progress
+    actors: []
     guards:
       - callerIsSupervisor
     effects:
@@ -326,14 +320,14 @@ transitions:
         data:
           reason: $request.reason
         description: Emit a domain event recording the return for revision
-
   - trigger: auto-escalate
-    on: timer
+    from: pending
+    to: escalated
+    "on": timer
     after: 72h
     relativeTo: createdAt
     calendarType: business
-    from: pending
-    to: escalated
+    actors: []
     effects:
       - type: evaluate-rules
         ruleType: priority
@@ -343,14 +337,14 @@ transitions:
         data:
           reason: deadline_exceeded
         description: Emit a domain event recording the automatic escalation
-
   - trigger: auto-escalate-sla-warning
-    on: timer
-    after: -48h
-    relativeTo: slaDeadline
-    calendarType: calendar
     from: in_progress
     to: escalated
+    "on": timer
+    after: "-48h"
+    relativeTo: slaDeadline
+    calendarType: calendar
+    actors: []
     effects:
       - type: evaluate-rules
         ruleType: priority
@@ -360,14 +354,14 @@ transitions:
         data:
           reason: sla_deadline_approaching
         description: Emit a domain event recording the SLA-triggered escalation
-
   - trigger: auto-cancel-awaiting-client
-    on: timer
+    from: awaiting_client
+    to: cancelled
+    "on": timer
     after: 30d
     relativeTo: blockedAt
     calendarType: calendar
-    from: awaiting_client
-    to: cancelled
+    actors: []
     effects:
       - type: set
         field: cancelledAt
@@ -378,14 +372,14 @@ transitions:
         data:
           reason: client_unresponsive
         description: Emit a domain event recording the automatic cancellation
-
   - trigger: auto-resume-awaiting-verification
-    on: timer
+    from: awaiting_verification
+    to: in_progress
+    "on": timer
     after: 7d
     relativeTo: blockedAt
     calendarType: calendar
-    from: awaiting_verification
-    to: in_progress
+    actors: []
     effects:
       - type: set
         field: blockedAt
@@ -396,7 +390,6 @@ transitions:
         data:
           reason: verification_timeout
         description: Emit a domain event recording the automatic resumption
-
 onCreate:
   actors: []
   effects:
@@ -409,7 +402,6 @@ onCreate:
     - type: evaluate-rules
       ruleType: priority
       description: Evaluate priority rules to set task priority
-
 onUpdate:
   fields:
     - isExpedited
@@ -422,7 +414,6 @@ onUpdate:
     - type: evaluate-rules
       ruleType: assignment
       description: Re-evaluate assignment when queue or program type changes
-
 requestBodies:
   claim: {}
   complete:
