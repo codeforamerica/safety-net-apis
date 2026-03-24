@@ -191,10 +191,14 @@ components:
           type: string
           format: uuid
           description: Reference to the Person record (the subject of the appointment).
+          x-relationship:
+            resource: Person
         assignedToId:
           type: string
           format: uuid
           description: Reference to the User record (staff member conducting the appointment).
+          x-relationship:
+            resource: User
         notes:
           type: string
           maxLength: 2000

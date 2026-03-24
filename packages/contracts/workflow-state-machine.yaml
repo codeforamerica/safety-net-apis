@@ -3,14 +3,11 @@ version: "1.0"
 object: Task
 domain: workflow
 apiSpec: workflow-openapi.yaml
-
 states:
   pending: {}
   in_progress: {}
   completed: {}
-
 initialState: pending
-
 guards:
   taskIsUnassigned:
     field: assignedToId
@@ -19,11 +16,11 @@ guards:
     field: assignedToId
     operator: equals
     value: $caller.id
-
 transitions:
   - trigger: claim
     from: pending
     to: in_progress
+    actors: []
     guards:
       - taskIsUnassigned
     effects:
@@ -34,10 +31,10 @@ transitions:
       - type: event
         action: claimed
         description: Emit a domain event recording the claim
-
   - trigger: complete
     from: in_progress
     to: completed
+    actors: []
     guards:
       - callerIsAssignedWorker
     effects:
@@ -60,7 +57,10 @@ transitions:
         description: Emit a domain event recording the completion and its outcome
       - type: create
         entity: tasks
-        when: {"==": [{"var": "request.createFollowUp"}, true]}
+        when:
+          "==":
+            - var: request.createFollowUp
+            - true
         description: Create a follow-up task when the caller requests one
         fields:
           name: $object.name
@@ -69,10 +69,10 @@ transitions:
           isExpedited: $object.isExpedited
           caseId: $object.caseId
           status: pending
-
   - trigger: release
     from: in_progress
     to: pending
+    actors: []
     guards:
       - callerIsAssignedWorker
     effects:
@@ -91,8 +91,8 @@ transitions:
       - type: evaluate-rules
         ruleType: priority
         description: Re-evaluate priority rules after release
-
 onCreate:
+  actors: []
   effects:
     - type: event
       action: created
@@ -103,7 +103,6 @@ onCreate:
     - type: evaluate-rules
       ruleType: priority
       description: Evaluate priority rules to set task priority
-
 requestBodies:
   claim: {}
   complete:

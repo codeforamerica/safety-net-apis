@@ -121,6 +121,155 @@ The entire property definition (type, description, pattern, enum, etc.) is prese
 - You want to align API field names with state system field names
 - The base schema uses a generic name that should be state-specific
 
+## Relationship Configuration
+
+FK fields in the base specs are plain string IDs. States can declare how related resources are represented in responses by adding `x-relationship` to FK fields via overlays. The resolver transforms the spec at build time based on the chosen style.
+
+### Available styles
+
+| Style | Description | Status |
+|-------|-------------|--------|
+| `links-only` | Adds a `links` object with URIs to related resources | Default, implemented |
+| `expand` | Replaces FK field with the related object, resolved at build time | Implemented |
+| `include` | JSON:API-style sideloading in an `included` array | Planned |
+| `embed` | Always inline related resources in the response | Planned |
+
+### Setting a global default
+
+Set the default style for all relationships in your config overlay:
+
+```yaml
+config:
+  x-relationship:
+    style: expand
+```
+
+### Per-field configuration
+
+Add `x-relationship` to specific FK fields via overlay actions. Per-field `style` overrides the global default:
+
+```yaml
+actions:
+  - target: $.components.schemas.Task.properties.assignedToId
+    file: workflow-openapi.yaml
+    description: Expand assignedToId with field subset
+    update:
+      type: string
+      format: uuid
+      description: Reference to the User assigned to this task.
+      x-relationship:
+        resource: User
+        style: expand
+        fields: [id, name, email]
+```
+
+- `resource` (required) — the target schema name (e.g., `User`, `Case`)
+- `style` (optional) — overrides the global style for this field
+- `fields` (optional, expand only) — subset of fields to include; supports dot notation for nested relationships
+
+### What each style produces
+
+**links-only** keeps the FK field and adds a read-only `links` object to the parent schema:
+
+```yaml
+# Base: Task.assignedToId → User
+# Result:
+Task:
+  properties:
+    assignedToId:
+      type: string
+      format: uuid
+    links:
+      type: object
+      readOnly: true
+      properties:
+        assignedTo:
+          type: string
+          format: uri
+```
+
+**expand** replaces the FK field with the related object, resolved at build time. The field is renamed (dropping the `Id` suffix) and the response shape is static — no query parameters needed.
+
+Without `fields` — the full related schema is included and example data is recursively expanded. If the related schema has its own `x-relationship` annotations, those FK fields are also expanded (in both schema and example data). Unannotated FK fields on the related schema remain as plain IDs.
+
+```yaml
+# x-relationship: { resource: User, style: expand }
+# Schema result:
+Task:
+  properties:
+    assignedTo:
+      $ref: '#/components/schemas/User'
+
+# Example data result (assuming User.teamId has x-relationship: { resource: Team, style: expand }):
+# TaskExample1.assignedTo:
+#   id: user-001
+#   name: Jane Smith
+#   team:           ← expanded because User.teamId also has x-relationship
+#     id: team-001
+#     name: Intake Team
+#   departmentId: dept-001   ← kept as plain ID — no x-relationship annotation
+```
+
+With `fields` — an inline subset object is produced:
+
+```yaml
+# x-relationship: { resource: User, style: expand, fields: [id, name, email] }
+# Result:
+Task:
+  properties:
+    assignedTo:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+```
+
+### Dot notation in fields
+
+Use dot notation in `fields` to reach into related resources across FK chains. Each segment must correspond to an FK field annotated with `x-relationship` on the intermediate schema.
+
+```yaml
+# Task.caseId → Case, Case.applicationId → Application
+x-relationship:
+  resource: Case
+  style: expand
+  fields:
+    - id              # Case.id
+    - status          # Case.status
+    - application.id  # Case → Application → id
+    - application.name
+```
+
+Result:
+
+```yaml
+Task:
+  properties:
+    case:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string }
+        application:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+```
+
+Dot notation works to any depth. Example data is also transformed — FK UUIDs are joined across example files to produce the nested structure.
+
+You can choose how much of a chain to traverse per field:
+
+```yaml
+fields:
+  - id
+  - applicationId          # raw UUID — keep the FK as-is
+  - application.id         # expand one level: Case → Application
+  - application.program.name  # expand two levels: Case → Application → Program
+```
+
 ## Target Path Syntax
 
 Targets use JSONPath-like syntax:

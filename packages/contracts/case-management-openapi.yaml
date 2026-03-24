@@ -183,6 +183,8 @@ components:
           type: string
           format: uuid
           description: Reference to the Person record for the primary applicant.
+          x-relationship:
+            resource: Person
         members:
           type: array
           description: Household members associated with this case.
@@ -192,6 +194,8 @@ components:
           type: string
           format: uuid
           description: Reference to the User record for the assigned case worker.
+          x-relationship:
+            resource: User
         createdAt:
           type: string
           format: date-time
@@ -217,6 +221,8 @@ components:
           type: string
           format: uuid
           description: Reference to the Person record.
+          x-relationship:
+            resource: Person
         relationship:
           type: string
           description: Relationship to the primary applicant.

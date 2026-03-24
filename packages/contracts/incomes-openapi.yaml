@@ -169,6 +169,8 @@ components:
           type: string
           format: uuid
           description: Foreign key reference to the person who has this income.
+          x-relationship:
+            resource: Person
         employerId:
           type: string
           format: uuid

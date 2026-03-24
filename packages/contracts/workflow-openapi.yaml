@@ -510,6 +510,8 @@ components:
           type: string
           format: uuid
           description: Reference to the Queue this task is routed to.
+          x-relationship:
+            resource: Queue
         priority:
           type: string
           enum:
@@ -530,10 +532,14 @@ components:
           type: string
           format: uuid
           description: Reference to the User assigned to this task.
+          x-relationship:
+            resource: User
         caseId:
           type: string
           format: uuid
           description: Reference to the Case this task belongs to.
+          x-relationship:
+            resource: Case
         outcome:
           type: string
           description: Completion outcome recorded when the task was completed (e.g., approved, denied).
